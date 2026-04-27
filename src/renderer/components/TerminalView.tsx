@@ -57,14 +57,16 @@ import {
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
 import {
+  getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
+  getSSHSessionOwnerWindowId,
   getStandaloneSSHWindowsForTarget,
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
-import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
-import { getInactiveWindowStatus, getStartablePanes, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
+import { getInactiveWindowStatus, getStartablePanes, hasAnyLiveTerminalSession, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -419,6 +421,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     },
     [removeWindow],
   );
+  const destroyAndRemoveRemoteWindows = useCallback(
+    async (windowIds: string[]) => {
+      for (const windowId of windowIds) {
+        await destroyWindowResourcesAndRemoveRecord(windowId);
+      }
+    },
+    [],
+  );
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
   useEffect(() => {
@@ -521,9 +531,57 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [destroyRemoteWindows, onReturn, onWindowSwitch, terminalWindow.id]);
 
+  const destroyStandaloneSshWindowFamily = useCallback(async () => {
+    const allWindows = useWindowStore.getState().windows;
+    const ownerWindowId = getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id;
+    const familyWindowIds = terminalWindow.ephemeral
+      ? [terminalWindow.id]
+      : [ownerWindowId, ...getOwnedEphemeralSSHWindowIds(allWindows, ownerWindowId)];
+    const uniqueWindowIds = Array.from(new Set(familyWindowIds));
+    const closingWindowIdSet = new Set(uniqueWindowIds);
+    const scopedWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
+    const currentWindowWillClose = closingWindowIdSet.has(terminalWindow.id);
+    const adjacentWindowId = currentWindowWillClose
+      ? getAdjacentSSHWindowId(scopedWindows, terminalWindow.id, closingWindowIdSet)
+      : null;
+    const fallbackWindowId = currentWindowWillClose
+      ? getPersistableWindows(allWindows).find((window) => (
+        !window.archived
+        && !closingWindowIdSet.has(window.id)
+        && hasAnyLiveTerminalSession(window)
+      ))?.id ?? null
+      : null;
+    const nextWindowId = currentWindowWillClose
+      ? adjacentWindowId ?? fallbackWindowId
+      : null;
+
+    if (nextWindowId) {
+      if (embedded && groupId) {
+        useWindowStore.getState().setActiveWindowInGroup(groupId, nextWindowId);
+      } else {
+        onWindowSwitch(nextWindowId);
+      }
+    }
+
+    await destroyAndRemoveRemoteWindows(uniqueWindowIds);
+
+    if (!nextWindowId && currentWindowWillClose) {
+      onReturn();
+    }
+  }, [destroyAndRemoveRemoteWindows, embedded, groupId, onReturn, onWindowSwitch, terminalWindow]);
+
   const handleDeleteWindow = useCallback(async () => {
     if (isEphemeralRemoteTab) {
       await destroyCurrentEphemeralRemoteWindow();
+      return;
+    }
+
+    if (isStandaloneSshWindow) {
+      try {
+        await destroyStandaloneSshWindowFamily();
+      } catch (error) {
+        console.error('Failed to destroy standalone SSH window family:', error);
+      }
       return;
     }
 
@@ -561,7 +619,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to delete window:', error);
     }
-  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, onReturn, onWindowSwitch, terminalWindow.id]);
+  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, destroyStandaloneSshWindowFamily, isEphemeralRemoteTab, isStandaloneSshWindow, onReturn, onWindowSwitch, terminalWindow.id]);
 
   // 处理窗格进程退出
   const handlePaneExit = useCallback(
@@ -951,10 +1009,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-      const clonedWindowDraft: Window = {
-        ...createWindowDraftFromSourcePane(sourceWindow, sourcePane),
+    const ownerWindowId = getSSHSessionOwnerWindowId(sourceWindow) ?? sourceWindow.id;
+    const clonedWindowDraft: Window = {
+      ...createWindowDraftFromSourcePane(sourceWindow, sourcePane),
         ephemeral: true,
-      };
+      sshTabOwnerWindowId: ownerWindowId,
+    };
 
     try {
       const result = await startClonedWindowFromSourcePane({

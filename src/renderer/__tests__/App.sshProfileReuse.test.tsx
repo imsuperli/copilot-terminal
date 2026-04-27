@@ -283,6 +283,48 @@ describe('App SSH profile reuse', () => {
     expect(window.electronAPI.createSSHWindow).not.toHaveBeenCalled();
   });
 
+  it('creates a fresh ssh window after the previous reusable runtime window record has been removed', async () => {
+    const user = userEvent.setup();
+    const switchToWindow = vi.fn();
+
+    useWindowStore.setState({
+      windows: [],
+    });
+
+    mockUseWindowSwitcher.mockReturnValue({
+      switchToWindow,
+    });
+
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValue({
+      success: true,
+      data: {
+        hasPassword: true,
+        hasPassphrase: false,
+      },
+    });
+    vi.mocked(window.electronAPI.createSSHWindow).mockResolvedValue({
+      success: true,
+      data: createNewSSHWindow('profile-1'),
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '连接 SSH' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '连接 SSH' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.createSSHWindow).toHaveBeenCalledWith({
+        profileId: 'profile-1',
+        name: 'Prod SSH',
+      });
+    });
+
+    expect(switchToWindow).toHaveBeenCalledWith('win-ssh-new');
+  });
+
   it('prompts for a password when starting a password-based ssh profile without a stored secret', async () => {
     const user = userEvent.setup();
     const switchToWindow = vi.fn();

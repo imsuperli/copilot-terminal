@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest';
+import { Window, WindowStatus } from '../../types/window';
+import {
+  getOwnedEphemeralSSHWindowIds,
+  getSSHSessionOwnerWindowId,
+} from '../sshWindowBindings';
+
+function createSSHWindow(id: string, options: {
+  ephemeral?: boolean;
+  ownerWindowId?: string;
+} = {}): Window {
+  return {
+    id,
+    name: id,
+    activePaneId: `${id}-pane`,
+    createdAt: '2026-04-27T00:00:00.000Z',
+    lastActiveAt: '2026-04-27T00:00:00.000Z',
+    kind: 'ssh',
+    ...(options.ephemeral ? { ephemeral: true } : {}),
+    ...(options.ownerWindowId ? { sshTabOwnerWindowId: options.ownerWindowId } : {}),
+    layout: {
+      type: 'pane',
+      id: `${id}-layout`,
+      pane: {
+        id: `${id}-pane`,
+        cwd: '/srv/app',
+        command: '',
+        status: WindowStatus.Running,
+        pid: 1001,
+        backend: 'ssh',
+        ssh: {
+          profileId: 'profile-1',
+          host: '10.0.0.21',
+          port: 22,
+          user: 'root',
+          authType: 'password',
+          remoteCwd: '/srv/app',
+          reuseSession: true,
+        },
+      },
+    },
+  };
+}
+
+describe('sshWindowBindings owner resolution', () => {
+  it('resolves an ephemeral clone tab to its owner window id', () => {
+    const cloneWindow = createSSHWindow('clone', {
+      ephemeral: true,
+      ownerWindowId: 'owner',
+    });
+
+    expect(getSSHSessionOwnerWindowId(cloneWindow)).toBe('owner');
+  });
+
+  it('finds ephemeral clone tabs owned by a standalone ssh window', () => {
+    const ownerWindow = createSSHWindow('owner');
+    const ownedClone = createSSHWindow('clone-1', {
+      ephemeral: true,
+      ownerWindowId: ownerWindow.id,
+    });
+    const unrelatedClone = createSSHWindow('clone-2', {
+      ephemeral: true,
+      ownerWindowId: 'someone-else',
+    });
+
+    expect(getOwnedEphemeralSSHWindowIds([ownerWindow, ownedClone, unrelatedClone], ownerWindow.id)).toEqual(['clone-1']);
+  });
+});

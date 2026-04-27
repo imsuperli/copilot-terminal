@@ -27,14 +27,16 @@ import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import {
   buildStandaloneSSHWindowMap,
+  getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
+  getSSHSessionOwnerWindowId,
   getStandaloneSSHProfileId,
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 
 // 统一的卡片项类型
 type CardItem =
@@ -573,14 +575,28 @@ export const CardGrid = React.memo<CardGridProps>(({
       await destroyWindowResourcesKeepRecord(windowId);
     }
   }, []);
+  const destroyAndRemoveWindowIds = useCallback(async (windowIds: string[]) => {
+    for (const windowId of windowIds) {
+      await destroyWindowResourcesAndRemoveRecord(windowId);
+    }
+  }, []);
 
   const handleDestroyWindowSession = useCallback(async (win: Window) => {
     try {
+      const ownerWindowId = getSSHSessionOwnerWindowId(win);
+      if (ownerWindowId && !isEphemeralSSHCloneWindow(win)) {
+        const ownedCloneWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, ownerWindowId);
+        if (ownedCloneWindowIds.length > 0) {
+          await destroyAndRemoveWindowIds([win.id, ...ownedCloneWindowIds]);
+          return;
+        }
+      }
+
       await destroyWindowIds([win.id]);
     } catch (error) {
       console.error('Failed to destroy window:', error);
     }
-  }, [destroyWindowIds]);
+  }, [destroyAndRemoveWindowIds, destroyWindowIds]);
 
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {

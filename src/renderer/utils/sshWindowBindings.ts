@@ -141,6 +141,10 @@ export function getSSHSessionOwnerWindowId(window: Window): string | null {
     return null;
   }
 
+  if (window.ephemeral) {
+    return window.sshTabOwnerWindowId?.trim() || window.id;
+  }
+
   return window.id;
 }
 
@@ -148,9 +152,16 @@ export function getOwnedEphemeralSSHWindows(
   windows: Window[],
   ownerWindowId: string,
 ): Window[] {
-  void windows;
-  void ownerWindowId;
-  return [];
+  const normalizedOwnerWindowId = ownerWindowId.trim();
+  if (!normalizedOwnerWindowId) {
+    return [];
+  }
+
+  return windows.filter((window) => (
+    isEphemeralSSHCloneWindow(window)
+    && getWindowKind(window) === 'ssh'
+    && window.sshTabOwnerWindowId?.trim() === normalizedOwnerWindowId
+  ));
 }
 
 export function getOwnedEphemeralSSHWindowIds(

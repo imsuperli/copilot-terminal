@@ -462,8 +462,10 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     const remoteTabsHeader = screen.getByTestId('terminal-remote-tabs-header');
-    expect(remoteTabsHeader).toHaveClass('bg-[rgb(var(--titlebar))]');
     expect(remoteTabsHeader).toHaveClass('px-2');
+    expect(remoteTabsHeader).toHaveStyle({
+      background: 'color-mix(in srgb, rgba(var(--titlebar), 0.75) 70%, white 30%)',
+    });
     expect(remoteTabsHeader.closest('.absolute')).toBeNull();
     const remoteTabButton = screen.getByRole('button', { name: 'Prod SSH' });
     expect(remoteTabButton).toBeInTheDocument();
@@ -775,7 +777,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
-  it('keeps a non-ephemeral ssh window record when stopped and returns when no runnable window remains', async () => {
+  it('destroys a standalone ssh owner window together with its ephemeral clone tabs when stopped', async () => {
     const user = userEvent.setup({ delay: null });
     const onReturn = vi.fn();
     const activeWindow = createSSHWindow({
@@ -784,17 +786,25 @@ describe('TerminalView SSH toolbar', () => {
       name: 'Prod SSH A',
       remoteCwd: '/srv/app',
     });
-    const pausedWindow = createSSHWindow({
+    const ephemeralCloneWindow = createSSHWindow({
       id: 'win-ssh-2',
       paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: activeWindow.id,
+    });
+    const pausedWindow = createSSHWindow({
+      id: 'win-ssh-3',
+      paneId: 'pane-ssh-3',
       name: 'Paused SSH',
       remoteCwd: '/srv/paused',
     });
     pausedWindow.layout = {
       type: 'pane',
-      id: 'pane-ssh-2',
+      id: 'pane-ssh-3',
       pane: {
-        id: 'pane-ssh-2',
+        id: 'pane-ssh-3',
         cwd: '/srv/paused',
         command: '',
         status: WindowStatus.Paused,
@@ -813,13 +823,15 @@ describe('TerminalView SSH toolbar', () => {
     };
 
     useWindowStore.setState({
-      windows: [activeWindow, pausedWindow],
+      windows: [activeWindow, ephemeralCloneWindow, pausedWindow],
       activeWindowId: activeWindow.id,
       mruList: [],
       sidebarExpanded: false,
       sidebarWidth: 200,
     });
 
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
     vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
     vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
 
@@ -837,10 +849,12 @@ describe('TerminalView SSH toolbar', () => {
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-1');
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     });
 
     expect(onReturn).toHaveBeenCalledTimes(1);
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-3']);
   });
 
   it('destroys an ephemeral ssh clone tab when its only pane exits', async () => {
