@@ -15,6 +15,7 @@ import type { WindowGroup } from '../../shared/types/window-group';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { SidebarToggleIcon } from './icons/SidebarToggleIcon';
 import { getPersistableWindows } from '../utils/sshWindowBindings';
+import { resolveRendererAssetUrl } from '../utils/assetUrl';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -48,10 +49,14 @@ const sidebarTooltipClassName =
   'z-[1100] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
 const sidebarIconButtonClassName =
   'flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[rgb(var(--muted-foreground))] transition-colors duration-200 hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]';
-const sidebarActionButtonBaseClassName =
+const sidebarCollapsedActionButtonClassName =
   'h-10 w-full items-center gap-2 border-b border-[rgb(var(--border))] transition-colors duration-200';
 const sidebarCardSurfaceClassName =
   'border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,var(--appearance-pane-chrome-background)_100%,transparent)] hover:bg-[rgb(var(--accent))]';
+const sidebarQuickActionButtonClassName =
+  'flex h-9 w-9 items-center justify-center rounded-xl border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,var(--appearance-pane-chrome-background)_92%,rgb(var(--secondary))_8%)] text-[rgb(var(--muted-foreground))] shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0';
+const sidebarBrandBadgeClassName =
+  'flex h-9 w-9 items-center justify-center rounded-xl border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,var(--appearance-pane-chrome-background)_90%,rgb(var(--secondary))_10%)] shadow-sm';
 
 function isSidebarVisibleStatus(status: WindowStatus): boolean {
   return (
@@ -112,6 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSSHProfileSaved,
 }) => {
   const { t } = useI18n();
+  const appLogoSrc = resolveRendererAssetUrl('resources/icon.png');
   const sidebarExpanded = useWindowStore((state) => state.sidebarExpanded);
   const sidebarWidth = useWindowStore((state) => state.sidebarWidth);
   const toggleSidebar = useWindowStore((state) => state.toggleSidebar);
@@ -404,34 +410,159 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部：切换按钮 */}
-        <div className={`h-10 flex-shrink-0 items-center border-b border-[rgb(var(--border))] ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
-                  className={sidebarIconButtonClassName}
-                  aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
-                >
-                  <SidebarToggleIcon
-                    size={18}
-                    expanded={sidebarExpanded}
-                    className="transition-all duration-200"
-                  />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className={sidebarTooltipClassName}
-                  side="right"
-                  sideOffset={5}
-                >
-                  {sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
+        {/* 顶部：品牌 + 快捷操作 */}
+        <div className={`flex-shrink-0 border-b border-[rgb(var(--border))] ${sidebarExpanded ? 'px-3 py-3' : 'h-10'}`}>
+          {sidebarExpanded ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className={sidebarBrandBadgeClassName}>
+                    <img src={appLogoSrc} alt="Copilot-Terminal Logo" className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-[rgb(var(--muted-foreground))]">
+                      Copilot Terminal
+                    </div>
+                    <div className="text-xs text-[rgb(var(--foreground))]">Workspace</div>
+                  </div>
+                </div>
+
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
+                        className={sidebarIconButtonClassName}
+                        aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                      >
+                        <SidebarToggleIcon
+                          size={18}
+                          expanded={sidebarExpanded}
+                          className="transition-all duration-200"
+                        />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className={sidebarTooltipClassName}
+                        side="bottom"
+                        sideOffset={6}
+                      >
+                        {sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              </div>
+
+              <div className="flex items-center justify-center gap-2">
+                {showOpenCodePaneAction && (
+                  <Tooltip.Provider>
+                    <Tooltip.Root delayDuration={300}>
+                      <Tooltip.Trigger asChild>
+                        <button
+                          onClick={() => onOpenCodePane?.()}
+                          disabled={!canOpenCodePane}
+                          className={`${sidebarQuickActionButtonClassName} ${
+                            isCodePaneActive
+                              ? 'border-[rgb(var(--primary))]/30 bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+                              : ''
+                          }`}
+                          aria-label={t('terminalView.openCode')}
+                        >
+                          <FileCode2 size={16} />
+                        </button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Portal>
+                        <Tooltip.Content
+                          className={sidebarTooltipClassName}
+                          side="bottom"
+                          sideOffset={6}
+                        >
+                          {t('terminalView.openCode')}
+                        </Tooltip.Content>
+                      </Tooltip.Portal>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+                )}
+
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={handleOpenCreateWindowDialog}
+                        className={`${sidebarQuickActionButtonClassName} text-[rgb(var(--foreground))]`}
+                        aria-label={t('common.newTerminal')}
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className={sidebarTooltipClassName}
+                        side="bottom"
+                        sideOffset={6}
+                      >
+                        {t('common.newTerminal')}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={() => onSettingsClick?.()}
+                        className={sidebarQuickActionButtonClassName}
+                        aria-label={t('settings.title')}
+                      >
+                        <Settings size={16} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className={sidebarTooltipClassName}
+                        side="bottom"
+                        sideOffset={6}
+                      >
+                        {t('settings.title')}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
+                      className={sidebarIconButtonClassName}
+                      aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                    >
+                      <SidebarToggleIcon
+                        size={18}
+                        expanded={sidebarExpanded}
+                        className="transition-all duration-200"
+                      />
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className={sidebarTooltipClassName}
+                      side="right"
+                      sideOffset={5}
+                    >
+                      {sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            </div>
+          )}
         </div>
 
         {/* 标题（仅展开时显示） */}
@@ -439,6 +570,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex-shrink-0 space-y-2 border-b border-[rgb(var(--border))] px-3 py-2">
             <div className="flex items-center justify-between text-xs font-semibold tracking-wide text-[rgb(var(--muted-foreground))]">
               <span>Windows</span>
+              <span className="rounded-full bg-[rgb(var(--accent))] px-2 py-0.5 text-[10px] text-[rgb(var(--foreground))]">
+                {visibleItems.length}
+              </span>
             </div>
             <select
               aria-label={t('sidebar.terminalFilterLabel')}
@@ -471,7 +605,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* 底部操作区 */}
-        <div className="flex-shrink-0 border-t border-[rgb(var(--border))]">
+        {!sidebarExpanded && (
+          <div className="flex-shrink-0 border-t border-[rgb(var(--border))]">
           {showOpenCodePaneAction && (
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
@@ -480,7 +615,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onOpenCodePane?.()}
                     disabled={!canOpenCodePane}
                     className={`
-                      ${sidebarActionButtonBaseClassName}
+                      ${sidebarCollapsedActionButtonClassName}
                       ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
                       ${isCodePaneActive
                         ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
@@ -518,7 +653,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   onClick={handleOpenCreateWindowDialog}
                   className={`
-                    ${sidebarActionButtonBaseClassName}
+                    ${sidebarCollapsedActionButtonClassName}
                     bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]
                     ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
                   `}
@@ -552,7 +687,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   onClick={() => onSettingsClick?.()}
                   className={`
-                    ${sidebarActionButtonBaseClassName}
+                    ${sidebarCollapsedActionButtonClassName}
                     border-b-0 text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]
                     ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
                   `}
@@ -579,7 +714,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </Tooltip.Root>
           </Tooltip.Provider>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 调整宽度的拖拽条（仅展开时显示） */}

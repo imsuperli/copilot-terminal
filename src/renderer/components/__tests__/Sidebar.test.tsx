@@ -189,7 +189,9 @@ describe('Terminal Sidebar', () => {
       <Sidebar activeWindowId={alphaWindow.id} onWindowSelect={onWindowSelect} />,
     );
 
-    expect(screen.getAllByText(/Terminal$/).map((node) => node.textContent)).toEqual([
+    expect(screen.getByTestId('terminal-sidebar-scroll-region').textContent).toContain('Alpha Terminal');
+    expect(screen.getByTestId('terminal-sidebar-scroll-region').textContent).toContain('Beta Terminal');
+    expect(screen.getAllByText(/Alpha Terminal|Beta Terminal/).map((node) => node.textContent)).toEqual([
       'Alpha Terminal',
       'Beta Terminal',
     ]);
@@ -207,7 +209,7 @@ describe('Terminal Sidebar', () => {
       <Sidebar activeWindowId={alphaWindow.id} onWindowSelect={onWindowSelect} />,
     );
 
-    expect(screen.getAllByText(/Terminal$/).map((node) => node.textContent)).toEqual([
+    expect(screen.getAllByText(/Alpha Terminal|Beta Terminal/).map((node) => node.textContent)).toEqual([
       'Alpha Terminal',
       'Beta Terminal',
     ]);
@@ -298,6 +300,31 @@ describe('Terminal Sidebar', () => {
     await user.click(screen.getByRole('button', { name: '新建终端' }));
 
     expect(screen.getByTestId('create-window-dialog')).toHaveTextContent('ssh-enabled');
+  });
+
+  it('shows the expanded header brand and centered quick actions', () => {
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: true,
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        onWindowSelect={vi.fn()}
+        showOpenCodePaneAction
+        canOpenCodePane
+      />,
+    );
+
+    expect(screen.getByAltText('Copilot-Terminal Logo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '打开代码面板' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建终端' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument();
   });
 
   it('keeps the create window action available when the sidebar is collapsed', async () => {
