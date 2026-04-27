@@ -917,6 +917,7 @@ export class CodeProjectIndexService {
           continue;
         }
 
+        const entryPath = path.join(directoryPath, entry.name);
         if (entry.isDirectory() && shouldIgnoreCodePaneDirectory(entry.name, entryPath)) {
           continue;
         }
@@ -925,7 +926,6 @@ export class CodeProjectIndexService {
           continue;
         }
 
-        const entryPath = path.join(directoryPath, entry.name);
         if (entry.isDirectory()) {
           stack.push(entryPath);
           continue;
