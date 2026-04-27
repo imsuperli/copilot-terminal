@@ -302,7 +302,7 @@ describe('Terminal Sidebar', () => {
     expect(screen.getByTestId('create-window-dialog')).toHaveTextContent('ssh-enabled');
   });
 
-  it('shows the expanded header brand and centered quick actions', () => {
+  it('keeps quick actions in the expanded footer without branding copy', () => {
     const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
 
     useWindowStore.setState({
@@ -321,7 +321,9 @@ describe('Terminal Sidebar', () => {
       />,
     );
 
-    expect(screen.getByAltText('Copilot-Terminal Logo')).toBeInTheDocument();
+    expect(screen.queryByAltText('Copilot-Terminal Logo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copilot Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '打开代码面板' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新建终端' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument();
