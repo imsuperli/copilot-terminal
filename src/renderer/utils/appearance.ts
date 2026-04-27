@@ -305,6 +305,7 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
     '--terminal-background-effective',
     `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.62))`,
   );
+  rootStyle.setProperty('--appearance-running-accent-rgb', resolveRunningAccentRgb(appearance));
   const skinDim = resolveSkinDim(appearance);
   const titlebarOpacity = resolveTitlebarOpacity(appearance, skinDim);
   const paneOpacity = resolvePaneOpacity(appearance);
@@ -333,6 +334,10 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   rootStyle.setProperty('--appearance-card-surface-bottom', rgbaWithTerminalBackground(cardBottomOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-top', rgbaWithTerminalBackground(cardHoverTopOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-bottom', rgbaWithTerminalBackground(cardHoverBottomOpacity));
+  rootStyle.setProperty(
+    '--appearance-main-surface-background',
+    resolveMainSurfaceBackground(appearance, paneStrongOpacity),
+  );
   rootStyle.setProperty('--appearance-skin-dim', String(skinDim));
   rootStyle.setProperty('--appearance-skin-blur', `${appearance.skin.blur}px`);
   rootStyle.setProperty('--appearance-skin-motion-duration', appearance.reduceMotion ? '0s' : '18s');
@@ -559,6 +564,21 @@ function resolveTitlebarBackdropFilter(appearance: AppearanceSettings): string {
     : 'none';
 }
 
+function resolveRunningAccentRgb(appearance: AppearanceSettings): string {
+  switch (appearance.skin.presetId) {
+    case 'paper':
+      return '53 116 240';
+    case 'midnight':
+      return '176 126 255';
+    case 'aurora':
+      return '94 234 212';
+    case 'obsidian':
+    case 'custom':
+    default:
+      return '22 198 12';
+  }
+}
+
 function resolveRemoteTabActiveBackground(appearance: AppearanceSettings): string {
   if (hasImageBackdrop(appearance)) {
     const opacity = appearance.readabilityMode === 'readability' ? 0.88 : appearance.readabilityMode === 'immersive' ? 0.66 : 0.76;
@@ -687,6 +707,14 @@ function resolveCardOpacity(appearance: AppearanceSettings): number {
   }
 
   return clampOpacity(baseOpacity, 0.08, 0.64);
+}
+
+function resolveMainSurfaceBackground(appearance: AppearanceSettings, paneStrongOpacity: number): string {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return 'rgba(255, 255, 255, 0.92)';
+  }
+
+  return rgbaWithTerminalBackground(paneStrongOpacity);
 }
 
 function clampOpacity(value: number, min: number, max: number): number {

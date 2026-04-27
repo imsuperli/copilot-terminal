@@ -30,7 +30,10 @@ export function MainLayout({ sidebar, toolbar, children }: MainLayoutProps) {
       )}
 
       {/* 主内容区 - 占满剩余空间 */}
-      <main className="flex-1 overflow-auto bg-transparent">
+      <main
+        className="flex-1 overflow-auto bg-transparent"
+        style={{ background: 'var(--appearance-main-surface-background)' }}
+      >
         {children}
       </main>
     </div>

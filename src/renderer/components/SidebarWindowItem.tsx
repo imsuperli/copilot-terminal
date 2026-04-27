@@ -30,7 +30,7 @@ function getWindowBackgroundColor(status: WindowStatus, isActive: boolean): stri
 
   switch (status) {
     case WindowStatus.Running:
-      return 'border-[rgb(var(--success)/0.25)] bg-[rgb(var(--success)/0.08)] hover:bg-[rgb(var(--success)/0.14)]';
+      return 'border-[rgb(var(--appearance-running-accent-rgb))/0.25] bg-[rgb(var(--appearance-running-accent-rgb))/0.08] hover:bg-[rgb(var(--appearance-running-accent-rgb))/0.14]';
     case WindowStatus.WaitingForInput:
       return 'border-[rgb(var(--primary))]/25 bg-[rgb(var(--primary))]/10 hover:bg-[rgb(var(--primary))]/16';
     case WindowStatus.Completed:

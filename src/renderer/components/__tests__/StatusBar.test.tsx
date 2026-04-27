@@ -125,7 +125,7 @@ describe('StatusBar', () => {
 
     expect(screen.getByRole('button', { name: /运行中/ })).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /等待输入/ })).toHaveTextContent('1');
-    expect(screen.getByRole('button', { name: /已暂停/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /未启动/ })).toHaveTextContent('1');
   });
 
   it('ignores archived, ephemeral, and profile-backed ssh runtime windows', () => {
@@ -147,13 +147,13 @@ describe('StatusBar', () => {
 
     expect(screen.getByRole('button', { name: /运行中/ })).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /等待输入/ })).toHaveTextContent('0');
-    expect(screen.getByRole('button', { name: /已暂停/ })).toHaveTextContent('0');
+    expect(screen.getByRole('button', { name: /未启动/ })).toHaveTextContent('0');
   });
 
   it('uses the current color classes for each visible status', () => {
     const { container } = render(<StatusBar />);
 
-    expect(container.querySelectorAll('.text-green-500').length).toBeGreaterThan(0);
+    expect(container.querySelector('[class~="text-[rgb(var(--appearance-running-accent-rgb))]"]')).not.toBeNull();
     expect(container.querySelector('[class~="text-[rgb(var(--primary))]"]')).not.toBeNull();
     expect(container.querySelector('[class~="text-[rgb(var(--muted-foreground))]"]')).not.toBeNull();
   });
@@ -174,6 +174,6 @@ describe('StatusBar', () => {
 
     expect(liveRegion?.getAttribute('aria-label')).toContain('运行中 1');
     expect(liveRegion?.getAttribute('aria-label')).toContain('等待输入 0');
-    expect(liveRegion?.getAttribute('aria-label')).toContain('暂停 0');
+    expect(liveRegion?.getAttribute('aria-label')).toContain('未启动 0');
   });
 });

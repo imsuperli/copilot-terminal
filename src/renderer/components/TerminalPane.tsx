@@ -57,7 +57,7 @@ export function __resetTerminalPaneReplaySessionCacheForTests(): void {
 function getStatusBorderColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      return 'border-t-[rgb(var(--success))]';
+      return 'border-t-[rgb(var(--appearance-running-accent-rgb))]';
     case WindowStatus.WaitingForInput:
       return 'border-t-[rgb(var(--primary))]';
     case WindowStatus.Completed:
@@ -105,7 +105,7 @@ function getActivePaneStyle(color?: string): React.CSSProperties | undefined {
 function getStatusRingColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      return 'ring-[rgb(var(--success))]';
+      return 'ring-[rgb(var(--appearance-running-accent-rgb))]';
     case WindowStatus.WaitingForInput:
       return 'ring-[rgb(var(--primary))]';
     case WindowStatus.Completed:

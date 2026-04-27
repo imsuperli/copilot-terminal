@@ -57,7 +57,14 @@ export const StatusBar = React.memo(function StatusBar({
     'bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] border-[rgb(var(--border))]';
   const idleButtonClassName = `border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_76%,transparent)] hover:bg-[rgb(var(--accent))]`;
   const items = useMemo<{ tab: StatusFilterTab; icon: typeof Activity; colorClass: string; activeClass: string; label: string; count: number }[]>(() => [
-    { tab: 'status:running', icon: Activity, colorClass: 'text-green-500', activeClass: 'bg-green-500/10 border-green-500/50', label: t('status.running'), count: statusCounts.running },
+    {
+      tab: 'status:running',
+      icon: Activity,
+      colorClass: 'text-[rgb(var(--appearance-running-accent-rgb))]',
+      activeClass: 'bg-[rgb(var(--appearance-running-accent-rgb))/0.10] border-[rgb(var(--appearance-running-accent-rgb))/0.50]',
+      label: t('status.running'),
+      count: statusCounts.running,
+    },
     { tab: 'status:waiting', icon: Keyboard, colorClass: 'text-[rgb(var(--primary))]', activeClass: 'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/40', label: t('status.waitingInput'), count: statusCounts.waiting },
     { tab: 'status:inactive', icon: Circle, colorClass: inactiveToneClassName, activeClass: inactiveActiveClassName, label: t('status.notStarted'), count: statusCounts.inactive },
   ], [inactiveActiveClassName, inactiveToneClassName, statusCounts.inactive, statusCounts.running, statusCounts.waiting, t]);

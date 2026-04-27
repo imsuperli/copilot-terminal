@@ -2,42 +2,6 @@ import { WindowStatus } from '../types/window';
 import { TranslationKey } from '../i18n';
 
 /**
- * 状态色映射表（常量，避免重复创建）
- */
-const STATUS_COLOR_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: 'bg-green-500',
-  [WindowStatus.WaitingForInput]: 'bg-[rgb(var(--primary))]',
-  [WindowStatus.Completed]: 'bg-gray-400',
-  [WindowStatus.Error]: 'bg-red-500',
-  [WindowStatus.Restoring]: 'bg-gray-500',
-  [WindowStatus.Paused]: 'bg-gray-400'
-};
-
-/**
- * 状态实际颜色值映射表（用于内联样式）
- */
-const STATUS_COLOR_VALUE_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: '#16c60c',
-  [WindowStatus.WaitingForInput]: '#a8aa58',
-  [WindowStatus.Completed]: '#9ca3af', // gray-400
-  [WindowStatus.Error]: '#ef4444', // red-500
-  [WindowStatus.Restoring]: '#6b7280', // gray-500
-  [WindowStatus.Paused]: '#9ca3af' // gray-400
-};
-
-/**
- * 状态文字色映射表（text-* 变体，用于文字和图标着色）
- */
-const STATUS_TEXT_COLOR_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: 'text-green-500',
-  [WindowStatus.WaitingForInput]: 'text-[rgb(var(--primary))]',
-  [WindowStatus.Completed]: 'text-gray-400',
-  [WindowStatus.Error]: 'text-red-500',
-  [WindowStatus.Restoring]: 'text-gray-500',
-  [WindowStatus.Paused]: 'text-gray-400'
-};
-
-/**
  * 状态标签映射表（常量，避免重复创建）
  */
 const STATUS_LABEL_KEY_MAP: Record<WindowStatus, TranslationKey> = {
@@ -55,7 +19,21 @@ const STATUS_LABEL_KEY_MAP: Record<WindowStatus, TranslationKey> = {
  * @returns Tailwind CSS 颜色类名
  */
 export function getStatusColor(status: WindowStatus): string {
-  return STATUS_COLOR_MAP[status];
+  switch (status) {
+    case WindowStatus.Running:
+      return 'bg-[rgb(var(--appearance-running-accent-rgb))]';
+    case WindowStatus.WaitingForInput:
+      return 'bg-[rgb(var(--primary))]';
+    case WindowStatus.Completed:
+    case WindowStatus.Paused:
+      return 'bg-[rgb(var(--muted-foreground))]';
+    case WindowStatus.Error:
+      return 'bg-[rgb(var(--error))]';
+    case WindowStatus.Restoring:
+      return 'bg-[rgb(var(--warning))]';
+    default:
+      return 'bg-[rgb(var(--border))]';
+  }
 }
 
 /**
@@ -73,7 +51,21 @@ export function getStatusLabelKey(status: WindowStatus): TranslationKey {
  * @returns Tailwind CSS text-* 颜色类名
  */
 export function getStatusTextColor(status: WindowStatus): string {
-  return STATUS_TEXT_COLOR_MAP[status];
+  switch (status) {
+    case WindowStatus.Running:
+      return 'text-[rgb(var(--appearance-running-accent-rgb))]';
+    case WindowStatus.WaitingForInput:
+      return 'text-[rgb(var(--primary))]';
+    case WindowStatus.Completed:
+    case WindowStatus.Paused:
+      return 'text-[rgb(var(--muted-foreground))]';
+    case WindowStatus.Error:
+      return 'text-[rgb(var(--error))]';
+    case WindowStatus.Restoring:
+      return 'text-[rgb(var(--warning))]';
+    default:
+      return 'text-[rgb(var(--border))]';
+  }
 }
 
 /**
@@ -82,5 +74,19 @@ export function getStatusTextColor(status: WindowStatus): string {
  * @returns 十六进制颜色值
  */
 export function getStatusColorValue(status: WindowStatus): string {
-  return STATUS_COLOR_VALUE_MAP[status];
+  switch (status) {
+    case WindowStatus.Running:
+      return 'rgb(var(--appearance-running-accent-rgb))';
+    case WindowStatus.WaitingForInput:
+      return 'rgb(var(--primary))';
+    case WindowStatus.Completed:
+    case WindowStatus.Paused:
+      return 'rgb(var(--muted-foreground))';
+    case WindowStatus.Error:
+      return 'rgb(var(--error))';
+    case WindowStatus.Restoring:
+      return 'rgb(var(--warning))';
+    default:
+      return 'rgb(var(--border))';
+  }
 }
