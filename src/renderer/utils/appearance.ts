@@ -149,18 +149,18 @@ const APPEARANCE_PRESET_DEFINITIONS: Record<AppearanceSkinPresetId, AppearancePr
   },
   paper: {
     app: {
-      background: '246 247 249',
+      background: '252 253 255',
       foreground: '38 44 54',
       card: '255 255 255',
-      secondary: '241 244 248',
-      muted: '230 235 241',
-      mutedForeground: '96 107 121',
-      accent: '220 229 241',
-      border: '203 211 223',
+      secondary: '248 250 253',
+      muted: '241 245 250',
+      mutedForeground: '102 111 125',
+      accent: '231 238 247',
+      border: '214 221 230',
       primary: '53 116 240',
       primaryForeground: '255 255 255',
-      sidebar: '240 243 247',
-      titlebar: '233 237 244',
+      sidebar: '249 251 253',
+      titlebar: '250 251 253',
       titlebarForeground: '34 41 52',
     },
     terminal: {
@@ -311,9 +311,16 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   const paneStrongOpacity = resolvePaneStrongOpacity(appearance, paneOpacity);
   const paneChromeOpacity = resolvePaneChromeOpacity(appearance);
   const cardTopOpacity = resolveCardOpacity(appearance);
-  const cardBottomOpacity = clampOpacity(cardTopOpacity + 0.12, 0.32, 0.78);
-  const cardHoverTopOpacity = clampOpacity(cardTopOpacity + 0.08, 0.28, 0.82);
-  const cardHoverBottomOpacity = clampOpacity(cardTopOpacity + 0.18, 0.36, 0.88);
+  const isPaperPreset = appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance);
+  const cardBottomOpacity = isPaperPreset
+    ? clampOpacity(cardTopOpacity + 0.06, 0.88, 0.98)
+    : clampOpacity(cardTopOpacity + 0.12, 0.32, 0.78);
+  const cardHoverTopOpacity = isPaperPreset
+    ? clampOpacity(cardTopOpacity + 0.04, 0.88, 0.98)
+    : clampOpacity(cardTopOpacity + 0.08, 0.28, 0.82);
+  const cardHoverBottomOpacity = isPaperPreset
+    ? clampOpacity(cardTopOpacity + 0.08, 0.90, 1)
+    : clampOpacity(cardTopOpacity + 0.18, 0.36, 0.88);
   rootStyle.setProperty('--appearance-titlebar-background', resolveTitlebarBackground(appearance, titlebarOpacity));
   rootStyle.setProperty('--appearance-titlebar-backdrop-filter', resolveTitlebarBackdropFilter(appearance));
   rootStyle.setProperty('--appearance-remote-tab-active-background', resolveRemoteTabActiveBackground(appearance));
@@ -454,19 +461,17 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
       {
         className: 'absolute inset-0',
         style: {
-          backgroundImage: 'linear-gradient(rgba(120, 91, 52, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 91, 52, 0.03) 1px, transparent 1px)',
-          backgroundSize: '120px 120px, 120px 120px',
-          opacity: 0.58,
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(247,250,255,0.96) 100%)',
         },
       },
       ...(motionEnabled
         ? [{
             className: 'absolute inset-[-6%] will-change-transform',
             style: {
-              background: 'radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.28), transparent 20%), radial-gradient(circle at 84% 14%, rgba(184, 137, 71, 0.14), transparent 26%)',
+              background: 'radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.60), transparent 22%), radial-gradient(circle at 84% 14%, rgba(83, 149, 255, 0.10), transparent 28%)',
               opacity: 'var(--appearance-skin-motion-opacity, 0)',
               animation: 'appearance-skin-float calc(var(--appearance-skin-motion-duration, 18s) * 0.82) ease-in-out infinite alternate',
-              mixBlendMode: 'soft-light' as const,
+              mixBlendMode: 'screen' as const,
             },
           }]
         : []),
@@ -496,9 +501,22 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
 
 function resolveSkinDim(appearance: AppearanceSettings): number {
   const isImageSkin = hasImageBackdrop(appearance);
+  const isPaperPreset = appearance.skin.presetId === 'paper' && !isImageSkin;
   const baseDim = isImageSkin
     ? clampOpacity(appearance.skin.dim - 0.24, 0.08, 0.68)
     : appearance.skin.dim;
+
+  if (isPaperPreset) {
+    if (appearance.readabilityMode === 'readability') {
+      return clampOpacity(baseDim + 0.02, 0.04, 0.12);
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return clampOpacity(baseDim - 0.02, 0.01, 0.08);
+    }
+
+    return clampOpacity(baseDim, 0.02, 0.10);
+  }
 
   if (appearance.readabilityMode === 'readability') {
     return clampOpacity(baseDim + (isImageSkin ? 0.08 : 0.18), 0.08, 0.92);
@@ -570,6 +588,18 @@ function resolveRemoteTabSeparatorColor(appearance: AppearanceSettings): string 
 }
 
 function resolvePaneOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.92;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.78;
+    }
+
+    return 0.86;
+  }
+
   if (hasImageBackdrop(appearance)) {
     if (appearance.readabilityMode === 'readability') {
       return 0.08;
@@ -591,6 +621,10 @@ function resolvePaneOpacity(appearance: AppearanceSettings): number {
 }
 
 function resolvePaneStrongOpacity(appearance: AppearanceSettings, paneOpacity: number): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return clampOpacity(paneOpacity + 0.06, 0.86, 0.96);
+  }
+
   if (hasImageBackdrop(appearance)) {
     if (appearance.readabilityMode === 'readability') {
       return 0.08;
@@ -603,6 +637,18 @@ function resolvePaneStrongOpacity(appearance: AppearanceSettings, paneOpacity: n
 }
 
 function resolvePaneChromeOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.96;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.82;
+    }
+
+    return 0.90;
+  }
+
   const isImageSkin = hasImageBackdrop(appearance);
   const baseOpacity = isImageSkin ? 0.10 : 0.14;
   const scaledOpacity = baseOpacity + ((appearance.terminalOpacity - 0.62) * (isImageSkin ? 0.08 : 0.12));
@@ -619,6 +665,18 @@ function resolvePaneChromeOpacity(appearance: AppearanceSettings): number {
 }
 
 function resolveCardOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.90;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.76;
+    }
+
+    return 0.84;
+  }
+
   const baseOpacity = 0.1 + (appearance.terminalOpacity * 0.24);
   if (appearance.readabilityMode === 'readability') {
     return clampOpacity(baseOpacity + 0.08, 0.18, 0.72);

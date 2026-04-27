@@ -304,7 +304,7 @@ describe('SettingsPanel', () => {
             presetId: 'paper',
             kind: 'image',
             imagePath: 'C:\\Wallpapers\\paper.png',
-            gradient: 'radial-gradient(circle at 14% 16%, rgba(255, 255, 255, 0.90), transparent 24%), radial-gradient(circle at 82% 18%, rgba(83, 149, 255, 0.14), transparent 28%), linear-gradient(135deg, #f8fafc 0%, #eef3fb 52%, #ffffff 100%)',
+            gradient: 'radial-gradient(circle at 14% 16%, rgba(255, 255, 255, 0.96), transparent 24%), radial-gradient(circle at 82% 18%, rgba(83, 149, 255, 0.10), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f7faff 48%, #ffffff 100%)',
             dim: 0.16,
             blur: 0,
             motion: 'none',
@@ -328,7 +328,7 @@ describe('SettingsPanel', () => {
           presetId: 'paper',
           kind: 'gradient',
           imagePath: 'C:\\Wallpapers\\paper.png',
-          gradient: expect.stringContaining('#f8fafc'),
+          gradient: expect.stringContaining('#ffffff 0%'),
         }),
       }),
     });

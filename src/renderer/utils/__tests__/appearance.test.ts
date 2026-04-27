@@ -48,14 +48,18 @@ describe('renderer appearance utilities', () => {
       skin: {
         ...DEFAULT_APPEARANCE_SETTINGS.skin,
         presetId: 'paper',
+        dim: 0.04,
       },
     });
 
     const style = document.documentElement.style;
-    expect(style.getPropertyValue('--background')).toBe('246 247 249');
+    expect(style.getPropertyValue('--background')).toBe('252 253 255');
     expect(style.getPropertyValue('--card')).toBe('255 255 255');
-    expect(style.getPropertyValue('--titlebar')).toBe('233 237 244');
+    expect(style.getPropertyValue('--titlebar')).toBe('250 251 253');
     expect(style.getPropertyValue('--terminal-background')).toBe('#ffffff');
+    expect(style.getPropertyValue('--appearance-skin-dim')).toBe('0.04');
+    expect(style.getPropertyValue('--appearance-pane-background')).toBe('rgba(var(--terminal-background-rgb, 12, 12, 12), 0.860)');
+    expect(style.getPropertyValue('--appearance-pane-chrome-background')).toBe('rgba(var(--terminal-background-rgb, 12, 12, 12), 0.900)');
   });
 
   it('builds one global skin background style', () => {
