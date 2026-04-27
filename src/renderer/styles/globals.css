@@ -57,6 +57,8 @@
     --appearance-skin-blur: 0px;
     --appearance-skin-motion-duration: 0s;
     --appearance-skin-motion-opacity: 0;
+    --appearance-titlebar-background: rgb(var(--titlebar));
+    --appearance-titlebar-backdrop-filter: none;
     --appearance-pane-background: rgba(var(--terminal-background-rgb), 0);
     --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0);
     --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.18);

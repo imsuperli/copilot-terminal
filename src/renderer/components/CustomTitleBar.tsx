@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Minus, Square, X, Maximize2, Home } from 'lucide-react';
 import { resolveRendererAssetUrl } from '../utils/assetUrl';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
+import { appearanceTitlebarSurfaceStyle } from '../utils/appearance';
 
 export const CUSTOM_TITLEBAR_ACTIONS_SLOT_ID = 'custom-titlebar-actions-slot';
 
@@ -68,8 +69,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
         className="h-9 flex items-center border-b px-3 select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
         style={{
           WebkitAppRegion: 'drag',
-          background: 'color-mix(in srgb, rgba(var(--titlebar), 0.75) 70%, white 30%)',
-          backdropFilter: 'blur(12px)',
+          ...appearanceTitlebarSurfaceStyle,
         } as React.CSSProperties}
       >
         {/* 左侧：窗口控制 + logo + 应用名 */}
@@ -122,8 +122,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
       className="h-8 flex items-center justify-between border-b select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
       style={{
         WebkitAppRegion: 'drag',
-        background: 'rgba(var(--titlebar), 0.75)',
-        backdropFilter: 'blur(12px)',
+        ...appearanceTitlebarSurfaceStyle,
       } as React.CSSProperties}
       onDoubleClick={handleDoubleClick}
     >

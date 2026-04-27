@@ -57,6 +57,16 @@ describe('CustomTitleBar', () => {
     expect(container.querySelector('#custom-titlebar-actions-slot')).toBe(slot);
   });
 
+  it('uses the shared appearance-driven title bar surface styles', () => {
+    const { container } = render(<CustomTitleBar title="Workspace" />);
+
+    const titleBar = container.firstElementChild;
+    expect(titleBar).toHaveStyle({
+      background: 'var(--appearance-titlebar-background)',
+      backdropFilter: 'var(--appearance-titlebar-backdrop-filter)',
+    });
+  });
+
   it('prevents mouse focus on title bar buttons', () => {
     const { container } = render(
       <CustomTitleBar

@@ -20,6 +20,11 @@ interface AppearancePresetDefinition {
   terminal: Record<string, string>;
 }
 
+export const appearanceTitlebarSurfaceStyle: CSSProperties = {
+  background: 'var(--appearance-titlebar-background)',
+  backdropFilter: 'var(--appearance-titlebar-backdrop-filter)',
+};
+
 // 皮肤预设定义 - 每个预设包含UI颜色方案和终端颜色
 const APPEARANCE_PRESET_DEFINITIONS: Record<AppearanceSkinPresetId, AppearancePresetDefinition> = {
   obsidian: {
@@ -300,6 +305,8 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
     '--terminal-background-effective',
     `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.62))`,
   );
+  const skinDim = resolveSkinDim(appearance);
+  const titlebarOpacity = resolveTitlebarOpacity(appearance, skinDim);
   const paneOpacity = resolvePaneOpacity(appearance);
   const paneStrongOpacity = resolvePaneStrongOpacity(appearance, paneOpacity);
   const paneChromeOpacity = resolvePaneChromeOpacity(appearance);
@@ -307,6 +314,8 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   const cardBottomOpacity = clampOpacity(cardTopOpacity + 0.12, 0.32, 0.78);
   const cardHoverTopOpacity = clampOpacity(cardTopOpacity + 0.08, 0.28, 0.82);
   const cardHoverBottomOpacity = clampOpacity(cardTopOpacity + 0.18, 0.36, 0.88);
+  rootStyle.setProperty('--appearance-titlebar-background', resolveTitlebarBackground(appearance, titlebarOpacity));
+  rootStyle.setProperty('--appearance-titlebar-backdrop-filter', resolveTitlebarBackdropFilter(appearance));
   rootStyle.setProperty('--appearance-pane-background', rgbaWithTerminalBackground(paneOpacity));
   rootStyle.setProperty('--appearance-pane-background-strong', rgbaWithTerminalBackground(paneStrongOpacity));
   rootStyle.setProperty('--appearance-pane-chrome-background', rgbaWithTerminalBackground(paneChromeOpacity));
@@ -314,7 +323,7 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   rootStyle.setProperty('--appearance-card-surface-bottom', rgbaWithTerminalBackground(cardBottomOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-top', rgbaWithTerminalBackground(cardHoverTopOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-bottom', rgbaWithTerminalBackground(cardHoverBottomOpacity));
-  rootStyle.setProperty('--appearance-skin-dim', String(resolveSkinDim(appearance)));
+  rootStyle.setProperty('--appearance-skin-dim', String(skinDim));
   rootStyle.setProperty('--appearance-skin-blur', `${appearance.skin.blur}px`);
   rootStyle.setProperty('--appearance-skin-motion-duration', appearance.reduceMotion ? '0s' : '18s');
   rootStyle.setProperty('--appearance-skin-motion-opacity', appearance.reduceMotion || appearance.skin.motion === 'none' ? '0' : '1');
@@ -475,6 +484,36 @@ function resolveSkinDim(appearance: AppearanceSettings): number {
   }
 
   return clampOpacity(baseDim, isImageSkin ? 0.08 : 0.18, 0.82);
+}
+
+function resolveTitlebarOpacity(appearance: AppearanceSettings, skinDim: number): number {
+  if (!hasImageBackdrop(appearance)) {
+    return 1;
+  }
+
+  let opacity = 0.56 + ((0.68 - skinDim) * 0.18);
+
+  if (appearance.readabilityMode === 'readability') {
+    opacity += 0.12;
+  } else if (appearance.readabilityMode === 'immersive') {
+    opacity -= 0.08;
+  }
+
+  return clampOpacity(opacity, 0.46, 0.82);
+}
+
+function resolveTitlebarBackground(appearance: AppearanceSettings, opacity: number): string {
+  if (!hasImageBackdrop(appearance)) {
+    return 'rgb(var(--titlebar))';
+  }
+
+  return `rgba(var(--titlebar), ${opacity.toFixed(3)})`;
+}
+
+function resolveTitlebarBackdropFilter(appearance: AppearanceSettings): string {
+  return hasImageBackdrop(appearance)
+    ? 'saturate(140%) blur(12px)'
+    : 'none';
 }
 
 function resolvePaneOpacity(appearance: AppearanceSettings): number {

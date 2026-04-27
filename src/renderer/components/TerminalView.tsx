@@ -69,6 +69,7 @@ import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord
 import { destroySSHWindowFamilyResources } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
 import { getInactiveWindowStatus, getStartablePanes, hasAnyLiveTerminalSession, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
+import { appearanceTitlebarSurfaceStyle } from '../utils/appearance';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -1579,7 +1580,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           <div
             data-testid="terminal-remote-tabs-header"
             className="shrink-0 px-2"
-            style={{ background: 'color-mix(in srgb, rgba(var(--titlebar), 0.75) 70%, white 30%)', backdropFilter: 'blur(12px)' }}
+            style={appearanceTitlebarSurfaceStyle}
           >
             <TerminalRemoteWindowTabs
               activeWindowId={terminalWindow.id}
