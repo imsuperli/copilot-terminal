@@ -128,4 +128,28 @@ describe('CodeFileService', () => {
     expect(results).toHaveLength(2);
     expect(results.every((result) => result.filePath === textFilePath)).toBe(true);
   });
+
+  it('keeps business env directories visible while ignoring python virtualenv env directories', async () => {
+    const businessEnvDirectoryPath = path.join(tempRootPath, 'services', 'env');
+    const businessEnvFilePath = path.join(businessEnvDirectoryPath, 'config.ts');
+    const virtualEnvPackagePath = path.join(tempRootPath, 'env', 'lib', 'python3.12', 'site-packages', 'requests', 'api.py');
+    const virtualEnvMarkerPath = path.join(tempRootPath, 'env', 'pyvenv.cfg');
+
+    await fsPromises.mkdir(businessEnvDirectoryPath, { recursive: true });
+    await fsPromises.mkdir(path.dirname(virtualEnvPackagePath), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(businessEnvFilePath, 'export const envName = "prod";\n', 'utf-8'),
+      fsPromises.writeFile(virtualEnvMarkerPath, 'home = /usr/bin\n', 'utf-8'),
+      fsPromises.writeFile(virtualEnvPackagePath, 'def get(url):\n    return url\n', 'utf-8'),
+    ]);
+
+    const rootEntries = await service.listDirectory({ rootPath: tempRootPath, includeHidden: true });
+    expect(rootEntries.map((entry) => entry.name)).toEqual(['services']);
+
+    const searchResults = await service.searchFiles({ rootPath: tempRootPath, query: 'config.ts' });
+    expect(searchResults).toEqual([businessEnvFilePath]);
+
+    const hiddenVirtualEnvResults = await service.searchFiles({ rootPath: tempRootPath, query: 'requests' });
+    expect(hiddenVirtualEnvResults).toEqual([]);
+  });
 });

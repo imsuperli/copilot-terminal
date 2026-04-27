@@ -1,6 +1,7 @@
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
+import { getPythonVirtualEnvIgnoreGlobs } from '../../../utils/pythonVirtualEnv';
 import type {
   CodePaneExternalLibraryRoot,
   CodePaneExternalLibrarySection,
@@ -127,6 +128,8 @@ export async function readTextFile(targetPath: string): Promise<string | null> {
 
 export const DEFAULT_WORKSPACE_IGNORE_PATTERNS = [
   '**/.git/**',
+  '**/.hg/**',
+  '**/.svn/**',
   '**/node_modules/**',
   '**/target/**',
   '**/dist/**',
@@ -134,6 +137,12 @@ export const DEFAULT_WORKSPACE_IGNORE_PATTERNS = [
   '**/venv/**',
   '**/__pycache__/**',
   '**/.pytest_cache/**',
+  '**/.mypy_cache/**',
+  '**/.ruff_cache/**',
+  '**/.tox/**',
+  '**/.nox/**',
+  '**/site-packages/**',
+  '**/dist-packages/**',
   '**/vendor/**',
 ];
 
@@ -142,12 +151,13 @@ export async function findWorkspaceFiles(
   patterns: string[],
   ignore: string[] = [],
 ): Promise<string[]> {
+  const dynamicPythonVirtualEnvIgnores = getPythonVirtualEnvIgnoreGlobs(workspaceRoot).ignore;
   return await fg(patterns, {
     cwd: workspaceRoot,
     absolute: true,
     onlyFiles: true,
     unique: true,
-    ignore: [...DEFAULT_WORKSPACE_IGNORE_PATTERNS, ...ignore],
+    ignore: [...DEFAULT_WORKSPACE_IGNORE_PATTERNS, ...dynamicPythonVirtualEnvIgnores, ...ignore],
   });
 }
 

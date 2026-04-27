@@ -259,6 +259,58 @@ describe('LanguagePluginResolver', () => {
     expect(resolution?.pluginId).toBe('acme.python-b');
   });
 
+  it('applies pyright defaults that exclude virtual environments and caches', async () => {
+    await writePlugin(tempDir, registryStore, {
+      id: 'official.python-pyright',
+      enabledByDefault: true,
+      settingsSchema: {
+        'python.analysis.typeCheckingMode': {
+          type: 'enum',
+          title: 'Type checking mode',
+          scope: 'workspace',
+          defaultValue: 'basic',
+          options: [
+            { label: 'off', value: 'off' },
+            { label: 'basic', value: 'basic' },
+          ],
+        },
+      },
+      capability: {
+        languages: ['python'],
+        priority: 60,
+        projectIndicators: ['pyproject.toml', 'requirements.txt'],
+        runtime: {
+          type: 'node',
+          entry: 'bin/pyright-proxy.cjs',
+        },
+      },
+    });
+
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const filePath = path.join(workspaceRoot, 'app.py');
+    await fs.ensureDir(workspaceRoot);
+    await fs.writeFile(path.join(workspaceRoot, 'requirements.txt'), 'fastapi\n');
+    await fs.writeFile(filePath, 'print("hello")');
+
+    const resolution = await resolver.resolve({
+      rootPath: workspaceRoot,
+      filePath,
+    });
+
+    expect(resolution?.mergedSettings['python.analysis.exclude']).toEqual(expect.arrayContaining([
+      '**/.venv',
+      '**/venv',
+      '**/site-packages',
+      '**/__pycache__',
+    ]));
+    expect(resolution?.mergedSettings['python.analysis.ignore']).toEqual(expect.arrayContaining([
+      '**/.venv/**',
+      '**/venv/**',
+      '**/site-packages/**',
+      '**/__pycache__/**',
+    ]));
+  });
+
   it('resolves a single-language workspace warmup candidate from project indicators', async () => {
     await writePlugin(tempDir, registryStore, {
       id: 'official.java-jdtls',

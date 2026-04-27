@@ -9,9 +9,10 @@ import type {
 } from '../../../shared/types/electron-api';
 import { PathValidator } from '../../utils/pathValidator';
 import {
-  CODE_PANE_IGNORED_DIRECTORY_NAMES,
   CODE_PANE_INDEX_IGNORE_SIGNATURE,
   CODE_PANE_INDEX_SCHEMA_VERSION,
+  isIgnoredCodePanePath,
+  shouldIgnoreCodePaneDirectory,
 } from './codePaneFsConstants';
 
 type ProjectType = 'directory';
@@ -602,13 +603,7 @@ export class CodeProjectIndexService {
         pollInterval: 100,
       },
       ignored: (target: string) => {
-        const resolvedTargetPath = path.resolve(target);
-        const relativePath = path.relative(state.projectRootPath, resolvedTargetPath);
-        if (!relativePath || relativePath.startsWith('..')) {
-          return false;
-        }
-
-        return relativePath.split(path.sep).some((segment) => CODE_PANE_IGNORED_DIRECTORY_NAMES.has(segment));
+        return isIgnoredCodePanePath(state.projectRootPath, target);
       },
     });
 
@@ -833,7 +828,10 @@ export class CodeProjectIndexService {
     const entryStats = await Promise.all(directoryEntries.map(async (
       directoryEntry,
     ): Promise<PersistedDirectoryEntry | null> => {
-      if (directoryEntry.isDirectory() && CODE_PANE_IGNORED_DIRECTORY_NAMES.has(directoryEntry.name)) {
+      if (
+        directoryEntry.isDirectory()
+        && shouldIgnoreCodePaneDirectory(directoryEntry.name, path.join(absoluteDirectoryPath, directoryEntry.name))
+      ) {
         return null;
       }
 
@@ -919,7 +917,7 @@ export class CodeProjectIndexService {
           continue;
         }
 
-        if (entry.isDirectory() && CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+        if (entry.isDirectory() && shouldIgnoreCodePaneDirectory(entry.name, entryPath)) {
           continue;
         }
 

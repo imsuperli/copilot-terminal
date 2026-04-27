@@ -12,7 +12,7 @@ import type {
 import { CodeFileService } from '../code/CodeFileService';
 import { CodeRunProfileService } from '../code/CodeRunProfileService';
 import { LanguageProjectAdapterRegistry } from './adapters/LanguageProjectAdapterRegistry';
-import { setPythonInterpreterOverride } from './adapters/PythonProjectAdapter';
+import { invalidatePythonProjectInfo, setPythonInterpreterOverride } from './adapters/PythonProjectAdapter';
 import { ExternalJarService } from './ExternalJarService';
 
 export interface LanguageProjectContributionServiceOptions {
@@ -48,6 +48,7 @@ export class LanguageProjectContributionService {
   }
 
   async refreshProjectModel(rootPath: string): Promise<CodePaneProjectContribution[]> {
+    invalidatePythonProjectInfo(rootPath);
     return await this.getProjectContributions(rootPath);
   }
 

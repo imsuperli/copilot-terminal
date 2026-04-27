@@ -21,7 +21,7 @@ import {
 } from '../../../shared/types/electron-api';
 import { PathValidator } from '../../utils/pathValidator';
 import { CodeProjectIndexService } from './CodeProjectIndexService';
-import { CODE_PANE_IGNORED_DIRECTORY_NAMES } from './codePaneFsConstants';
+import { shouldIgnoreCodePaneDirectory } from './codePaneFsConstants';
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_SEARCH_LIMIT = 100;
@@ -322,7 +322,7 @@ export class CodeFileService {
         }
 
         if (stats.isDirectory()) {
-          if (!CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+          if (!shouldIgnoreCodePaneDirectory(entry.name, entryPath)) {
             stack.push(entryPath);
           }
           continue;
@@ -379,7 +379,7 @@ export class CodeFileService {
         }
 
         if (stats.isDirectory()) {
-          if (!CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+          if (!shouldIgnoreCodePaneDirectory(entry.name, entryPath)) {
             stack.push(entryPath);
           }
           continue;
@@ -624,7 +624,7 @@ export class CodeFileService {
         return null;
       }
 
-      if (entry.isDirectory() && CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+      if (entry.isDirectory() && shouldIgnoreCodePaneDirectory(entry.name, path.join(directoryPath, entry.name))) {
         return null;
       }
 

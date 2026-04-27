@@ -34,6 +34,23 @@ const PYTHON_PROJECT_INDICATORS = [
   'env',
 ];
 
+const PYTHON_FRAMEWORK_SCAN_PATTERNS = [
+  'main.py',
+  'app.py',
+  'manage.py',
+  'app/**/*.py',
+  'apps/**/*.py',
+  'src/**/*.py',
+  'backend/**/*.py',
+  'server/**/*.py',
+  'api/**/*.py',
+  'services/**/*.py',
+  'project/**/*.py',
+  'config/**/*.py',
+];
+
+const PYTHON_PROJECT_INFO_CACHE_TTL_MS = 10_000;
+
 type PythonInterpreterSource = 'workspace' | 'poetry' | 'virtualenv' | 'conda' | 'system';
 
 export interface PythonInterpreterCandidate {
@@ -46,6 +63,10 @@ export interface PythonInterpreterCandidate {
 }
 
 const pythonInterpreterOverrides = new Map<string, string>();
+const pythonProjectInfoCache = new Map<string, {
+  promise: Promise<PythonProjectInfo | null>;
+  createdAt: number;
+}>();
 
 export class PythonProjectAdapter implements LanguageProjectAdapter {
   readonly languageId = 'python';
@@ -110,7 +131,7 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
   }
 
   async getProjectContribution(workspaceRoot: string): Promise<CodePaneProjectContribution | null> {
-    const projectInfo = await detectPythonProject(workspaceRoot);
+    const projectInfo = await getCachedPythonProjectInfo(workspaceRoot);
     if (!projectInfo) {
       return null;
     }
@@ -189,7 +210,7 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
   }
 
   async resolveProjectCommand(workspaceRoot: string, commandId: string): Promise<LanguageProjectCommandDefinition | null> {
-    const projectInfo = await detectPythonProject(workspaceRoot);
+    const projectInfo = await getCachedPythonProjectInfo(workspaceRoot);
     if (!projectInfo) {
       return null;
     }
@@ -412,11 +433,42 @@ async function detectPythonProject(workspaceRoot: string): Promise<PythonProject
   };
 }
 
+async function getCachedPythonProjectInfo(workspaceRoot: string): Promise<PythonProjectInfo | null> {
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+  const now = Date.now();
+  const cachedEntry = pythonProjectInfoCache.get(normalizedWorkspaceRoot);
+  if (cachedEntry && now - cachedEntry.createdAt < PYTHON_PROJECT_INFO_CACHE_TTL_MS) {
+    return await cachedEntry.promise;
+  }
+
+  const promise = detectPythonProject(normalizedWorkspaceRoot).catch((error) => {
+    const currentEntry = pythonProjectInfoCache.get(normalizedWorkspaceRoot);
+    if (currentEntry?.promise === promise) {
+      pythonProjectInfoCache.delete(normalizedWorkspaceRoot);
+    }
+    throw error;
+  });
+
+  pythonProjectInfoCache.set(normalizedWorkspaceRoot, {
+    promise,
+    createdAt: now,
+  });
+
+  return await promise;
+}
+
 async function collectPythonFrameworkInsights(
   workspaceRoot: string,
   managePyPath: string | null,
 ): Promise<PythonFrameworkInsights> {
-  const pythonFiles = await findWorkspaceFiles(workspaceRoot, ['**/*.py']);
+  const pythonFiles = deduplicateFilePaths([
+    ...await findWorkspaceFiles(workspaceRoot, PYTHON_FRAMEWORK_SCAN_PATTERNS),
+    ...await findWorkspaceFiles(workspaceRoot, ['**/*.py'], [
+      '**/tests/**',
+      '**/test_*.py',
+      '**/*_test.py',
+    ]),
+  ]).slice(0, 400);
   const routes: PythonProjectEntry[] = [];
   const entrypoints: PythonProjectEntry[] = [];
   let fastApiEntrypoint: PythonFastApiEntrypoint | undefined;
@@ -598,10 +650,16 @@ export function setPythonInterpreterOverride(workspaceRoot: string, interpreterP
   const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
   if (!interpreterPath) {
     pythonInterpreterOverrides.delete(normalizedWorkspaceRoot);
+    invalidatePythonProjectInfo(normalizedWorkspaceRoot);
     return;
   }
 
   pythonInterpreterOverrides.set(normalizedWorkspaceRoot, normalizeInterpreterPath(interpreterPath));
+  invalidatePythonProjectInfo(normalizedWorkspaceRoot);
+}
+
+export function invalidatePythonProjectInfo(workspaceRoot: string): void {
+  pythonProjectInfoCache.delete(path.resolve(workspaceRoot));
 }
 
 async function detectFirstExistingFile(workspaceRoot: string, fileNames: string[]): Promise<string | null> {
@@ -1061,5 +1119,16 @@ async function isPythonWorkspace(workspaceRoot: string): Promise<boolean> {
     return true;
   }
 
-  return (await findWorkspaceFiles(workspaceRoot, ['**/*.py'])).length > 0;
+  return (await findWorkspaceFiles(workspaceRoot, [
+    '*.py',
+    'src/**/*.py',
+    'app/**/*.py',
+    'backend/**/*.py',
+    'server/**/*.py',
+    'api/**/*.py',
+  ])).length > 0;
+}
+
+function deduplicateFilePaths(filePaths: string[]): string[] {
+  return Array.from(new Set(filePaths.map((filePath) => path.resolve(filePath))));
 }

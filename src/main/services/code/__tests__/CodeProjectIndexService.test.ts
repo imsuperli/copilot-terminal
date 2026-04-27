@@ -188,6 +188,68 @@ describe('CodeProjectIndexService', () => {
     await service.destroy();
   });
 
+  it('ignores python virtual environments and cache directories during indexing', async () => {
+    const appDirectoryPath = path.join(tempProjectRoot, 'app');
+    const sourceFilePath = path.join(appDirectoryPath, 'main.py');
+    const venvFilePath = path.join(tempProjectRoot, '.venv', 'lib', 'python3.12', 'site-packages', 'requests', 'api.py');
+    const pycacheFilePath = path.join(tempProjectRoot, '__pycache__', 'main.cpython-312.pyc');
+    await fsPromises.mkdir(path.dirname(sourceFilePath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(venvFilePath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(pycacheFilePath), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(sourceFilePath, 'print("hello")\n', 'utf-8'),
+      fsPromises.writeFile(venvFilePath, 'def get(url):\n    return url\n', 'utf-8'),
+      fsPromises.writeFile(pycacheFilePath, 'compiled', 'utf-8'),
+    ]);
+
+    const service = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await service.watchProjectForPane('pane-1', tempProjectRoot);
+    await service.waitForIdle(tempProjectRoot);
+
+    const rootEntries = await service.listDirectory({ rootPath: tempProjectRoot, includeHidden: true });
+    expect(rootEntries.map((entry) => entry.name)).toEqual(['app']);
+
+    const appResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'main.py' });
+    expect(appResults).toEqual([sourceFilePath]);
+
+    const venvResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'requests' });
+    expect(venvResults).toEqual([]);
+
+    await service.destroy();
+  });
+
+  it('ignores env directories only when they are actual python virtual environments', async () => {
+    const appDirectoryPath = path.join(tempProjectRoot, 'app');
+    const sourceFilePath = path.join(appDirectoryPath, 'main.py');
+    const envPackagePath = path.join(tempProjectRoot, 'env', 'lib', 'python3.12', 'site-packages', 'requests', 'api.py');
+    const envMarkerPath = path.join(tempProjectRoot, 'env', 'pyvenv.cfg');
+    const businessEnvPath = path.join(tempProjectRoot, 'services', 'env', 'config.ts');
+    await fsPromises.mkdir(path.dirname(sourceFilePath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(envPackagePath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(businessEnvPath), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(sourceFilePath, 'print("hello")\n', 'utf-8'),
+      fsPromises.writeFile(envMarkerPath, 'home = /usr/bin\n', 'utf-8'),
+      fsPromises.writeFile(envPackagePath, 'def get(url):\n    return url\n', 'utf-8'),
+      fsPromises.writeFile(businessEnvPath, 'export const environment = "prod";\n', 'utf-8'),
+    ]);
+
+    const service = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await service.watchProjectForPane('pane-1', tempProjectRoot);
+    await service.waitForIdle(tempProjectRoot);
+
+    const rootEntries = await service.listDirectory({ rootPath: tempProjectRoot, includeHidden: true });
+    expect(rootEntries.map((entry) => entry.name)).toEqual(['app', 'services']);
+
+    const businessResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'config.ts' });
+    expect(businessResults).toEqual([businessEnvPath]);
+
+    const envPackageResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'requests' });
+    expect(envPackageResults).toEqual([]);
+
+    await service.destroy();
+  });
+
   it('keeps the pane root as the indexed project root even inside a larger git repository', async () => {
     const nestedProjectRoot = path.join(tempProjectRoot, 'services', 'orders');
     const nestedSourceFilePath = path.join(nestedProjectRoot, 'src', 'main', 'java', 'OrdersApp.java');

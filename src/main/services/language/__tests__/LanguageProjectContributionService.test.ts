@@ -402,6 +402,49 @@ describe('LanguageProjectContributionService', () => {
     });
   });
 
+  it('ignores virtualenv files when building python framework insights', async () => {
+    await fsPromises.mkdir(path.join(workspaceRootPath, 'app'), { recursive: true });
+    await fsPromises.mkdir(path.join(workspaceRootPath, '.venv', 'lib', 'python3.12', 'site-packages', 'pkg'), { recursive: true });
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'app', 'main.py'),
+      [
+        'from fastapi import FastAPI',
+        'app = FastAPI()',
+        '@app.get("/health")',
+        'def health():',
+        '    return {"ok": True}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, '.venv', 'lib', 'python3.12', 'site-packages', 'pkg', 'vendor_app.py'),
+      [
+        'from fastapi import FastAPI',
+        'app = FastAPI()',
+        '@app.get("/vendor")',
+        'def vendor():',
+        '    return {"ok": True}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const service = new LanguageProjectContributionService({
+      codeFileService: new CodeFileService(),
+    });
+
+    const contributions = await service.getProjectContributions(workspaceRootPath);
+    const pythonContribution = contributions.find((item) => item.languageId === 'python');
+    const routeLabels = pythonContribution?.treeSections
+      ?.find((section) => section.title === 'Routes')
+      ?.items
+      ?.map((item) => item.label) ?? [];
+
+    expect(routeLabels).toContain('GET /health');
+    expect(routeLabels).not.toContain('GET /vendor');
+  });
+
   it('surfaces environment control commands and applies python interpreter overrides without a run session', async () => {
     const dotVenvInterpreterPath = path.join(workspaceRootPath, '.venv', 'bin', 'python');
     const venvInterpreterPath = path.join(workspaceRootPath, 'venv', 'bin', 'python');
@@ -475,6 +518,11 @@ describe('LanguageProjectContributionService', () => {
 
     const resolvedEnvironment = await resolvePythonEnvironment(workspaceRootPath);
     expect(resolvedEnvironment.interpreterPath).toBe(venvInterpreterPath);
+
+    const refreshedContributions = await service.getProjectContributions(workspaceRootPath);
+    const refreshedPythonContribution = refreshedContributions.find((item) => item.languageId === 'python');
+    const interpreterStatus = refreshedPythonContribution?.statusItems?.find((item) => item.id === 'python-interpreter');
+    expect(interpreterStatus?.label).toBe('Interpreter: python');
   });
 
   it('builds diagnostics and repair actions for degraded project environments', async () => {

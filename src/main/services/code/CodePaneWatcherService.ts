@@ -1,7 +1,7 @@
 import path from 'path';
 import { BrowserWindow } from 'electron';
 import { PathValidator } from '../../utils/pathValidator';
-import { CODE_PANE_IGNORED_DIRECTORY_NAMES } from './codePaneFsConstants';
+import { isIgnoredCodePanePath } from './codePaneFsConstants';
 
 let chokidarModule: any = null;
 let chokidarPromise: Promise<any> | null = null;
@@ -70,13 +70,7 @@ export class CodePaneWatcherService {
           pollInterval: 100,
         },
         ignored: (target: string) => {
-          const resolvedTargetPath = path.resolve(target);
-          const relativePath = path.relative(normalizedRootPath, resolvedTargetPath);
-          if (!relativePath || relativePath.startsWith('..')) {
-            return false;
-          }
-
-          return relativePath.split(path.sep).some((segment) => CODE_PANE_IGNORED_DIRECTORY_NAMES.has(segment));
+          return isIgnoredCodePanePath(normalizedRootPath, target);
         },
       });
 

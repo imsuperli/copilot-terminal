@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { getPythonVirtualEnvIgnoreGlobs } from '../../utils/pythonVirtualEnv';
 import type {
   PluginManifest,
   PluginRegistry,
@@ -56,6 +57,52 @@ async function getComputedPluginDefaults(
   projectRoot: string,
   currentSettings: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  if (pluginId === 'official.python-pyright') {
+    const defaults: Record<string, unknown> = {};
+    const pythonVirtualEnvIgnores = getPythonVirtualEnvIgnoreGlobs(projectRoot);
+
+    if (currentSettings['python.analysis.exclude'] === undefined) {
+      defaults['python.analysis.exclude'] = [
+        '**/.git',
+        '**/.hg',
+        '**/.svn',
+        '**/.venv',
+        '**/venv',
+        '**/__pycache__',
+        '**/.pytest_cache',
+        '**/.mypy_cache',
+        '**/.ruff_cache',
+        '**/.tox',
+        '**/.nox',
+        '**/site-packages',
+        '**/dist-packages',
+        '**/node_modules',
+        '**/dist',
+        '**/build',
+        '**/target',
+        ...pythonVirtualEnvIgnores.exclude,
+      ];
+    }
+
+    if (currentSettings['python.analysis.ignore'] === undefined) {
+      defaults['python.analysis.ignore'] = [
+        '**/.venv/**',
+        '**/venv/**',
+        '**/__pycache__/**',
+        '**/.pytest_cache/**',
+        '**/.mypy_cache/**',
+        '**/.ruff_cache/**',
+        '**/.tox/**',
+        '**/.nox/**',
+        '**/site-packages/**',
+        '**/dist-packages/**',
+        ...pythonVirtualEnvIgnores.ignore,
+      ];
+    }
+
+    return defaults;
+  }
+
   if (pluginId !== 'official.java-jdtls') {
     return {};
   }
