@@ -1,5 +1,7 @@
 import type { IpcResponse } from '../../shared/types/electron-api';
+import { Window } from '../types/window';
 import { useWindowStore } from '../stores/windowStore';
+import { getDestroyableSSHWindowIds, isEphemeralSSHCloneWindow } from './sshWindowBindings';
 
 function assertIpcSuccess(response: IpcResponse<void> | undefined, fallbackMessage: string): void {
   if (response && !response.success) {
@@ -35,4 +37,40 @@ export async function destroyWindowResourcesKeepRecord(windowId: string): Promis
 export async function destroyWindowResourcesAndRemoveRecord(windowId: string): Promise<void> {
   await destroyWindowResources(windowId);
   useWindowStore.getState().removeWindow(windowId);
+}
+
+export async function destroySSHWindowFamilyResources(
+  targetWindow: Window,
+  options?: {
+    removeTargetRecord?: boolean;
+    includeOwnedClones?: boolean;
+  },
+): Promise<string[]> {
+  const allWindows = useWindowStore.getState().windows;
+  const windowIds = getDestroyableSSHWindowIds(allWindows, targetWindow, {
+    includeOwner: !isEphemeralSSHCloneWindow(targetWindow),
+    includeOwnedClones: options?.includeOwnedClones ?? !isEphemeralSSHCloneWindow(targetWindow),
+  });
+  const processedWindowIds: string[] = [];
+
+  for (const windowId of windowIds) {
+    const currentWindow = useWindowStore.getState().getWindowById(windowId);
+    if (!currentWindow) {
+      continue;
+    }
+
+    const shouldRemoveRecord = currentWindow.id === targetWindow.id
+      ? (currentWindow.ephemeral ? true : Boolean(options?.removeTargetRecord))
+      : true;
+
+    if (shouldRemoveRecord) {
+      await destroyWindowResourcesAndRemoveRecord(windowId);
+    } else {
+      await destroyWindowResourcesKeepRecord(windowId);
+    }
+
+    processedWindowIds.push(windowId);
+  }
+
+  return processedWindowIds;
 }

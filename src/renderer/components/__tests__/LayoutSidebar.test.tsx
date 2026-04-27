@@ -90,4 +90,75 @@ describe('Layout Sidebar', () => {
     const storedWindows = useWindowStore.getState().windows;
     expect(storedWindows.map((window) => window.id)).toEqual([otherWindow.id]);
   });
+
+  it('clears ssh window records together with owned ephemeral clone tabs from the ssh tab', async () => {
+    const user = userEvent.setup();
+    const ownerWindow = {
+      ...createWindowWithStatus('ssh-owner', WindowStatus.Running),
+      kind: 'ssh' as const,
+      layout: {
+        type: 'pane' as const,
+        id: 'pane-ssh-owner',
+        pane: {
+          id: 'pane-ssh-owner',
+          cwd: '/srv/app',
+          command: '',
+          status: WindowStatus.Running,
+          pid: 2001,
+          backend: 'ssh' as const,
+          ssh: {
+            profileId: 'profile-1',
+          },
+        },
+      },
+    };
+    const cloneWindow = {
+      ...createWindowWithStatus('ssh-clone', WindowStatus.Running),
+      kind: 'ssh' as const,
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindow.id,
+      layout: {
+        type: 'pane' as const,
+        id: 'pane-ssh-clone',
+        pane: {
+          id: 'pane-ssh-clone',
+          cwd: '/srv/clone',
+          command: '',
+          status: WindowStatus.Running,
+          pid: 2002,
+          backend: 'ssh' as const,
+          ssh: {
+            profileId: 'profile-1',
+          },
+        },
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+    });
+
+    render(
+      <Sidebar
+        currentTab="ssh"
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onTabChange={vi.fn()}
+        sshEnabled
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '清空远程终端' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(cloneWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(cloneWindow.id);
+    });
+
+    expect(useWindowStore.getState().windows).toHaveLength(0);
+  });
 });

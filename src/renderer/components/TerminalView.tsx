@@ -57,6 +57,7 @@ import {
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
 import {
+  getDestroyableSSHWindowIds,
   getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
   getSSHSessionOwnerWindowId,
@@ -65,6 +66,7 @@ import {
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { destroySSHWindowFamilyResources } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
 import { getInactiveWindowStatus, getStartablePanes, hasAnyLiveTerminalSession, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 
@@ -531,13 +533,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [destroyRemoteWindows, onReturn, onWindowSwitch, terminalWindow.id]);
 
+  const destroyStandaloneSshWindowResources = useCallback(async (
+    targetWindow: Window,
+    options?: {
+      removeOwnerRecord?: boolean;
+    },
+  ) => destroySSHWindowFamilyResources(targetWindow, {
+    removeTargetRecord: options?.removeOwnerRecord,
+    includeOwnedClones: !isEphemeralSSHCloneWindow(targetWindow),
+  }), []);
+
   const destroyStandaloneSshWindowFamily = useCallback(async () => {
     const allWindows = useWindowStore.getState().windows;
-    const ownerWindowId = getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id;
-    const familyWindowIds = terminalWindow.ephemeral
-      ? [terminalWindow.id]
-      : [ownerWindowId, ...getOwnedEphemeralSSHWindowIds(allWindows, ownerWindowId)];
-    const uniqueWindowIds = Array.from(new Set(familyWindowIds));
+    const uniqueWindowIds = getDestroyableSSHWindowIds(allWindows, terminalWindow, {
+      includeOwner: true,
+      includeOwnedClones: !terminalWindow.ephemeral,
+    });
     const closingWindowIdSet = new Set(uniqueWindowIds);
     const scopedWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
     const currentWindowWillClose = closingWindowIdSet.has(terminalWindow.id);
@@ -563,12 +574,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
     }
 
-    await destroyAndRemoveRemoteWindows(uniqueWindowIds);
+    await destroyStandaloneSshWindowResources(terminalWindow, {
+      removeOwnerRecord: true,
+    });
 
     if (!nextWindowId && currentWindowWillClose) {
       onReturn();
     }
-  }, [destroyAndRemoveRemoteWindows, embedded, groupId, onReturn, onWindowSwitch, terminalWindow]);
+  }, [destroyStandaloneSshWindowResources, embedded, groupId, onReturn, onWindowSwitch, terminalWindow]);
 
   const handleDeleteWindow = useCallback(async () => {
     if (isEphemeralRemoteTab) {
@@ -636,6 +649,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           void destroyCurrentEphemeralRemoteWindow().catch((error) => {
             console.error('Failed to destroy ephemeral remote window after pane exit:', error);
           });
+        } else if (isStandaloneSshWindow) {
+          void destroyStandaloneSshWindowFamily().catch((error) => {
+            console.error('Failed to destroy standalone SSH window family after pane exit:', error);
+          });
         } else {
           void destroyWindowResourcesKeepRecord(terminalWindow.id).catch((error) => {
             console.error('Failed to destroy window session after pane exit:', error);
@@ -653,7 +670,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       embedded,
       onStopAndRemoveFromGroup,
       isEphemeralRemoteTab,
+      isStandaloneSshWindow,
       destroyCurrentEphemeralRemoteWindow,
+      destroyStandaloneSshWindowFamily,
       destroyWindowResourcesKeepRecord,
       closePaneInWindow,
     ]

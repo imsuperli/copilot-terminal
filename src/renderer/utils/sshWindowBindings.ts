@@ -171,6 +171,40 @@ export function getOwnedEphemeralSSHWindowIds(
   return getOwnedEphemeralSSHWindows(windows, ownerWindowId).map((window) => window.id);
 }
 
+export function getDestroyableSSHWindowIds(
+  windows: Window[],
+  targetWindow: Window,
+  options?: {
+    includeOwner?: boolean;
+    includeOwnedClones?: boolean;
+  },
+): string[] {
+  const ownerWindowId = getSSHSessionOwnerWindowId(targetWindow);
+  if (!ownerWindowId) {
+    return [targetWindow.id];
+  }
+
+  const includeOwner = options?.includeOwner ?? true;
+  const includeOwnedClones = options?.includeOwnedClones ?? !isEphemeralSSHCloneWindow(targetWindow);
+  const windowIds: string[] = [];
+
+  if (includeOwner) {
+    windowIds.push(ownerWindowId);
+  } else {
+    windowIds.push(targetWindow.id);
+  }
+
+  if (includeOwnedClones) {
+    windowIds.push(...getOwnedEphemeralSSHWindowIds(windows, ownerWindowId));
+  }
+
+  if (!includeOwner && !windowIds.includes(targetWindow.id)) {
+    windowIds.push(targetWindow.id);
+  }
+
+  return Array.from(new Set(windowIds));
+}
+
 export function getSSHSessionFamilyWindows(
   windows: Window[],
   targetWindowId: string,

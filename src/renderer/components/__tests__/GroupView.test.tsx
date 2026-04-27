@@ -161,4 +161,86 @@ describe('GroupView', () => {
     expect(useWindowStore.getState().groups).toHaveLength(0);
     expect(onReturn).toHaveBeenCalledTimes(1);
   });
+
+  it('destroys grouped ssh owner sessions while also removing owned ephemeral clone tabs', async () => {
+    const user = userEvent.setup();
+    const onReturn = vi.fn();
+    const ownerWindow = {
+      ...createWindow('win-a', WindowStatus.Running),
+      kind: 'ssh' as const,
+      layout: {
+        type: 'pane' as const,
+        id: 'pane-win-a',
+        pane: {
+          id: 'pane-win-a',
+          cwd: '/srv/app',
+          command: '',
+          status: WindowStatus.Running,
+          pid: 1000,
+          backend: 'ssh' as const,
+          ssh: {
+            profileId: 'profile-1',
+          },
+        },
+      },
+    };
+    const groupedWindow = createWindow('win-b', WindowStatus.Running);
+    const cloneWindow = {
+      ...createWindow('win-clone', WindowStatus.Running),
+      ephemeral: true,
+      kind: 'ssh' as const,
+      sshTabOwnerWindowId: ownerWindow.id,
+      layout: {
+        type: 'pane' as const,
+        id: 'pane-win-clone',
+        pane: {
+          id: 'pane-win-clone',
+          cwd: '/srv/clone',
+          command: '',
+          status: WindowStatus.Running,
+          pid: 1001,
+          backend: 'ssh' as const,
+          ssh: {
+            profileId: 'profile-1',
+          },
+        },
+      },
+    };
+    const group = createGroup([ownerWindow.id, groupedWindow.id]);
+
+    useWindowStore.setState({
+      windows: [ownerWindow, groupedWindow, cloneWindow],
+      groups: [group],
+      activeGroupId: group.id,
+    });
+
+    render(
+      <GroupView
+        group={group}
+        onReturn={onReturn}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '销毁全部' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(cloneWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(cloneWindow.id);
+    });
+
+    const storedOwner = useWindowStore.getState().windows.find((window) => window.id === ownerWindow.id);
+    expect(storedOwner).toBeDefined();
+    expect(storedOwner?.layout.type).toBe('pane');
+    if (storedOwner?.layout.type === 'pane') {
+      expect(storedOwner.layout.pane.status).toBe(WindowStatus.Completed);
+      expect(storedOwner.layout.pane.pid).toBeNull();
+    }
+    expect(useWindowStore.getState().windows.some((window) => window.id === cloneWindow.id)).toBe(false);
+    expect(useWindowStore.getState().groups).toEqual([group]);
+    expect(onReturn).toHaveBeenCalledTimes(1);
+  });
 });

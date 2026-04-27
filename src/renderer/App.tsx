@@ -37,6 +37,7 @@ import type {
 } from '../shared/types/electron-api';
 import './api/ptyDataBus';
 import { getAllPanes } from './utils/layoutHelpers';
+import { getAllWindowIds } from './utils/groupLayoutHelpers';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
 import {
   authNeedsPassword,
@@ -72,9 +73,9 @@ const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
   WindowStatus.Error,
 ]);
 
-function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
+function findReusableSSHWindow(windows: Window[], profileId: string, groupedWindowIds: Set<string>): Window | null {
   const matchedWindows = windows.filter((window) => {
-    if (window.archived || isEphemeralSSHCloneWindow(window)) {
+    if (window.archived || isEphemeralSSHCloneWindow(window) || groupedWindowIds.has(window.id)) {
       return false;
     }
 
@@ -277,6 +278,7 @@ function AppContent() {
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
+  const groups = useWindowStore((state) => state.groups);
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const mountedWindowLifecycleRecordKeys = useWindowStore(useShallow(selectMountedWindowLifecycleRecordKeys));
   const mountedWindowRecordKeys = useMemo(
@@ -671,6 +673,17 @@ function AppContent() {
   // 使用 store 的 activeWindowId，确保状态一致
   const activeWindowId = storeActiveWindowId;
   const [mountedTerminalWindowIds, setMountedTerminalWindowIds] = useState<string[]>([]);
+  const groupedWindowIdSet = useMemo(() => {
+    const nextIds = new Set<string>();
+
+    for (const group of groups) {
+      for (const windowId of getAllWindowIds(group.layout)) {
+        nextIds.add(windowId);
+      }
+    }
+
+    return nextIds;
+  }, [groups]);
 
   useEffect(() => {
     if (!activeWindowId) {
@@ -946,7 +959,7 @@ function AppContent() {
 
     const windows = useWindowStore.getState().windows;
     const reusableWindow = profile.reuseSession
-      ? findReusableSSHWindow(windows, profile.id)
+      ? findReusableSSHWindow(windows, profile.id, groupedWindowIdSet)
       : null;
     if (reusableWindow) {
       const reusablePanes = getAllPanes(reusableWindow.layout).filter((pane) => pane.ssh?.profileId === profile.id);
@@ -1022,7 +1035,7 @@ function AppContent() {
     } finally {
       setConnectingSSHProfileId(null);
     }
-  }, [addWindow, connectingSSHProfileId, showAppError, switchToWindow, updatePane, updateWindow]);
+  }, [addWindow, connectingSSHProfileId, groupedWindowIdSet, showAppError, switchToWindow, updatePane, updateWindow]);
 
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);

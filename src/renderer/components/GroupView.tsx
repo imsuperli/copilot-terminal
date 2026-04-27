@@ -14,8 +14,10 @@ import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
+import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { destroySSHWindowFamilyResources } from '../utils/windowDestruction';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 import { getStartablePanes } from '../utils/windowLifecycle';
@@ -166,6 +168,19 @@ export const GroupView: React.FC<GroupViewProps> = ({
 
   const destroyWindowIds = useCallback(async (windowIds: string[]) => {
     for (const windowId of windowIds) {
+      const targetWindow = useWindowStore.getState().getWindowById(windowId);
+      if (!targetWindow) {
+        continue;
+      }
+
+      if (getWindowKind(targetWindow) === 'ssh') {
+        await destroySSHWindowFamilyResources(targetWindow, {
+          removeTargetRecord: false,
+          includeOwnedClones: !isEphemeralSSHCloneWindow(targetWindow),
+        });
+        continue;
+      }
+
       await destroyWindowResourcesKeepRecord(windowId);
     }
   }, []);

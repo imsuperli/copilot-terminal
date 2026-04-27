@@ -405,6 +405,57 @@ describe('CardGrid SSH profile cards', () => {
     });
   });
 
+  it('destroys a lone bound SSH runtime window instead of leaving a restartable placeholder', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const closeWindowMock = vi.mocked(window.electronAPI.closeWindow);
+    const deleteWindowMock = vi.mocked(window.electronAPI.deleteWindow);
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    await user.click(screen.getByRole('button', { name: '销毁' }));
+
+    await waitFor(() => {
+      expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(deleteWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(false);
+    });
+
+    expect(screen.getByRole('button', { name: '启动' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '销毁' })).not.toBeInTheDocument();
+  });
+
+  it('switches back to the unified view when destroying the currently active bound SSH runtime window from the card', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+      activeWindowId: runtimeWindow.id,
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    await user.click(screen.getByRole('button', { name: '销毁' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.switchToUnifiedView).toHaveBeenCalledTimes(1);
+      expect(useWindowStore.getState().activeWindowId).toBeNull();
+    });
+  });
+
   it('deletes a bound SSH card by removing both the runtime window and the SSH profile', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();

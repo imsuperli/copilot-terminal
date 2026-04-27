@@ -725,6 +725,58 @@ describe('TerminalView SSH toolbar', () => {
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
+  it('closes an ssh owner tab without destroying its clone tabs', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+    const ownerWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const cloneWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindow.id,
+    });
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      activeWindowId: ownerWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
+
+    render(
+      <TerminalView
+        window={ownerWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    await user.hover(screen.getByRole('button', { name: 'Prod SSH A' }));
+    await user.click(screen.getByRole('button', { name: '销毁 app' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(ownerWindow.id);
+    });
+
+    expect(window.electronAPI.closeWindow).not.toHaveBeenCalledWith(cloneWindow.id);
+    expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith(cloneWindow.id);
+    expect(onWindowSwitch).toHaveBeenCalledWith(cloneWindow.id);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual([cloneWindow.id]);
+  });
+
   it('destroys an ephemeral ssh clone tab when stopped and hides archive and restart actions', async () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();

@@ -27,7 +27,6 @@ import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import {
   buildStandaloneSSHWindowMap,
-  getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
   getSSHSessionOwnerWindowId,
   getStandaloneSSHProfileId,
@@ -36,7 +35,7 @@ import {
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { destroySSHWindowFamilyResources, destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 
 // 统一的卡片项类型
 type CardItem =
@@ -584,19 +583,26 @@ export const CardGrid = React.memo<CardGridProps>(({
   const handleDestroyWindowSession = useCallback(async (win: Window) => {
     try {
       const ownerWindowId = getSSHSessionOwnerWindowId(win);
-      if (ownerWindowId && !isEphemeralSSHCloneWindow(win)) {
-        const ownedCloneWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, ownerWindowId);
-        if (ownedCloneWindowIds.length > 0) {
-          await destroyAndRemoveWindowIds([win.id, ...ownedCloneWindowIds]);
-          return;
+      if (ownerWindowId) {
+        const { activeWindowId } = useWindowStore.getState();
+        const windowIdsToRemove = await destroySSHWindowFamilyResources(win, {
+          removeTargetRecord: true,
+          includeOwnedClones: !isEphemeralSSHCloneWindow(win),
+        });
+
+        if (activeWindowId && windowIdsToRemove.includes(activeWindowId)) {
+          useWindowStore.getState().setActiveWindow(null);
+          await window.electronAPI.switchToUnifiedView();
         }
+
+        return;
       }
 
       await destroyWindowIds([win.id]);
     } catch (error) {
       console.error('Failed to destroy window:', error);
     }
-  }, [destroyAndRemoveWindowIds, destroyWindowIds]);
+  }, [destroyWindowIds]);
 
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {
@@ -751,6 +757,14 @@ export const CardGrid = React.memo<CardGridProps>(({
       await Promise.all(
         windowsToDestroy.map(async (win) => {
           try {
+            if (getSSHSessionOwnerWindowId(win)) {
+              await destroySSHWindowFamilyResources(win, {
+                removeTargetRecord: false,
+                includeOwnedClones: !isEphemeralSSHCloneWindow(win),
+              });
+              return;
+            }
+
             await destroyWindowIds([win.id]);
           } catch (error) {
             console.error(`Failed to destroy window ${win.id}:`, error);

@@ -10,11 +10,11 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
-import { getPersistableWindows } from '../../utils/sshWindowBindings';
+import { getPersistableWindows, getSSHSessionOwnerWindowId, isEphemeralSSHCloneWindow } from '../../utils/sshWindowBindings';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
 import { getSidebarCardCounts } from '../../utils/cardCollection';
-import { destroyWindowResourcesAndRemoveRecord } from '../../utils/windowDestruction';
+import { destroySSHWindowFamilyResources, destroyWindowResourcesAndRemoveRecord } from '../../utils/windowDestruction';
 import {
   idePopupInputClassName,
   idePopupSecondaryButtonClassName,
@@ -210,6 +210,14 @@ export function Sidebar({
     for (const windowId of uniqueWindowIds) {
       const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
       if (!win || win.ephemeral) {
+        continue;
+      }
+
+      if (getSSHSessionOwnerWindowId(win)) {
+        await destroySSHWindowFamilyResources(win, {
+          removeTargetRecord: true,
+          includeOwnedClones: !isEphemeralSSHCloneWindow(win),
+        });
         continue;
       }
 

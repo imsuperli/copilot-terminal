@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SSH_AUTH_FAILED_ERROR_CODE } from '../../shared/types/electron-api';
+import { createGroup } from '../utils/groupLayoutHelpers';
 import { useWindowStore } from '../stores/windowStore';
 import { Window, WindowStatus } from '../types/window';
 
@@ -289,6 +290,75 @@ describe('App SSH profile reuse', () => {
 
     useWindowStore.setState({
       windows: [],
+    });
+
+    mockUseWindowSwitcher.mockReturnValue({
+      switchToWindow,
+    });
+
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValue({
+      success: true,
+      data: {
+        hasPassword: true,
+        hasPassphrase: false,
+      },
+    });
+    vi.mocked(window.electronAPI.createSSHWindow).mockResolvedValue({
+      success: true,
+      data: createNewSSHWindow('profile-1'),
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '连接 SSH' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '连接 SSH' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.createSSHWindow).toHaveBeenCalledWith({
+        profileId: 'profile-1',
+        name: 'Prod SSH',
+      });
+    });
+
+    expect(switchToWindow).toHaveBeenCalledWith('win-ssh-new');
+  });
+
+  it('does not reuse an ssh window that still belongs to a group', async () => {
+    const user = userEvent.setup();
+    const switchToWindow = vi.fn();
+    const groupedWindow = createSSHWindow('profile-1');
+    const siblingWindow = createSSHWindow('profile-2', {
+      id: 'win-ssh-group-sibling',
+      activePaneId: 'pane-ssh-group-sibling',
+      layout: {
+        type: 'pane',
+        id: 'pane-ssh-group-sibling',
+        pane: {
+          id: 'pane-ssh-group-sibling',
+          cwd: '~',
+          command: '',
+          status: WindowStatus.Completed,
+          pid: null,
+          backend: 'ssh',
+          ssh: {
+            profileId: 'profile-2',
+            host: '10.0.0.22',
+            port: 22,
+            user: 'root',
+            authType: 'password',
+            reuseSession: true,
+          },
+        },
+      },
+    });
+    const group = createGroup('SSH Group', groupedWindow.id, siblingWindow.id);
+
+    useWindowStore.setState({
+      windows: [groupedWindow, siblingWindow],
+      groups: [group],
     });
 
     mockUseWindowSwitcher.mockReturnValue({
