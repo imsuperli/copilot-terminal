@@ -49,7 +49,7 @@ const sidebarTooltipClassName =
 const sidebarIconButtonClassName =
   'flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[rgb(var(--muted-foreground))] transition-colors duration-200 hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]';
 const sidebarCollapsedActionButtonClassName =
-  'h-10 w-full items-center gap-2 border-b border-[rgb(var(--border))] transition-colors duration-200';
+  'flex h-10 w-full items-center justify-center gap-2 border-b border-[rgb(var(--border))] transition-colors duration-200';
 const sidebarCardSurfaceClassName =
   'border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,var(--appearance-pane-chrome-background)_100%,transparent)] hover:bg-[rgb(var(--accent))]';
 const sidebarQuickActionButtonClassName =
@@ -728,7 +728,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
           <Tooltip.Trigger asChild>
             <button
               onClick={handleClick}
-              className={`flex h-10 w-full items-center justify-center border-l-2 border-y border-r transition-colors ${itemSurfaceClassName} ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}`}
+              className={`flex h-10 w-full items-center justify-center border transition-colors ${itemSurfaceClassName}`}
               aria-label={group.name}
             >
               <div className="relative">
@@ -756,7 +756,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   return (
     <button
       onClick={handleClick}
-      className={`flex w-full items-start gap-2 rounded-lg border border-l-2 px-3 py-2 text-left transition-colors ${itemSurfaceClassName} ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}`}
+      className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${itemSurfaceClassName}`}
       aria-label={group.name}
     >
       <div className="relative mt-0.5 flex-shrink-0">

@@ -352,6 +352,29 @@ describe('Terminal Sidebar', () => {
     expect(screen.getByTestId('create-window-dialog')).toHaveTextContent('local-only');
   });
 
+  it('keeps collapsed footer actions centered with flex layout', () => {
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: false,
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        onWindowSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '新建终端' }).className).toContain('flex');
+    expect(screen.getByRole('button', { name: '新建终端' }).className).toContain('justify-center');
+    expect(screen.getByRole('button', { name: '设置' }).className).toContain('flex');
+    expect(screen.getByRole('button', { name: '设置' }).className).toContain('justify-center');
+  });
+
   it('renders the open code pane action above new terminal and triggers it', async () => {
     const user = userEvent.setup();
     const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');

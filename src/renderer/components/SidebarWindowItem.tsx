@@ -108,9 +108,8 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
                 onClick={handleWindowClick}
                 onContextMenu={onContextMenu}
                 className={`
-                  flex h-10 w-full items-center justify-center border-l-2 border-y border-r transition-colors
+                  flex h-10 w-full items-center justify-center border transition-colors
                   ${bgColor}
-                  ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}
                 `}
                 aria-label={terminalWindow.name}
               >
@@ -148,9 +147,8 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
         onClick={handleWindowClick}
         onContextMenu={onContextMenu}
         className={`
-          flex w-full items-start gap-2 rounded-lg border border-l-2 px-3 py-2 text-left transition-colors
+          flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors
           ${bgColor}
-          ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}
         `}
         aria-label={terminalWindow.name}
       >
