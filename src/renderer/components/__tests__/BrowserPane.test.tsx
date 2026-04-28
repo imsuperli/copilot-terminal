@@ -141,11 +141,17 @@ describe('BrowserPane', () => {
     vi.useFakeTimers();
     updatePane.mockReset();
     __resetBrowserPaneWebviewCacheForTests();
+    document.documentElement.style.setProperty('--appearance-pane-background-strong', 'rgba(255, 255, 255, 0.92)');
+    document.documentElement.style.setProperty('--background', '252 253 255');
+    document.documentElement.style.setProperty('--foreground', '38 44 54');
   });
 
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    document.documentElement.style.removeProperty('--appearance-pane-background-strong');
+    document.documentElement.style.removeProperty('--background');
+    document.documentElement.style.removeProperty('--foreground');
   });
 
   it('does not call ready-only webview APIs before dom-ready', () => {
@@ -197,7 +203,7 @@ describe('BrowserPane', () => {
     expect(webview.insertCssCalls).toHaveLength(0);
   });
 
-  it('applies a dark theme to the blank page after dom-ready', async () => {
+  it('applies the active appearance theme to the blank page after dom-ready', async () => {
     const { container } = render(
       <I18nProvider>
         <BrowserPane
@@ -221,7 +227,9 @@ describe('BrowserPane', () => {
     });
 
     expect(webview.insertCssCalls).toHaveLength(1);
-    expect(webview.insertCssCalls[0]).toContain('background: #09090b');
+    expect(webview.insertCssCalls[0]).toContain('color-scheme: light');
+    expect(webview.insertCssCalls[0]).toContain('background: rgb(252, 253, 255)');
+    expect(webview.insertCssCalls[0]).toContain('color: rgb(38, 44, 54)');
   });
 
   it('creates a fresh webview guest when the pane is remounted', async () => {

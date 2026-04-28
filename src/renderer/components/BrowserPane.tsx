@@ -15,14 +15,110 @@ import {
 } from './ui/ide-popup';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[var(--appearance-pane-background)]';
-const BLANK_PAGE_THEME_CSS = `
-  :root { color-scheme: dark; }
-  html, body {
-    background: #09090b !important;
-    color: #d4d4d8 !important;
+const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[var(--appearance-pane-background-strong)]';
+
+function normalizeRgbChannels(value: string): string | null {
+  const normalized = value.replace(/\s+/g, ' ').replace(/,\s*/g, ', ').trim();
+  if (!normalized) {
+    return null;
   }
-`;
+
+  if (normalized.includes(',')) {
+    return normalized;
+  }
+
+  const parts = normalized.split(' ').filter(Boolean);
+  return parts.length >= 3 ? parts.slice(0, 3).join(', ') : null;
+}
+
+function readResolvedCssColor(
+  propertyName: 'color' | 'backgroundColor',
+  cssValue: string,
+): string | null {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return null;
+  }
+
+  const probe = document.createElement('div');
+  probe.style.position = 'fixed';
+  probe.style.pointerEvents = 'none';
+  probe.style.opacity = '0';
+  probe.style[propertyName] = cssValue;
+  document.body.appendChild(probe);
+
+  const resolved = window.getComputedStyle(probe)[propertyName];
+  probe.remove();
+
+  if (!resolved || resolved.includes('var(')) {
+    return null;
+  }
+
+  return resolved.trim();
+}
+
+function resolveBlankPageBackground(style: CSSStyleDeclaration): string {
+  const resolved = readResolvedCssColor('backgroundColor', 'var(--appearance-pane-background-strong)');
+  if (resolved) {
+    return resolved;
+  }
+
+  const rawPaneBackground = style.getPropertyValue('--appearance-pane-background-strong').trim();
+  const terminalBackgroundRgb = normalizeRgbChannels(style.getPropertyValue('--terminal-background-rgb'));
+  if (rawPaneBackground && terminalBackgroundRgb && rawPaneBackground.includes('--terminal-background-rgb')) {
+    const alphaMatch = rawPaneBackground.match(/,\s*([0-9.]+)\)$/);
+    const alpha = alphaMatch?.[1] ?? '1';
+    return `rgba(${terminalBackgroundRgb}, ${alpha})`;
+  }
+
+  const fallbackBackgroundRgb = normalizeRgbChannels(style.getPropertyValue('--background'));
+  return fallbackBackgroundRgb ? `rgb(${fallbackBackgroundRgb})` : 'rgb(9, 9, 11)';
+}
+
+function resolveBlankPageForeground(style: CSSStyleDeclaration): string {
+  const resolved = readResolvedCssColor('color', 'rgb(var(--foreground))');
+  if (resolved) {
+    return resolved;
+  }
+
+  const foregroundRgb = normalizeRgbChannels(style.getPropertyValue('--foreground'));
+  return foregroundRgb ? `rgb(${foregroundRgb})` : 'rgb(212, 212, 216)';
+}
+
+function getColorSchemeFromColor(color: string): 'light' | 'dark' {
+  const channels = color.match(/\d+(?:\.\d+)?/g);
+  if (!channels || channels.length < 3) {
+    return 'dark';
+  }
+
+  const [r, g, b] = channels.slice(0, 3).map(Number);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance >= 0.72 ? 'light' : 'dark';
+}
+
+function resolveBlankPageThemeCss(): string {
+  if (typeof window === 'undefined') {
+    return `
+      :root { color-scheme: dark; }
+      html, body {
+        background: #09090b !important;
+        color: #d4d4d8 !important;
+      }
+    `;
+  }
+
+  const style = window.getComputedStyle(document.documentElement);
+  const background = resolveBlankPageBackground(style);
+  const foreground = resolveBlankPageForeground(style);
+  const colorScheme = getColorSchemeFromColor(background);
+
+  return `
+    :root { color-scheme: ${colorScheme}; }
+    html, body {
+      background: ${background} !important;
+      color: ${foreground} !important;
+    }
+  `;
+}
 
 function getBrowserPaneUrl(pane: Pane): string {
   return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
@@ -106,7 +202,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
           return;
         }
 
-        await webview.insertCSS(BLANK_PAGE_THEME_CSS);
+        await webview.insertCSS(resolveBlankPageThemeCss());
       } catch (error) {
         console.error('Failed to apply blank browser pane theme:', error);
       }
