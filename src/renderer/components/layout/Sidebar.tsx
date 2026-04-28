@@ -293,7 +293,7 @@ export function Sidebar({
       <aside
         className="w-64 h-full border-r border-[rgb(var(--border))] flex flex-col"
         style={{
-          background: 'rgba(var(--sidebar), 0.85)',
+          background: 'var(--appearance-sidebar-surface-background)',
           backdropFilter: 'blur(12px)',
         }}
       >

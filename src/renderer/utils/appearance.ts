@@ -338,6 +338,10 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
     '--appearance-main-surface-background',
     resolveMainSurfaceBackground(appearance, paneStrongOpacity),
   );
+  rootStyle.setProperty(
+    '--appearance-sidebar-surface-background',
+    resolveSidebarSurfaceBackground(appearance, paneStrongOpacity),
+  );
   rootStyle.setProperty('--appearance-skin-dim', String(skinDim));
   rootStyle.setProperty('--appearance-skin-blur', `${appearance.skin.blur}px`);
   rootStyle.setProperty('--appearance-skin-motion-duration', appearance.reduceMotion ? '0s' : '18s');
@@ -715,6 +719,18 @@ function resolveMainSurfaceBackground(appearance: AppearanceSettings, paneStrong
   }
 
   return rgbaWithTerminalBackground(paneStrongOpacity);
+}
+
+function resolveSidebarSurfaceBackground(appearance: AppearanceSettings, paneStrongOpacity: number): string {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return resolveMainSurfaceBackground(appearance, paneStrongOpacity);
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    return 'rgba(var(--sidebar), 0.85)';
+  }
+
+  return 'rgba(var(--sidebar), 0.85)';
 }
 
 function clampOpacity(value: number, min: number, max: number): number {

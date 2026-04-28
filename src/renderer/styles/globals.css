@@ -64,6 +64,7 @@
     --appearance-remote-tab-hover-background: rgb(var(--accent));
     --appearance-remote-tab-separator-color: rgba(var(--border), 0.72);
     --appearance-main-surface-background: transparent;
+    --appearance-sidebar-surface-background: rgba(var(--sidebar), 0.85);
     --appearance-pane-background: rgba(var(--terminal-background-rgb), 0);
     --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0);
     --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.18);

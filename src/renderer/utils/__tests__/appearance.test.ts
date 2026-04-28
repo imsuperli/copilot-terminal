@@ -60,6 +60,8 @@ describe('renderer appearance utilities', () => {
     expect(style.getPropertyValue('--appearance-skin-dim')).toBe('0.04');
     expect(style.getPropertyValue('--appearance-pane-background')).toBe('rgba(var(--terminal-background-rgb, 12, 12, 12), 0.860)');
     expect(style.getPropertyValue('--appearance-pane-chrome-background')).toBe('rgba(var(--terminal-background-rgb, 12, 12, 12), 0.900)');
+    expect(style.getPropertyValue('--appearance-main-surface-background')).toBe('rgba(255, 255, 255, 0.92)');
+    expect(style.getPropertyValue('--appearance-sidebar-surface-background')).toBe('rgba(255, 255, 255, 0.92)');
   });
 
   it('builds one global skin background style', () => {

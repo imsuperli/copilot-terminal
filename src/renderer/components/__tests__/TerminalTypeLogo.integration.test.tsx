@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { WindowCard } from '../WindowCard';
 import { QuickSwitcherGroupItem } from '../QuickSwitcherGroupItem';
 import { SSHProfileCard } from '../SSHProfileCard';
+import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { useWindowStore } from '../../stores/windowStore';
 import type { Window } from '../../types/window';
 import { WindowStatus } from '../../types/window';
@@ -143,5 +144,14 @@ describe('terminal type logo integration', () => {
     render(<SSHProfileCard profile={createSSHProfile()} />);
 
     expect(screen.getByTestId('ssh-profile-card-logo')).toHaveAttribute('data-terminal-type-logo', 'ssh');
+  });
+
+  it('uses theme primary token for local logos instead of a fixed green accent', () => {
+    render(<TerminalTypeLogo variant="local" data-testid="local-terminal-logo" />);
+
+    const logo = screen.getByTestId('local-terminal-logo');
+    expect(logo.className).toContain('text-[rgb(var(--primary))]');
+    expect(logo.className).toContain('bg-[rgb(var(--primary))]/10');
+    expect(logo.className).not.toContain('emerald');
   });
 });
