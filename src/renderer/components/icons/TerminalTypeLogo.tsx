@@ -23,10 +23,10 @@ const BADGE_CLASSES: Record<NonNullable<TerminalTypeLogoProps['size']>, string> 
 };
 
 const VARIANT_CLASSES: Record<TerminalTypeLogoVariant, string> = {
-  local: 'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/25 text-[rgb(var(--primary))]',
-  ssh:   'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/25 text-[rgb(var(--primary))]',
-  mixed: 'bg-amber-500/10 border-amber-500/25 text-amber-400',
-  group: 'bg-violet-500/10 border-violet-500/25 text-violet-400',
+  local: 'bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]',
+  ssh:   'bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]',
+  mixed: 'bg-amber-500/10 text-amber-400',
+  group: 'bg-violet-500/10 text-violet-400',
 };
 
 /** >_ 终端提示符 */
@@ -99,7 +99,6 @@ export const TerminalTypeLogo: React.FC<TerminalTypeLogoProps> = ({
       data-terminal-type-logo={variant}
       className={`
         pointer-events-none relative inline-flex shrink-0 items-center justify-center
-        border
         ${SIZE_CLASSES[size]}
         ${VARIANT_CLASSES[variant]}
         ${className}

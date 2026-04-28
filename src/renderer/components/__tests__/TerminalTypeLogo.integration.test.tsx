@@ -152,6 +152,7 @@ describe('terminal type logo integration', () => {
     const logo = screen.getByTestId('local-terminal-logo');
     expect(logo.className).toContain('text-[rgb(var(--primary))]');
     expect(logo.className).toContain('bg-[rgb(var(--primary))]/10');
+    expect(logo.className).not.toContain('border');
     expect(logo.className).not.toContain('emerald');
   });
 });
