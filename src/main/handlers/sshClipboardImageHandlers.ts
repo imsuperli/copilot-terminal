@@ -139,7 +139,7 @@ async function resolveCandidateDirectories(
     }
     case 'current-working-directory':
     default: {
-      const runtimeCwd = pane.cwd?.trim();
+      const runtimeCwd = config.runtimeCwd?.trim() || pane.cwd?.trim();
       const remoteCwd = pane.ssh?.remoteCwd?.trim();
       return dedupeDirectories([
         runtimeCwd,

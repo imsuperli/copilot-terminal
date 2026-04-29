@@ -479,8 +479,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('clipboard-write-text', text),
   readClipboardText: () =>
     ipcRenderer.invoke('clipboard-read-text'),
-  tryPasteSshClipboardImage: (windowId: string, paneId: string) =>
-    ipcRenderer.invoke('try-paste-ssh-clipboard-image', { windowId, paneId }),
+  tryPasteSshClipboardImage: (windowId: string, paneId: string, runtimeCwd?: string) =>
+    ipcRenderer.invoke('try-paste-ssh-clipboard-image', { windowId, paneId, runtimeCwd }),
 
   // 通知主进程渲染完成
   notifyRendererReady: () => ipcRenderer.send('renderer-ready'),

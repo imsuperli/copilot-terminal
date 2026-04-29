@@ -740,9 +740,6 @@ describe('TerminalPane history replay', () => {
     } as unknown as KeyboardEvent);
 
     await waitFor(() => {
-      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh');
-    });
-    await waitFor(() => {
       expect(window.electronAPI.readClipboardText).toHaveBeenCalled();
     });
     await waitFor(() => {
@@ -753,6 +750,7 @@ describe('TerminalPane history replay', () => {
         { source: 'clipboard-shortcut' },
       );
     });
+    expect(window.electronAPI.tryPasteSshClipboardImage).not.toHaveBeenCalled();
   });
 
   it('does not text-paste when ssh image upload already handled the clipboard', async () => {
@@ -798,16 +796,16 @@ describe('TerminalPane history replay', () => {
     keyHandler({
       type: 'keydown',
       key: 'v',
-      ctrlKey: true,
+      ctrlKey: false,
       metaKey: false,
-      altKey: false,
+      altKey: true,
       shiftKey: false,
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
     } as unknown as KeyboardEvent);
 
     await waitFor(() => {
-      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh');
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh', '/srv/app');
     });
 
     await waitFor(() => {
@@ -864,16 +862,16 @@ describe('TerminalPane history replay', () => {
     keyHandler({
       type: 'keydown',
       key: 'v',
-      ctrlKey: true,
+      ctrlKey: false,
       metaKey: false,
-      altKey: false,
+      altKey: true,
       shiftKey: false,
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
     } as unknown as KeyboardEvent);
 
     await waitFor(() => {
-      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh');
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh', '/srv/app');
     });
 
     expect(window.electronAPI.readClipboardText).not.toHaveBeenCalled();

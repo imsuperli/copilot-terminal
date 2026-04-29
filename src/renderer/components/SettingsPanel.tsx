@@ -60,9 +60,14 @@ const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
 const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
   sshEnabled: true,
 };
+function getDefaultSSHClipboardImageShortcut(platform: string | undefined): SSHClipboardImageSettings['shortcut'] {
+  return platform === 'darwin' ? 'ctrl-v' : 'alt-v';
+}
+
 const DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS: SSHClipboardImageSettings = {
   enabled: true,
   uploadLocation: 'current-working-directory',
+  shortcut: getDefaultSSHClipboardImageShortcut(window.electronAPI?.platform),
   customUploadDirectory: '',
   copyRemotePathAfterUpload: true,
   maxUploadBytes: 20 * 1024 * 1024,
@@ -300,6 +305,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         });
         setSshClipboardImageSettings({
           ...DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS,
+          shortcut: getDefaultSSHClipboardImageShortcut(window.electronAPI?.platform),
           ...settings.sshClipboardImage,
         });
         setTmuxSettings({
@@ -1855,6 +1861,55 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       >
                         <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
                       </Switch.Root>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.ssh.clipboardImageShortcutTitle')}
+                      help={t('settings.ssh.clipboardImageShortcutDescription')}
+                      disabled={!sshClipboardImageSettings.enabled}
+                    >
+                      <Select.Root
+                        value={sshClipboardImageSettings.shortcut}
+                        onValueChange={(value) => handleSshClipboardImageSettingsChange({
+                          shortcut: value as SSHClipboardImageSettings['shortcut'],
+                        })}
+                        disabled={!sshClipboardImageSettings.enabled}
+                      >
+                        <Select.Trigger
+                          aria-label={t('settings.ssh.clipboardImageShortcutTitle')}
+                          className={`max-w-[300px] ${settingsPanelCompactSelectTriggerClassName}`}
+                        >
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
+                          >
+                            <Select.Viewport className="p-1">
+                              <Select.Item value="alt-v" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageShortcutAltV')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="ctrl-v" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageShortcutCtrlV')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="ctrl-alt-v" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageShortcutCtrlAltV')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="cmd-shift-v" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageShortcutCmdShiftV')}</Select.ItemText>
+                              </Select.Item>
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
                     </CompactSettingRow>
 
                     <CompactSettingRow

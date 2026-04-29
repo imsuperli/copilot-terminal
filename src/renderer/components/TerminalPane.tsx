@@ -27,10 +27,38 @@ import {
 import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import '../styles/xterm.css';
 import { dispatchAppError, dispatchAppSuccess } from '../utils/appNotice';
+import type { SSHClipboardImageShortcut } from '../../shared/types/workspace';
 
 const completedReplaySessions = new Set<string>();
 const DIRECT_LIVE_OUTPUT_MAX_CHARS = 256;
 const DIRECT_LIVE_OUTPUT_IDLE_MS = 12;
+
+function getDefaultSSHClipboardImageShortcut(platform: string | undefined): SSHClipboardImageShortcut {
+  return platform === 'darwin' ? 'ctrl-v' : 'alt-v';
+}
+
+function matchesSSHClipboardImageShortcut(
+  event: KeyboardEvent,
+  shortcut: SSHClipboardImageShortcut,
+  isMac: boolean,
+): boolean {
+  if (event.type !== 'keydown' || event.key.toLowerCase() !== 'v') {
+    return false;
+  }
+
+  switch (shortcut) {
+    case 'alt-v':
+      return event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    case 'ctrl-v':
+      return event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+    case 'ctrl-alt-v':
+      return event.ctrlKey && event.altKey && !event.metaKey && !event.shiftKey;
+    case 'cmd-shift-v':
+      return isMac && event.metaKey && event.shiftKey && !event.ctrlKey && !event.altKey;
+    default:
+      return false;
+  }
+}
 
 function nowMs(): number {
   if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
@@ -338,6 +366,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [linkDragOverlay, setLinkDragOverlay] = useState<TerminalLinkDragOverlayState | null>(null);
   const [isLinkDragActive, setIsLinkDragActive] = useState(false);
+  const sshClipboardImageShortcutRef = useRef<SSHClipboardImageShortcut>(getDefaultSSHClipboardImageShortcut(window.electronAPI?.platform));
   const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
@@ -779,14 +808,16 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     }
 
     const handleWorkspaceSettingsUpdated = (event: Event) => {
-      const patch = (event as CustomEvent<{ appearance?: unknown } | undefined>).detail;
-      if (!patch?.appearance || !('options' in terminal) || !terminal.options) {
-        return;
+      const patch = (event as CustomEvent<{ appearance?: unknown; sshClipboardImage?: { shortcut?: SSHClipboardImageShortcut } } | undefined>).detail;
+      if (patch?.sshClipboardImage?.shortcut) {
+        sshClipboardImageShortcutRef.current = patch.sshClipboardImage.shortcut;
       }
 
-      terminal.options.theme = getWindowsTerminalTheme();
-      if (terminal.rows > 0 && typeof terminal.refresh === 'function') {
-        terminal.refresh(0, terminal.rows - 1);
+      if (patch?.appearance && 'options' in terminal && terminal.options) {
+        terminal.options.theme = getWindowsTerminalTheme();
+        if (terminal.rows > 0 && typeof terminal.refresh === 'function') {
+          terminal.refresh(0, terminal.rows - 1);
+        }
       }
     };
 
@@ -1126,6 +1157,29 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     // 告诉 xterm.js 忽略应用级快捷键
     const isMac = window.electronAPI?.platform === 'darwin';
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      const isImagePasteShortcut = pane.backend === 'ssh'
+        && matchesSSHClipboardImageShortcut(e, sshClipboardImageShortcutRef.current, isMac);
+      if (isImagePasteShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
+        if (isActiveRef.current && window.electronAPI?.tryPasteSshClipboardImage) {
+          void (async () => {
+            const imageResult = await window.electronAPI.tryPasteSshClipboardImage(windowId, pane.id, pane.cwd);
+            if (imageResult.success && imageResult.data?.handled) {
+              const remotePath = imageResult.data.remotePath ?? '';
+              dispatchAppSuccess(remotePath ? t('ssh.clipboardImageUploaded', { path: remotePath }) : t('ssh.clipboardImageUploaded', { path: '' }));
+              return;
+            }
+
+            if (!imageResult.success) {
+              dispatchAppError(imageResult.error || 'Failed to upload clipboard image');
+            }
+          })();
+        }
+        return false;
+      }
+
       // 粘贴：macOS 用 ⌘V，Windows/Linux 用 Ctrl+V
       const isPaste = e.type === 'keydown' && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey
         && (isMac ? (e.metaKey && !e.ctrlKey) : (e.ctrlKey && !e.metaKey));
@@ -1135,20 +1189,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
         if (isActiveRef.current && window.electronAPI) {
           void (async () => {
-            if (pane.backend === 'ssh' && window.electronAPI?.tryPasteSshClipboardImage) {
-              const imageResult = await window.electronAPI.tryPasteSshClipboardImage(windowId, pane.id);
-              if (imageResult.success && imageResult.data?.handled) {
-                const remotePath = imageResult.data.remotePath ?? '';
-                dispatchAppSuccess(remotePath ? t('ssh.clipboardImageUploaded', { path: remotePath }) : t('ssh.clipboardImageUploaded', { path: '' }));
-                return;
-              }
-
-              if (!imageResult.success) {
-                dispatchAppError(imageResult.error || 'Failed to upload clipboard image');
-                return;
-              }
-            }
-
             const text = await readClipboardText();
             if (text && window.electronAPI && isActiveRef.current) {
               // 如果终端开启了 bracketed paste mode，用转义序列包裹粘贴内容

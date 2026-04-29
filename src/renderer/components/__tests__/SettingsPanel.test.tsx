@@ -774,6 +774,7 @@ describe('SettingsPanel', () => {
         sshClipboardImage: {
           enabled: true,
           uploadLocation: 'temporary-directory',
+          shortcut: 'alt-v',
           customUploadDirectory: '',
           copyRemotePathAfterUpload: true,
           maxUploadBytes: 8 * 1024 * 1024,
@@ -794,14 +795,24 @@ describe('SettingsPanel', () => {
     await user.click(screen.getByRole('tab', { name: /高级设置/ }));
 
     expect(await screen.findByText('启用 SSH 图片粘贴上传')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '图片粘贴快捷键' })).toHaveTextContent('Alt+V');
     expect(screen.getByRole('combobox', { name: '上传位置' })).toHaveTextContent('临时缓存目录');
     expect(screen.getByDisplayValue('8')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: '图片粘贴快捷键' }));
+    await user.click(await screen.findByRole('option', { name: 'Ctrl+Alt+V' }));
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      sshClipboardImage: expect.objectContaining({
+        shortcut: 'ctrl-alt-v',
+      }),
+    });
 
     await user.click(screen.getByRole('switch', { name: '上传成功后自动复制远端路径' }));
     expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
       sshClipboardImage: expect.objectContaining({
         enabled: true,
         uploadLocation: 'temporary-directory',
+        shortcut: 'ctrl-alt-v',
         copyRemotePathAfterUpload: false,
         maxUploadBytes: 8 * 1024 * 1024,
       }),
@@ -836,5 +847,39 @@ describe('SettingsPanel', () => {
         }),
       });
     });
+  });
+
+  it('defaults the SSH image shortcut to Ctrl+V on macOS when settings are missing', async () => {
+    const user = userEvent.setup();
+    window.electronAPI.platform = 'darwin';
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        features: {
+          sshEnabled: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.listKnownHosts).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /高级设置/ }));
+
+    expect(await screen.findByRole('combobox', { name: '图片粘贴快捷键' })).toHaveTextContent('Ctrl+V');
   });
 });

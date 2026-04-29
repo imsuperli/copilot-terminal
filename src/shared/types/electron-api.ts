@@ -181,7 +181,9 @@ export interface GetSSHSessionMetricsConfig extends SSHSessionPortForwardTarget 
   path?: string;
 }
 
-export interface TryPasteSSHClipboardImageConfig extends SSHSessionPortForwardTarget {}
+export interface TryPasteSSHClipboardImageConfig extends SSHSessionPortForwardTarget {
+  runtimeCwd?: string;
+}
 
 export interface TryPasteSSHClipboardImageResult {
   handled: boolean;
@@ -1867,6 +1869,7 @@ export interface ElectronAPI {
   tryPasteSshClipboardImage: (
     windowId: string,
     paneId: string,
+    runtimeCwd?: string,
   ) => Promise<IpcResponse<TryPasteSSHClipboardImageResult>>;
 
   notifyRendererReady: () => void;

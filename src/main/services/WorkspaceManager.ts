@@ -946,6 +946,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       sshClipboardImage: {
         enabled: settings?.sshClipboardImage?.enabled ?? defaults.sshClipboardImage?.enabled ?? true,
         uploadLocation: settings?.sshClipboardImage?.uploadLocation ?? defaults.sshClipboardImage?.uploadLocation ?? 'current-working-directory',
+        shortcut: settings?.sshClipboardImage?.shortcut ?? defaults.sshClipboardImage?.shortcut ?? this.getDefaultSSHClipboardImageShortcut(),
         customUploadDirectory: settings?.sshClipboardImage?.customUploadDirectory ?? defaults.sshClipboardImage?.customUploadDirectory ?? '',
         copyRemotePathAfterUpload: settings?.sshClipboardImage?.copyRemotePathAfterUpload
           ?? defaults.sshClipboardImage?.copyRemotePathAfterUpload
@@ -991,6 +992,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       sshClipboardImage: {
         enabled: true,
         uploadLocation: 'current-working-directory',
+        shortcut: this.getDefaultSSHClipboardImageShortcut(),
         customUploadDirectory: '',
         copyRemotePathAfterUpload: true,
         maxUploadBytes: 20 * 1024 * 1024,
@@ -1059,6 +1061,10 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     }
 
     return Number.NEGATIVE_INFINITY;
+  }
+
+  private getDefaultSSHClipboardImageShortcut(): NonNullable<Settings['sshClipboardImage']>['shortcut'] {
+    return process.platform === 'darwin' ? 'ctrl-v' : 'alt-v';
   }
 }
 

@@ -87,6 +87,7 @@ function createWorkspace(overrides?: Partial<Workspace>): Workspace {
       sshClipboardImage: {
         enabled: true,
         uploadLocation: 'current-working-directory',
+        shortcut: 'alt-v',
         customUploadDirectory: '',
         copyRemotePathAfterUpload: true,
         maxUploadBytes: 20 * 1024 * 1024,
@@ -230,6 +231,60 @@ describe('registerSSHClipboardImageHandlers', () => {
     expect(mockClipboardWriteText).toHaveBeenCalledWith(response.data.remotePath);
   });
 
+  it('prefers runtime cwd from the renderer over stale workspace cwd', async () => {
+    const workspace = createWorkspace({
+      windows: [
+        {
+          id: 'win-ssh',
+          name: 'SSH',
+          activePaneId: 'pane-ssh',
+          createdAt: '2026-04-29T00:00:00.000Z',
+          lastActiveAt: '2026-04-29T00:00:00.000Z',
+          layout: {
+            type: 'pane',
+            id: 'pane-ssh',
+            pane: {
+              id: 'pane-ssh',
+              cwd: '/root',
+              command: '',
+              status: WindowStatus.WaitingForInput,
+              pid: 1001,
+              backend: 'ssh',
+              ssh: {
+                profileId: 'profile-1',
+                remoteCwd: '/root',
+              },
+            },
+          },
+        },
+      ],
+    });
+    mockClipboardReadImage.mockReturnValue(createClipboardImage({ empty: false }));
+    const processManager = {
+      uploadSSHSftpFiles: vi.fn().mockResolvedValue(1),
+      execSSHCommand: vi.fn(),
+    };
+
+    const ctx = {
+      processManager,
+      workspaceManager: null,
+      getCurrentWorkspace: () => workspace,
+      setCurrentWorkspace: vi.fn(),
+    } as unknown as HandlerContext;
+
+    registerSSHClipboardImageHandlers(ctx);
+    const handler = getRegisteredHandler('try-paste-ssh-clipboard-image');
+
+    await handler({}, { windowId: 'win-ssh', paneId: 'pane-ssh', runtimeCwd: '/home/lichneg2' });
+
+    expect(processManager.uploadSSHSftpFiles).toHaveBeenCalledWith(
+      'win-ssh',
+      'pane-ssh',
+      '/home/lichneg2',
+      [expect.stringMatching(/copilot-clipboard-\d{8}-\d{6}\.png$/)],
+    );
+  });
+
   it('falls back to home directory when current cwd upload fails once', async () => {
     const workspace = createWorkspace();
     mockClipboardReadImage.mockReturnValue(createClipboardImage({ empty: false }));
@@ -331,6 +386,7 @@ describe('registerSSHClipboardImageHandlers', () => {
         sshClipboardImage: {
           enabled: true,
           uploadLocation: 'current-working-directory',
+          shortcut: 'alt-v',
           customUploadDirectory: '',
           copyRemotePathAfterUpload: false,
           maxUploadBytes: 20 * 1024 * 1024,
@@ -370,6 +426,7 @@ describe('registerSSHClipboardImageHandlers', () => {
         sshClipboardImage: {
           enabled: true,
           uploadLocation: 'current-working-directory',
+          shortcut: 'alt-v',
           customUploadDirectory: '',
           copyRemotePathAfterUpload: true,
           maxUploadBytes: 1024,

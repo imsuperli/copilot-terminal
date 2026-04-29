@@ -59,9 +59,16 @@ export type SSHClipboardImageUploadLocation =
   | 'temporary-directory'
   | 'custom-directory';
 
+export type SSHClipboardImageShortcut =
+  | 'alt-v'
+  | 'ctrl-v'
+  | 'ctrl-alt-v'
+  | 'cmd-shift-v';
+
 export interface SSHClipboardImageSettings {
   enabled: boolean;
   uploadLocation: SSHClipboardImageUploadLocation;
+  shortcut: SSHClipboardImageShortcut;
   customUploadDirectory?: string;
   copyRemotePathAfterUpload: boolean;
   maxUploadBytes?: number;
