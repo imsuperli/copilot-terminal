@@ -418,10 +418,10 @@ describe('TerminalPane history replay', () => {
     });
   });
 
-  it('routes right-click paste through xterm instead of direct pty writes', async () => {
+  it('routes right-click paste through direct PTY writes with normalized LF endings', async () => {
     vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
       success: true,
-      data: 'pasted text',
+      data: 'first line\r\nsecond line',
     });
 
     const { container } = render(
@@ -449,18 +449,58 @@ describe('TerminalPane history replay', () => {
     expect(event.defaultPrevented).toBe(true);
 
     await waitFor(() => {
-      expect(terminalInstances[0]?.paste).toHaveBeenCalledWith('pasted text');
+      expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
+        'win-1',
+        'pane-1',
+        'first line\nsecond line',
+        { source: 'context-menu-paste' },
+      );
+    });
+    expect(terminalInstances[0]?.paste).not.toHaveBeenCalled();
+  });
+
+  it('wraps right-click paste in bracketed paste mode when enabled', async () => {
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'first line\r\nsecond line',
     });
 
-    expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
-      'win-1',
-      'pane-1',
-      'pasted text',
-      { source: 'xterm.onData' },
+    const { container } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
     );
-    expect(
-      vi.mocked(window.electronAPI.ptyWrite).mock.calls.some(([, , , metadata]) => metadata?.source === 'context-menu-paste'),
-    ).toBe(false);
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+    terminalInstances[0].modes.bracketedPasteMode = true;
+
+    const terminalContainer = container.querySelector('.overflow-hidden');
+    expect(terminalContainer).toBeTruthy();
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    terminalContainer?.dispatchEvent(event);
+
+    await waitFor(() => {
+      expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
+        'win-1',
+        'pane-1',
+        '\u001b[200~first line\nsecond line\u001b[201~',
+        { source: 'context-menu-paste' },
+      );
+    });
+    expect(terminalInstances[0]?.paste).not.toHaveBeenCalled();
   });
 
   it('does not replay history again when a placeholder pane receives its first pid', async () => {
@@ -751,6 +791,59 @@ describe('TerminalPane history replay', () => {
       );
     });
     expect(window.electronAPI.tryPasteSshClipboardImage).not.toHaveBeenCalled();
+  });
+
+  it('normalizes Ctrl+V line endings before bracketed paste wrapping', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'alpha\r\nbeta\rgamma',
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+    terminalInstances[0].modes.bracketedPasteMode = true;
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
+        'win-1',
+        'pane-1',
+        '\u001b[200~alpha\nbeta\ngamma\u001b[201~',
+        { source: 'clipboard-shortcut' },
+      );
+    });
   });
 
   it('does not text-paste when ssh image upload already handled the clipboard', async () => {

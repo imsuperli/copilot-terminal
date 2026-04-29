@@ -208,6 +208,10 @@ function readRootCssColor(variableName: string, fallback: string): string {
   return value || fallback;
 }
 
+function normalizeTerminalPasteText(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
 function getWindowsTerminalTheme() {
   return {
     background: 'transparent',
@@ -1126,6 +1130,18 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     helperTextarea?.addEventListener('paste', suppressNativePaste, true);
     terminalContainer?.addEventListener('paste', suppressNativePaste as EventListener, true);
 
+    const performPaste = (text: string, source: 'context-menu-paste' | 'clipboard-shortcut') => {
+      const normalizedText = normalizeTerminalPasteText(text);
+      if (!normalizedText || !window.electronAPI) {
+        return;
+      }
+
+      const payload = terminal.modes.bracketedPasteMode
+        ? `\x1b[200~${normalizedText}\x1b[201~`
+        : normalizedText;
+      window.electronAPI.ptyWrite(windowId, pane.id, payload, { source });
+    };
+
     // 在捕获阶段接管右键粘贴，阻止 xterm 先污染 helper textarea。
     const handleNativeContextMenu = (event: MouseEvent) => {
       event.preventDefault();
@@ -1148,7 +1164,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         }
 
         currentTerminal.focus();
-        currentTerminal.paste(text);
+        performPaste(text, 'context-menu-paste');
       })();
     };
 
@@ -1192,11 +1208,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           void (async () => {
             const text = await readClipboardText();
             if (text && window.electronAPI && isActiveRef.current) {
-              // 如果终端开启了 bracketed paste mode，用转义序列包裹粘贴内容
-              const wrapped = terminal.modes.bracketedPasteMode
-                ? `\x1b[200~${text}\x1b[201~`
-                : text;
-              window.electronAPI.ptyWrite(windowId, pane.id, wrapped, { source: 'clipboard-shortcut' });
+              performPaste(text, 'clipboard-shortcut');
             }
           })();
         }
