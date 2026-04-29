@@ -80,6 +80,53 @@ describe('PaneDropZone', () => {
     );
   });
 
+  it('renders a visible edge drop indicator while hovering a native browser pane drag', () => {
+    render(
+      <PaneDropZone
+        targetWindowId="win-1"
+        targetPaneId="pane-target"
+        targetPaneKind="terminal"
+        onDrop={vi.fn()}
+      >
+        <div data-testid="pane-content-indicator">content</div>
+      </PaneDropZone>,
+    );
+
+    const container = screen.getByTestId('pane-content-indicator').parentElement as HTMLDivElement | null;
+    if (!container) {
+      throw new Error('expected pane drop container');
+    }
+
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 100,
+      width: 200,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    setActiveBrowserPaneDragItem({
+      type: DragItemTypes.BROWSER_PANE,
+      windowId: 'win-1',
+      paneId: 'pane-source',
+      url: 'https://example.com',
+    });
+
+    fireEvent.dragOver(container, {
+      clientX: 12,
+      clientY: 50,
+    });
+
+    const indicator = container.querySelector('[data-pane-drop-indicator="true"]') as HTMLDivElement | null;
+    expect(indicator).not.toBeNull();
+    expect(indicator?.dataset.paneDropPosition).not.toBe('center');
+    expect(indicator?.style.border).toContain('2px dashed');
+  });
+
   it('handles browser pane move drops through the overlay surface', () => {
     const onDrop = vi.fn();
 

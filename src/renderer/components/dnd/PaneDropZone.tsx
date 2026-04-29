@@ -22,6 +22,10 @@ import {
   getBrowserPanePointerDragState,
   subscribeBrowserPanePointerDrag,
 } from '../../utils/browserPanePointerDragState';
+import {
+  edgeDropIndicatorPositionStyles,
+  getDropIndicatorVisualStyle,
+} from './dropIndicatorStyles';
 
 interface PaneDropZoneProps {
   targetWindowId: string;
@@ -31,14 +35,6 @@ interface PaneDropZoneProps {
   children: React.ReactNode;
   className?: string;
 }
-
-const positionStyles: Record<PaneDropPosition, React.CSSProperties> = {
-  left: { left: 0, top: 0, width: '50%', height: '100%' },
-  right: { right: 0, top: 0, width: '50%', height: '100%' },
-  top: { left: 0, top: 0, width: '100%', height: '50%' },
-  bottom: { left: 0, bottom: 0, width: '100%', height: '50%' },
-  center: { left: '25%', top: '25%', width: '50%', height: '50%' },
-};
 
 function calcPaneDropPosition(
   clientX: number,
@@ -361,20 +357,14 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
       >
         {(showPointerIndicator || showIndicator) && activeIndicatorPosition && (
           <div
+            data-pane-drop-indicator="true"
+            data-pane-drop-position={activeIndicatorPosition}
             style={{
               position: 'absolute',
-              ...positionStyles[activeIndicatorPosition],
-              backgroundColor: activeIndicatorPosition === 'center'
-                ? 'rgba(14, 165, 233, 0.18)'
-                : 'rgba(39, 39, 42, 0.22)',
-              border: activeIndicatorPosition === 'center'
-                ? '1px solid rgba(56, 189, 248, 0.55)'
-                : 'none',
-              borderRadius: activeIndicatorPosition === 'center' ? '0.75rem' : '0',
-              boxShadow: 'none',
-              pointerEvents: 'none',
-              zIndex: 20,
-              transition: 'all 120ms ease',
+              ...(activeIndicatorPosition === 'center'
+                ? { left: '25%', top: '25%', width: '50%', height: '50%' }
+                : edgeDropIndicatorPositionStyles[activeIndicatorPosition]),
+              ...getDropIndicatorVisualStyle(activeIndicatorPosition),
             }}
           />
         )}

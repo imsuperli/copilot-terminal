@@ -8,6 +8,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useDrop } from 'react-dnd';
 import { DragItemTypes, WindowCardDragItem, DropPosition, DropResult } from './types';
+import { edgeDropIndicatorPositionStyles, getDropIndicatorVisualStyle } from './dropIndicatorStyles';
 
 interface DropZoneProps {
   /** 目标窗口 ID（拖到某个窗口卡片上时） */
@@ -42,15 +43,6 @@ function calcDropPosition(
   if (relY > 1 - edgeThreshold) return 'bottom';
   return 'center';
 }
-
-/** 放置方向对应的高亮样式 */
-const positionStyles: Record<DropPosition, React.CSSProperties> = {
-  left: { left: 0, top: 0, width: '50%', height: '100%' },
-  right: { right: 0, top: 0, width: '50%', height: '100%' },
-  top: { left: 0, top: 0, width: '100%', height: '50%' },
-  bottom: { left: 0, bottom: 0, width: '100%', height: '50%' },
-  center: { left: 0, top: 0, width: '100%', height: '100%' },
-};
 
 export const DropZone: React.FC<DropZoneProps> = ({
   targetWindowId,
@@ -135,15 +127,10 @@ export const DropZone: React.FC<DropZoneProps> = ({
         <div
           style={{
             position: 'absolute',
-            ...positionStyles[hoverPosition],
-            backgroundColor: hoverPosition === 'center'
-              ? 'rgba(59, 130, 246, 0.15)'
-              : 'rgba(59, 130, 246, 0.25)',
-            border: '2px dashed rgba(59, 130, 246, 0.6)',
-            borderRadius: '8px',
-            pointerEvents: 'none',
-            zIndex: 10,
-            transition: 'all 150ms ease',
+            ...(hoverPosition === 'center'
+              ? { left: 0, top: 0, width: '100%', height: '100%' }
+              : edgeDropIndicatorPositionStyles[hoverPosition]),
+            ...getDropIndicatorVisualStyle(hoverPosition),
           }}
         />
       )}
