@@ -54,6 +54,19 @@ export interface FeatureSettings {
   sshEnabled: boolean;
 }
 
+export type SSHClipboardImageUploadLocation =
+  | 'current-working-directory'
+  | 'temporary-directory'
+  | 'custom-directory';
+
+export interface SSHClipboardImageSettings {
+  enabled: boolean;
+  uploadLocation: SSHClipboardImageUploadLocation;
+  customUploadDirectory?: string;
+  copyRemotePathAfterUpload: boolean;
+  maxUploadBytes?: number;
+}
+
 export interface Settings {
   notificationsEnabled: boolean;
   theme: 'dark' | 'light';
@@ -67,6 +80,7 @@ export interface Settings {
   appearance?: AppearanceSettings;
   tmux?: TmuxSettings;
   features?: FeatureSettings;
+  sshClipboardImage?: SSHClipboardImageSettings;
   customCategories?: CustomCategory[];
   defaultSidebarTab?: 'all' | 'active' | 'local' | 'ssh' | 'archived' | string; // string 也可能是自定义分类或状态筛选 ID
   chat?: ChatSettings;

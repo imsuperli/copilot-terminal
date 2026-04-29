@@ -37,8 +37,8 @@ vi.mock('../components/ArchivedView', () => ({
   ArchivedView: () => null,
 }));
 
-vi.mock('../components/ViewSwitchError', () => ({
-  ViewSwitchError: () => null,
+vi.mock('../components/AppNotice', () => ({
+  AppNotice: () => null,
 }));
 
 vi.mock('../components/CleanupOverlay', () => ({

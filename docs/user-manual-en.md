@@ -9,10 +9,11 @@
 5. [Creating and Managing Window Groups](#creating-and-managing-window-groups)
 6. [Window Status and Icon Descriptions](#window-status-and-icon-descriptions)
 7. [Keyboard Shortcuts](#keyboard-shortcuts)
-8. [Project Link Configuration](#project-link-configuration)
-9. [Quick Navigation](#quick-navigation)
-10. [Workspace Save and Restore](#workspace-save-and-restore)
-11. [FAQ](#faq)
+8. [SSH Image Paste](#ssh-image-paste)
+9. [Project Link Configuration](#project-link-configuration)
+10. [Quick Navigation](#quick-navigation)
+11. [Workspace Save and Restore](#workspace-save-and-restore)
+12. [FAQ](#faq)
 
 ---
 
@@ -219,6 +220,37 @@ Window count = 2
 
 Display result: [❤️₂]
 ```
+
+---
+
+## SSH Image Paste
+
+When the active pane is an SSH session, using the normal paste shortcut first checks whether the local clipboard currently contains an image.
+
+- If the clipboard contains an image, the app uploads it to a remote directory and shows a success notice at the top of the window.
+- By default, the remote image path is copied back to the local clipboard so you can paste it manually into `codex`, `claude`, shell commands, or editors.
+- If the clipboard is empty or does not contain an image, no upload is attempted and normal text paste continues unchanged.
+
+### Configurable Options
+
+In `Settings -> Advanced -> SSH Terminal`, you can configure:
+
+- whether SSH image paste upload is enabled
+- where images are stored: current directory, temporary cache directory, or a custom directory
+- whether the remote path should be copied after upload
+- the maximum image size in MB
+
+### Upload Location Behavior
+
+- Current directory: prefers the active SSH pane working directory, then falls back to `~` or `/tmp`
+- Temporary cache directory: prefers `~/.cache/copilot-terminal/images`, then falls back to `/tmp`
+- Custom directory: uses the configured remote directory and attempts `mkdir -p` when needed
+
+### Failures and Limits
+
+- Images larger than the configured max size are rejected before upload with a clear error message
+- Upload can fail if the SSH connection is broken, the target directory is not writable, or the remote disk is full
+- The current implementation only handles images, not generic files or other clipboard object types
 
 ---
 

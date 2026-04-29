@@ -47,8 +47,8 @@ vi.mock('../components/GroupView', () => ({
   GroupView: () => null,
 }));
 
-vi.mock('../components/ViewSwitchError', () => ({
-  ViewSwitchError: () => null,
+vi.mock('../components/AppNotice', () => ({
+  AppNotice: () => null,
 }));
 
 vi.mock('../components/CleanupOverlay', () => ({

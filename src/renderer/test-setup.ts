@@ -425,6 +425,7 @@ Object.defineProperty(window, 'electronAPI', {
     onWindowFullScreen: vi.fn().mockReturnValue(() => {}),
     writeClipboardText: vi.fn().mockResolvedValue(undefined),
     readClipboardText: vi.fn().mockResolvedValue({ success: true, data: '' }),
+    tryPasteSshClipboardImage: vi.fn().mockResolvedValue({ success: true, data: { handled: false } }),
     notifyRendererReady: vi.fn(),
     onWindowRestored: vi.fn(),
     offWindowRestored: vi.fn(),

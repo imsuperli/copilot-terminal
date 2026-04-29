@@ -26,13 +26,13 @@ describe('ViewSwitchError', () => {
   it('应该有正确的 data-testid', () => {
     render(<ViewSwitchError message="切换失败" />);
 
-    expect(screen.getByTestId('view-switch-error')).toBeInTheDocument();
+    expect(screen.getByTestId('app-notice')).toBeInTheDocument();
   });
 
   it('应该应用正确的样式类', () => {
     const { container } = render(<ViewSwitchError message="切换失败" />);
 
-    const errorDiv = container.querySelector('[data-testid="view-switch-error"]');
+    const errorDiv = container.querySelector('[data-testid="app-notice"]');
     expect(errorDiv).toHaveClass('fixed', 'top-4', 'z-[12050]');
     expect(errorDiv).toHaveClass('border-[rgb(var(--error)/0.26)]');
   });

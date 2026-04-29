@@ -9,7 +9,7 @@ import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
 import { notifyTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { QuickNavItem } from '../../shared/types/quick-nav';
-import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
+import { FeatureSettings, IDEConfig, SSHClipboardImageSettings, StatusLineConfig } from '../../shared/types/workspace';
 import { KnownHostEntry } from '../../shared/types/ssh';
 import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceSkinMotionMode } from '../../shared/types/appearance';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
@@ -59,6 +59,13 @@ const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
 };
 const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
   sshEnabled: true,
+};
+const DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS: SSHClipboardImageSettings = {
+  enabled: true,
+  uploadLocation: 'current-working-directory',
+  customUploadDirectory: '',
+  copyRemotePathAfterUpload: true,
+  maxUploadBytes: 20 * 1024 * 1024,
 };
 
 const APPEARANCE_OPACITY_OPTIONS = [0.28, 0.42, 0.62, 0.82];
@@ -231,6 +238,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   });
   const [appearanceSettings, setAppearanceSettings] = useState<AppearanceSettings>(DEFAULT_APPEARANCE_SETTINGS);
   const [featureSettings, setFeatureSettings] = useState<FeatureSettings>(DEFAULT_FEATURE_SETTINGS);
+  const [sshClipboardImageSettings, setSshClipboardImageSettings] = useState<SSHClipboardImageSettings>(DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS);
   const [knownHosts, setKnownHosts] = useState<KnownHostEntry[]>([]);
   const [knownHostsLoading, setKnownHostsLoading] = useState(false);
   const [knownHostsError, setKnownHostsError] = useState<string | null>(null);
@@ -289,6 +297,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         setFeatureSettings({
           ...DEFAULT_FEATURE_SETTINGS,
           ...settings.features,
+        });
+        setSshClipboardImageSettings({
+          ...DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS,
+          ...settings.sshClipboardImage,
         });
         setTmuxSettings({
           enabled: settings.tmux?.enabled ?? true,
@@ -761,6 +773,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     } catch (error) {
       console.error('Failed to update feature settings:', error);
       setFeatureSettings(previousConfig);
+    }
+  };
+
+  const handleSshClipboardImageSettingsChange = async (updates: Partial<SSHClipboardImageSettings>) => {
+    const previousConfig = sshClipboardImageSettings;
+    const newConfig = { ...previousConfig, ...updates };
+    setSshClipboardImageSettings(newConfig);
+
+    try {
+      await window.electronAPI.updateSettings({ sshClipboardImage: newConfig });
+      notifyWorkspaceSettingsUpdated({ sshClipboardImage: newConfig });
+    } catch (error) {
+      console.error('Failed to update SSH clipboard image settings:', error);
+      setSshClipboardImageSettings(previousConfig);
     }
   };
 
@@ -1815,6 +1841,124 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       >
                         <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
                       </Switch.Root>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.ssh.clipboardImageEnableTitle')}
+                      help={t('settings.ssh.clipboardImageEnableDescription')}
+                    >
+                      <Switch.Root
+                        checked={sshClipboardImageSettings.enabled}
+                        onCheckedChange={(checked) => handleSshClipboardImageSettingsChange({ enabled: checked })}
+                        aria-label={t('settings.ssh.clipboardImageEnableTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.ssh.clipboardImageUploadLocationTitle')}
+                      help={t('settings.ssh.clipboardImageUploadLocationDescription')}
+                      disabled={!sshClipboardImageSettings.enabled}
+                    >
+                      <Select.Root
+                        value={sshClipboardImageSettings.uploadLocation}
+                        onValueChange={(value) => handleSshClipboardImageSettingsChange({
+                          uploadLocation: value as SSHClipboardImageSettings['uploadLocation'],
+                        })}
+                        disabled={!sshClipboardImageSettings.enabled}
+                      >
+                        <Select.Trigger
+                          aria-label={t('settings.ssh.clipboardImageUploadLocationTitle')}
+                          className={`max-w-[300px] ${settingsPanelCompactSelectTriggerClassName}`}
+                        >
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
+                          >
+                            <Select.Viewport className="p-1">
+                              <Select.Item value="current-working-directory" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageUploadLocationCurrent')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="temporary-directory" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageUploadLocationTemp')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="custom-directory" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.ssh.clipboardImageUploadLocationCustom')}</Select.ItemText>
+                              </Select.Item>
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
+
+                    {sshClipboardImageSettings.uploadLocation === 'custom-directory' && (
+                      <CompactSettingRow
+                        label={t('settings.ssh.clipboardImageCustomDirectoryTitle')}
+                        htmlFor="ssh-clipboard-custom-directory"
+                        help={t('settings.ssh.clipboardImageCustomDirectoryDescription')}
+                        disabled={!sshClipboardImageSettings.enabled}
+                      >
+                        <input
+                          id="ssh-clipboard-custom-directory"
+                          type="text"
+                          value={sshClipboardImageSettings.customUploadDirectory ?? ''}
+                          disabled={!sshClipboardImageSettings.enabled}
+                          onChange={(event) => {
+                            void handleSshClipboardImageSettingsChange({ customUploadDirectory: event.target.value });
+                          }}
+                          className={`max-w-[360px] ${settingsPanelInputClassName}`}
+                        />
+                      </CompactSettingRow>
+                    )}
+
+                    <CompactSettingRow
+                      label={t('settings.ssh.clipboardImageCopyPathTitle')}
+                      help={t('settings.ssh.clipboardImageCopyPathDescription')}
+                      disabled={!sshClipboardImageSettings.enabled}
+                    >
+                      <Switch.Root
+                        checked={sshClipboardImageSettings.copyRemotePathAfterUpload}
+                        disabled={!sshClipboardImageSettings.enabled}
+                        onCheckedChange={(checked) => handleSshClipboardImageSettingsChange({ copyRemotePathAfterUpload: checked })}
+                        aria-label={t('settings.ssh.clipboardImageCopyPathTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.ssh.clipboardImageMaxSizeTitle')}
+                      htmlFor="ssh-clipboard-max-upload-mb"
+                      help={t('settings.ssh.clipboardImageMaxSizeDescription')}
+                      disabled={!sshClipboardImageSettings.enabled}
+                    >
+                      <input
+                        id="ssh-clipboard-max-upload-mb"
+                        type="number"
+                        min={1}
+                        max={200}
+                        step={1}
+                        value={Math.max(1, Math.round((sshClipboardImageSettings.maxUploadBytes ?? DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS.maxUploadBytes ?? 0) / 1024 / 1024))}
+                        disabled={!sshClipboardImageSettings.enabled}
+                        onChange={(event) => {
+                          const mb = Math.max(1, Number(event.target.value || 1));
+                          void handleSshClipboardImageSettingsChange({ maxUploadBytes: mb * 1024 * 1024 });
+                        }}
+                        className={`max-w-[120px] ${settingsPanelInputClassName}`}
+                      />
                     </CompactSettingRow>
 
                     <div className="px-4 py-3">

@@ -181,6 +181,15 @@ export interface GetSSHSessionMetricsConfig extends SSHSessionPortForwardTarget 
   path?: string;
 }
 
+export interface TryPasteSSHClipboardImageConfig extends SSHSessionPortForwardTarget {}
+
+export interface TryPasteSSHClipboardImageResult {
+  handled: boolean;
+  remotePath?: string;
+  width?: number;
+  height?: number;
+}
+
 export const SSH_HOST_KEY_PROMPT_CHANNEL = 'ssh-host-key-prompt';
 export const SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL = 'ssh-host-key-prompt-response';
 
@@ -1591,7 +1600,7 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'appearance' | 'tmux' | 'features' | 'customCategories' | 'chat' | 'plugins'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'appearance' | 'tmux' | 'features' | 'sshClipboardImage' | 'customCategories' | 'chat' | 'plugins'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
@@ -1600,6 +1609,7 @@ export type SettingsPatch =
     appearance?: Partial<Settings['appearance']>;
     tmux?: Partial<TmuxSettings>;
     features?: Partial<FeatureSettings>;
+    sshClipboardImage?: Partial<NonNullable<Settings['sshClipboardImage']>>;
     customCategories?: CustomCategory[];
     chat?: Partial<ChatSettings>;
     plugins?: Partial<WorkspacePluginSettings>;
@@ -1854,6 +1864,10 @@ export interface ElectronAPI {
 
   writeClipboardText: (text: string) => Promise<IpcResponse<void>>;
   readClipboardText: () => Promise<IpcResponse<string>>;
+  tryPasteSshClipboardImage: (
+    windowId: string,
+    paneId: string,
+  ) => Promise<IpcResponse<TryPasteSSHClipboardImageResult>>;
 
   notifyRendererReady: () => void;
 

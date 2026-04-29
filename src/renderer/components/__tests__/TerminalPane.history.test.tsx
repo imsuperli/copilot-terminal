@@ -22,6 +22,9 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks, requestAnimation
     onSelectionChange: ReturnType<typeof vi.fn>;
     attachCustomKeyEventHandler: ReturnType<typeof vi.fn>;
     options: Record<string, unknown>;
+    modes: {
+      bracketedPasteMode: boolean;
+    };
     cols: number;
     rows: number;
   }>,
@@ -61,6 +64,9 @@ vi.mock('@xterm/xterm', () => ({
       onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
       attachCustomKeyEventHandler: vi.fn(),
       options: { ...(options ?? {}) },
+      modes: {
+        bracketedPasteMode: false,
+      },
       cols: 120,
       rows: 40,
     };
@@ -679,6 +685,203 @@ describe('TerminalPane history replay', () => {
       paneId,
       '\u001b[?1;2c',
       { source: 'xterm.onData' },
+    );
+  });
+
+  it('falls back to normal text paste when ssh image upload reports handled false', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'hello from clipboard',
+    });
+    vi.mocked(window.electronAPI.tryPasteSshClipboardImage).mockResolvedValue({
+      success: true,
+      data: { handled: false },
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-ssh"
+        pane={{
+          id: 'pane-ssh',
+          cwd: '/srv/app',
+          command: '',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+          backend: 'ssh',
+          ssh: {
+            profileId: 'profile-1',
+            remoteCwd: '/srv/app',
+          },
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh');
+    });
+    await waitFor(() => {
+      expect(window.electronAPI.readClipboardText).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
+        'win-ssh',
+        'pane-ssh',
+        'hello from clipboard',
+        { source: 'clipboard-shortcut' },
+      );
+    });
+  });
+
+  it('does not text-paste when ssh image upload already handled the clipboard', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'should not be pasted',
+    });
+    vi.mocked(window.electronAPI.tryPasteSshClipboardImage).mockResolvedValue({
+      success: true,
+      data: { handled: true, remotePath: '/srv/app/copilot-clipboard.png' },
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-ssh"
+        pane={{
+          id: 'pane-ssh',
+          cwd: '/srv/app',
+          command: '',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+          backend: 'ssh',
+          ssh: {
+            profileId: 'profile-1',
+            remoteCwd: '/srv/app',
+          },
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh');
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.readClipboardText).not.toHaveBeenCalled();
+    });
+    expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith(
+      'win-ssh',
+      'pane-ssh',
+      'should not be pasted',
+      { source: 'clipboard-shortcut' },
+    );
+  });
+
+  it('does not fall back to text paste when ssh image upload fails', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'should not be pasted after image error',
+    });
+    vi.mocked(window.electronAPI.tryPasteSshClipboardImage).mockResolvedValue({
+      success: false,
+      error: '图片已识别，但超过 SSH 图片上传大小限制：当前 25.0 MB，限制 20.0 MB',
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-ssh"
+        pane={{
+          id: 'pane-ssh',
+          cwd: '/srv/app',
+          command: '',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+          backend: 'ssh',
+          ssh: {
+            profileId: 'profile-1',
+            remoteCwd: '/srv/app',
+          },
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh');
+    });
+
+    expect(window.electronAPI.readClipboardText).not.toHaveBeenCalled();
+    expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith(
+      'win-ssh',
+      'pane-ssh',
+      'should not be pasted after image error',
+      { source: 'clipboard-shortcut' },
     );
   });
 });

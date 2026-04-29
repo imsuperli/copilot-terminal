@@ -26,6 +26,7 @@ import {
 } from '../utils/sshCwdTracking';
 import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import '../styles/xterm.css';
+import { dispatchAppError, dispatchAppSuccess } from '../utils/appNotice';
 
 const completedReplaySessions = new Set<string>();
 const DIRECT_LIVE_OUTPUT_MAX_CHARS = 256;
@@ -1133,7 +1134,22 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         e.stopPropagation();
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
         if (isActiveRef.current && window.electronAPI) {
-          void readClipboardText().then((text) => {
+          void (async () => {
+            if (pane.backend === 'ssh' && window.electronAPI?.tryPasteSshClipboardImage) {
+              const imageResult = await window.electronAPI.tryPasteSshClipboardImage(windowId, pane.id);
+              if (imageResult.success && imageResult.data?.handled) {
+                const remotePath = imageResult.data.remotePath ?? '';
+                dispatchAppSuccess(remotePath ? t('ssh.clipboardImageUploaded', { path: remotePath }) : t('ssh.clipboardImageUploaded', { path: '' }));
+                return;
+              }
+
+              if (!imageResult.success) {
+                dispatchAppError(imageResult.error || 'Failed to upload clipboard image');
+                return;
+              }
+            }
+
+            const text = await readClipboardText();
             if (text && window.electronAPI && isActiveRef.current) {
               // 如果终端开启了 bracketed paste mode，用转义序列包裹粘贴内容
               const wrapped = terminal.modes.bracketedPasteMode
@@ -1141,7 +1157,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                 : text;
               window.electronAPI.ptyWrite(windowId, pane.id, wrapped, { source: 'clipboard-shortcut' });
             }
-          });
+          })();
         }
         return false; // 阻止 xterm.js 处理粘贴键
       }
@@ -1263,7 +1279,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       terminalContainer?.removeEventListener('paste', suppressNativePaste as EventListener, true);
       terminalContainer?.removeEventListener('contextmenu', handleNativeContextMenu, true);
       webLinkProviderDisposable.dispose();
-
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;

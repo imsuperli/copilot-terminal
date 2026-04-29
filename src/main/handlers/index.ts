@@ -12,6 +12,7 @@ import { registerStatusLineHandlers } from './statusLineHandlers';
 import { registerGroupHandlers } from './groupHandlers';
 import { registerSSHProfileHandlers } from './sshProfileHandlers';
 import { registerSSHSessionHandlers } from './sshSessionHandlers';
+import { registerSSHClipboardImageHandlers } from './sshClipboardImageHandlers';
 import { registerCodePaneHandlers } from './codePaneHandlers';
 import { registerChatHandlers } from './chatHandlers';
 import { registerAgentHandlers } from './agentHandlers';
@@ -62,6 +63,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // SSH 会话管理
   registerSSHSessionHandlers(ctx);
+
+  // SSH 剪贴板图片上传
+  registerSSHClipboardImageHandlers(ctx);
 
   // StatusLine 管理 (statusline-configure, statusline-remove, etc.)
   registerStatusLineHandlers(ctx);

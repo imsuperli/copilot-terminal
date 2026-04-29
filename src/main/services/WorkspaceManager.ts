@@ -943,6 +943,15 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       features: {
         sshEnabled: settings?.features?.sshEnabled ?? defaults.features?.sshEnabled ?? true,
       },
+      sshClipboardImage: {
+        enabled: settings?.sshClipboardImage?.enabled ?? defaults.sshClipboardImage?.enabled ?? true,
+        uploadLocation: settings?.sshClipboardImage?.uploadLocation ?? defaults.sshClipboardImage?.uploadLocation ?? 'current-working-directory',
+        customUploadDirectory: settings?.sshClipboardImage?.customUploadDirectory ?? defaults.sshClipboardImage?.customUploadDirectory ?? '',
+        copyRemotePathAfterUpload: settings?.sshClipboardImage?.copyRemotePathAfterUpload
+          ?? defaults.sshClipboardImage?.copyRemotePathAfterUpload
+          ?? true,
+        maxUploadBytes: settings?.sshClipboardImage?.maxUploadBytes ?? defaults.sshClipboardImage?.maxUploadBytes ?? 20 * 1024 * 1024,
+      },
       plugins: normalizeWorkspacePluginSettings(settings?.plugins),
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
@@ -978,6 +987,13 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       },
       features: {
         sshEnabled: true,
+      },
+      sshClipboardImage: {
+        enabled: true,
+        uploadLocation: 'current-working-directory',
+        customUploadDirectory: '',
+        copyRemotePathAfterUpload: true,
+        maxUploadBytes: 20 * 1024 * 1024,
       },
       customCategories: [],
       defaultSidebarTab: 'active',

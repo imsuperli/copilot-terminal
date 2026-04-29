@@ -9,7 +9,7 @@ import { CreateGroupDialog } from './components/CreateGroupDialog';
 import { CreateWindowDialog } from './components/CreateWindowDialog';
 import { TerminalView } from './components/TerminalView';
 import { GroupView } from './components/GroupView';
-import { ViewSwitchError } from './components/ViewSwitchError';
+import { AppNotice } from './components/AppNotice';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { AppearanceBackdrop } from './components/AppearanceBackdrop';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
@@ -46,7 +46,7 @@ import {
   setSSHPasswordPromptHandler,
   type SSHPasswordPromptRequest,
 } from './utils/sshPasswordPrompt';
-import { APP_ERROR_EVENT, type AppErrorEventDetail } from './utils/appNotice';
+import { APP_NOTICE_EVENT, type AppNoticeEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
 import { isEphemeralSSHCloneWindow } from './utils/sshWindowBindings';
 import {
@@ -328,7 +328,7 @@ function AppContent() {
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
   const [sshHostKeyPromptQueue, setSSHHostKeyPromptQueue] = useState<SSHHostKeyPromptPayload[]>([]);
   const [sshPasswordPromptRequest, setSSHPasswordPromptRequest] = useState<SSHPasswordPromptRequest | null>(null);
-  const [appError, setAppError] = useState<string | null>(null);
+  const [appNotice, setAppNotice] = useState<{ message: string; tone: 'error' | 'success' } | null>(null);
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
     name: 'Copilot-Terminal',
     version: '1.0.0',
@@ -505,20 +505,20 @@ function AppContent() {
     };
   }, []);
 
-  const showAppError = useCallback((message: string) => {
+  const showAppNotice = useCallback((message: string, tone: 'error' | 'success' = 'error') => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage) {
       return;
     }
 
-    setAppError(trimmedMessage);
+    setAppNotice({ message: trimmedMessage, tone });
 
     if (appErrorTimerRef.current) {
       clearTimeout(appErrorTimerRef.current);
     }
 
     appErrorTimerRef.current = setTimeout(() => {
-      setAppError(null);
+      setAppNotice(null);
       appErrorTimerRef.current = null;
     }, 6000);
   }, []);
@@ -532,18 +532,20 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const handleAppError = (event: Event) => {
-      const message = (event as CustomEvent<AppErrorEventDetail | undefined>).detail?.message;
+    const handleAppNotice = (event: Event) => {
+      const detail = (event as CustomEvent<AppNoticeEventDetail | undefined>).detail;
+      const message = detail?.message;
+      const level = detail?.level ?? 'error';
       if (message) {
-        showAppError(message);
+        showAppNotice(message, level);
       }
     };
 
-    window.addEventListener(APP_ERROR_EVENT, handleAppError);
+    window.addEventListener(APP_NOTICE_EVENT, handleAppNotice);
     return () => {
-      window.removeEventListener(APP_ERROR_EVENT, handleAppError);
+      window.removeEventListener(APP_NOTICE_EVENT, handleAppNotice);
     };
-  }, [showAppError]);
+  }, [showAppNotice]);
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -1030,12 +1032,12 @@ function AppContent() {
     } catch (error) {
       console.error('Failed to create SSH window:', error);
       if (!isSSHPasswordPromptCancelled(error)) {
-        showAppError(error instanceof Error ? error.message : `Failed to connect SSH profile ${profile.id}`);
+        showAppNotice(error instanceof Error ? error.message : `Failed to connect SSH profile ${profile.id}`, 'error');
       }
     } finally {
       setConnectingSSHProfileId(null);
     }
-  }, [addWindow, connectingSSHProfileId, groupedWindowIdSet, showAppError, switchToWindow, updatePane, updateWindow]);
+  }, [addWindow, connectingSSHProfileId, groupedWindowIdSet, showAppNotice, switchToWindow, updatePane, updateWindow]);
 
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);
@@ -1283,8 +1285,8 @@ function AppContent() {
         />
       ))}
 
-      {error && <ViewSwitchError message={error} />}
-      {!error && appError && <ViewSwitchError message={appError} />}
+      {error && <AppNotice message={error} />}
+      {!error && appNotice && <AppNotice message={appNotice.message} tone={appNotice.tone} />}
 
       {/* 组视图：当 activeGroupId 有效时显示 */}
       {activeGroupId && (

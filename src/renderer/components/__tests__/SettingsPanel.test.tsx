@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsPanel } from '../SettingsPanel';
 import { I18nProvider } from '../../i18n';
@@ -754,5 +754,87 @@ describe('SettingsPanel', () => {
     await user.click(screen.getByRole('tab', { name: '插件' }));
 
     expect(window.electronAPI.listPlugins).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads and updates SSH clipboard image settings in the advanced tab', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        features: {
+          sshEnabled: true,
+        },
+        sshClipboardImage: {
+          enabled: true,
+          uploadLocation: 'temporary-directory',
+          customUploadDirectory: '',
+          copyRemotePathAfterUpload: true,
+          maxUploadBytes: 8 * 1024 * 1024,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.listKnownHosts).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /高级设置/ }));
+
+    expect(await screen.findByText('启用 SSH 图片粘贴上传')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '上传位置' })).toHaveTextContent('临时缓存目录');
+    expect(screen.getByDisplayValue('8')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: '上传成功后自动复制远端路径' }));
+    expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+      sshClipboardImage: expect.objectContaining({
+        enabled: true,
+        uploadLocation: 'temporary-directory',
+        copyRemotePathAfterUpload: false,
+        maxUploadBytes: 8 * 1024 * 1024,
+      }),
+    });
+
+    await user.click(screen.getByRole('combobox', { name: '上传位置' }));
+    await user.click(await screen.findByRole('option', { name: '自定义目录' }));
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      sshClipboardImage: expect.objectContaining({
+        uploadLocation: 'custom-directory',
+      }),
+    });
+
+    const customDirectoryInput = await screen.findByLabelText('自定义目录');
+    await user.clear(customDirectoryInput);
+    await user.type(customDirectoryInput, '~/uploads/images');
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+        sshClipboardImage: expect.objectContaining({
+          uploadLocation: 'custom-directory',
+          customUploadDirectory: '~/uploads/images',
+        }),
+      });
+    });
+
+    const maxSizeInput = screen.getByLabelText('最大图片大小（MB）');
+    fireEvent.change(maxSizeInput, { target: { value: '12' } });
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+        sshClipboardImage: expect.objectContaining({
+          maxUploadBytes: 12 * 1024 * 1024,
+        }),
+      });
+    });
   });
 });
