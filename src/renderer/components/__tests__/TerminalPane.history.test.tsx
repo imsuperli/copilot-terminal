@@ -882,4 +882,64 @@ describe('TerminalPane history replay', () => {
       { source: 'clipboard-shortcut' },
     );
   });
+
+  it('uses the latest tracked ssh runtime cwd for image upload shortcuts', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+    vi.mocked(window.electronAPI.tryPasteSshClipboardImage).mockResolvedValue({
+      success: true,
+      data: { handled: true, remotePath: '/home/a/copilot-clipboard.png' },
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-ssh"
+        pane={{
+          id: 'pane-ssh',
+          cwd: '~',
+          command: '',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+          backend: 'ssh',
+          ssh: {
+            profileId: 'profile-1',
+            remoteCwd: '~',
+          },
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+      expect(ptyCallbacks.length).toBeGreaterThan(0);
+    });
+
+    ptyCallbacks[0]({
+      windowId: 'win-ssh',
+      paneId: 'pane-ssh',
+      data: '\u001b]633;P;Cwd=/home/a\u0007',
+      seq: 1,
+    });
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: true,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh', '/home/a');
+    });
+  });
 });

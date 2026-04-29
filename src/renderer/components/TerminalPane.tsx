@@ -1165,7 +1165,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
         if (isActiveRef.current && window.electronAPI?.tryPasteSshClipboardImage) {
           void (async () => {
-            const imageResult = await window.electronAPI.tryPasteSshClipboardImage(windowId, pane.id, pane.cwd);
+            const runtimeCwd = sshCwdTrackerRef.current.cwd ?? pane.cwd;
+            const imageResult = await window.electronAPI.tryPasteSshClipboardImage(windowId, pane.id, runtimeCwd);
             if (imageResult.success && imageResult.data?.handled) {
               const remotePath = imageResult.data.remotePath ?? '';
               dispatchAppSuccess(remotePath ? t('ssh.clipboardImageUploaded', { path: remotePath }) : t('ssh.clipboardImageUploaded', { path: '' }));
