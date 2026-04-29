@@ -100,13 +100,16 @@ describe('GroupSplitLayout', () => {
 
     const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
     expect(separator.className).toContain('w-2');
-    expect(separator.className).toContain('bg-transparent');
+    expect(separator.className).toContain('bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]');
 
     const dividerIndicator = separator.firstElementChild;
     expect(dividerIndicator).not.toBeNull();
     expect(dividerIndicator?.className).toContain('w-px');
-    expect(dividerIndicator?.className).toContain('bg-[rgb(var(--border))]/80');
-    expect(dividerIndicator?.className).not.toContain('shadow-');
+    expect(dividerIndicator?.className).toContain('transition-all');
+
+    const dividerGlow = dividerIndicator?.nextElementSibling;
+    expect(dividerGlow).not.toBeNull();
+    expect(dividerGlow?.className).toContain('w-[3px]');
   });
 
   it('highlights the active group window without adding an outer border', () => {

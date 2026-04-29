@@ -34,16 +34,40 @@
   max-width: 100% !important;
 }
 
-/* Keep the terminal scrollbar fixed at 4px and support old/new xterm DOM */
+/* Keep a stable gutter, but only expand the visible thumb when the user is over the scrollbar.
+   This avoids hover flicker from changing the actual hit target width. */
 .xterm .xterm-scrollable-element > .xterm-scrollbar,
 .xterm .xterm-scrollable-element > .scrollbar {
-  width: 4px !important;
+  width: 12px !important;
   background: transparent !important;
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar:hover,
 .xterm .xterm-scrollable-element > .scrollbar:hover {
+  width: 12px !important;
+}
+
+.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
+  right: 2px !important;
   width: 4px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-radius: 999px !important;
+  transition: width 0.16s ease, right 0.16s ease, background 0.2s ease !important;
+}
+
+.xterm .xterm-scrollable-element > .xterm-scrollbar:hover > .xterm-slider,
+.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:hover,
+.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider.xterm-active {
+  right: 0 !important;
+  width: 8px !important;
+}
+
+.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:hover {
+  background: rgba(255, 255, 255, 0.28) !important;
+}
+
+.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider.xterm-active {
+  background: rgba(255, 255, 255, 0.36) !important;
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider,
@@ -51,12 +75,18 @@
   width: 4px !important;
   background: rgba(255, 255, 255, 0.18) !important;
   border-radius: 999px !important;
-  transition: background 0.2s ease !important;
+  transition: width 0.16s ease, background 0.2s ease !important;
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:hover,
 .xterm .xterm-scrollable-element > .scrollbar > .slider:hover {
   background: rgba(255, 255, 255, 0.26) !important;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar:hover > .slider,
+.xterm .xterm-scrollable-element > .scrollbar > .slider:hover,
+.xterm .xterm-scrollable-element > .scrollbar > .slider:active {
+  width: 8px !important;
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:active,

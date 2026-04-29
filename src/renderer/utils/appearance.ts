@@ -330,6 +330,15 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   rootStyle.setProperty('--appearance-pane-background', rgbaWithTerminalBackground(paneOpacity));
   rootStyle.setProperty('--appearance-pane-background-strong', rgbaWithTerminalBackground(paneStrongOpacity));
   rootStyle.setProperty('--appearance-pane-chrome-background', rgbaWithTerminalBackground(paneChromeOpacity));
+  rootStyle.setProperty('--appearance-pane-hover-scrim-opacity', resolvePaneHoverScrimOpacity(appearance).toFixed(3));
+  rootStyle.setProperty(
+    '--appearance-pane-window-inactive-scrim-opacity',
+    resolvePaneWindowInactiveScrimOpacity(appearance).toFixed(3),
+  );
+  rootStyle.setProperty('--appearance-pane-inactive-scrim-opacity', resolvePaneInactiveScrimOpacity(appearance).toFixed(3));
+  rootStyle.setProperty('--appearance-split-divider-track-opacity', resolveSplitDividerTrackOpacity(appearance).toFixed(3));
+  rootStyle.setProperty('--appearance-split-divider-line-opacity', resolveSplitDividerLineOpacity(appearance).toFixed(3));
+  rootStyle.setProperty('--appearance-split-divider-glow-opacity', resolveSplitDividerGlowOpacity(appearance).toFixed(3));
   rootStyle.setProperty('--appearance-card-surface-top', rgbaWithTerminalBackground(cardTopOpacity));
   rootStyle.setProperty('--appearance-card-surface-bottom', rgbaWithTerminalBackground(cardBottomOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-top', rgbaWithTerminalBackground(cardHoverTopOpacity));
@@ -686,6 +695,150 @@ function resolvePaneChromeOpacity(appearance: AppearanceSettings): number {
   }
 
   return clampOpacity(scaledOpacity, isImageSkin ? 0.08 : 0.12, 0.32);
+}
+
+function resolvePaneHoverScrimOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.035;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.02;
+    }
+
+    return 0.028;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.08;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.05;
+    }
+
+    return 0.065;
+  }
+
+  if (appearance.readabilityMode === 'readability') {
+    return 0.07;
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return 0.04;
+  }
+
+  return 0.055;
+}
+
+function resolvePaneWindowInactiveScrimOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.055;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.03;
+    }
+
+    return 0.042;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.12;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.08;
+    }
+
+    return 0.1;
+  }
+
+  if (appearance.readabilityMode === 'readability') {
+    return 0.1;
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return 0.06;
+  }
+
+  return 0.08;
+}
+
+function resolvePaneInactiveScrimOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.09;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.05;
+    }
+
+    return 0.07;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.18;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.11;
+    }
+
+    return 0.14;
+  }
+
+  if (appearance.readabilityMode === 'readability') {
+    return 0.15;
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return 0.09;
+  }
+
+  return 0.12;
+}
+
+function resolveSplitDividerTrackOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return appearance.readabilityMode === 'immersive' ? 0.12 : 0.16;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    return appearance.readabilityMode === 'readability' ? 0.28 : 0.22;
+  }
+
+  return appearance.readabilityMode === 'readability' ? 0.26 : 0.2;
+}
+
+function resolveSplitDividerLineOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return appearance.readabilityMode === 'immersive' ? 0.72 : 0.82;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    return appearance.readabilityMode === 'readability' ? 0.96 : 0.9;
+  }
+
+  return appearance.readabilityMode === 'readability' ? 0.94 : 0.88;
+}
+
+function resolveSplitDividerGlowOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return 0.1;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    return appearance.readabilityMode === 'immersive' ? 0.14 : 0.2;
+  }
+
+  return appearance.readabilityMode === 'readability' ? 0.22 : 0.18;
 }
 
 function resolveCardOpacity(appearance: AppearanceSettings): number {

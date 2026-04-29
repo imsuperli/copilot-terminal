@@ -210,8 +210,6 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   }, [applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
-  const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
-  const dividerIdleClassName = 'bg-[rgb(var(--border)/0.85)] group-hover:bg-[rgb(var(--primary))]/75';
 
   return (
     <div
@@ -256,22 +254,41 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               className={`
                 ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
                 group relative flex-shrink-0 select-none
-                bg-transparent transition-colors
+                bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]
+                transition-colors
               `}
               onMouseDown={handleMouseDown(index)}
             >
               <div
                 className={`
-                  absolute rounded-full transition-all duration-150
+                  absolute transition-all duration-150
                   ${isHorizontal
                     ? 'inset-y-0 left-1/2 w-px -translate-x-1/2'
                     : 'inset-x-0 top-1/2 h-px -translate-y-1/2'
                   }
-                  ${isResizing && resizingIndex === index
-                    ? `${dividerActiveClassName} ${isHorizontal ? 'w-[2px]' : 'h-[2px]'}`
-                    : dividerIdleClassName
+                `}
+                style={{
+                  backgroundColor: isResizing && resizingIndex === index
+                    ? 'rgb(var(--primary))'
+                    : `rgba(var(--border), var(--appearance-split-divider-line-opacity))`,
+                  boxShadow: isResizing && resizingIndex === index
+                    ? `0 0 0 1px rgba(var(--primary), 0.32), 0 0 14px rgba(var(--primary), 0.42)`
+                    : `0 0 0 1px rgba(var(--background), 0.28), 0 0 8px rgba(var(--foreground), var(--appearance-split-divider-glow-opacity))`,
+                }}
+              />
+              <div
+                aria-hidden="true"
+                className={`
+                  pointer-events-none absolute transition-opacity duration-150
+                  ${isHorizontal
+                    ? 'inset-y-0 left-1/2 w-[3px] -translate-x-1/2'
+                    : 'inset-x-0 top-1/2 h-[3px] -translate-y-1/2'
                   }
                 `}
+                style={{
+                  backgroundColor: `rgba(var(--primary), ${isResizing && resizingIndex === index ? '0.38' : '0.18'})`,
+                  opacity: isResizing && resizingIndex === index ? 1 : undefined,
+                }}
               />
             </div>
           )}
@@ -294,6 +311,55 @@ interface LayoutNodeRendererProps {
   onBrowserPaneDrop?: (item: BrowserDropDragItem, result: PaneDropResult) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
+
+interface PaneVisualFrameProps {
+  isActive: boolean;
+  isWindowActive: boolean;
+  children: React.ReactNode;
+}
+
+const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
+  isActive,
+  isWindowActive,
+  children,
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const overlayOpacity = isActive && isWindowActive
+    ? 0
+    : isHovered
+      ? 'var(--appearance-pane-hover-scrim-opacity)'
+      : isActive
+        ? 'var(--appearance-pane-window-inactive-scrim-opacity)'
+        : 'var(--appearance-pane-inactive-scrim-opacity)';
+
+  return (
+    <div
+      className="relative h-full min-h-0 min-w-0 overflow-hidden"
+      data-pane-visual-state={
+        isActive && isWindowActive
+          ? 'active'
+          : isHovered
+            ? 'hover'
+            : isActive
+              ? 'window-inactive'
+              : 'inactive'
+      }
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {children}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-10 transition-opacity duration-150"
+        style={{
+          backgroundColor: 'rgb(var(--background))',
+          opacity: overlayOpacity,
+        }}
+      />
+    </div>
+  );
+};
 
 interface DraggableBrowserPaneProps {
   windowId: string;
@@ -524,7 +590,12 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
 }) => {
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
-    const paneContent = isBrowserPane(layout.pane)
+    const paneContent = (
+      <PaneVisualFrame
+        isActive={isActive}
+        isWindowActive={isWindowActive}
+      >
+        {isBrowserPane(layout.pane)
       ? (
         <DraggableBrowserPane
           windowId={windowId}
@@ -565,7 +636,9 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
           onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
           onProcessExit={onPaneExit ? () => onPaneExit(layout.id) : undefined}
         />
-      );
+      )}
+      </PaneVisualFrame>
+    );
 
     if (!onBrowserPaneDrop) {
       return paneContent;

@@ -198,8 +198,6 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
   }, [applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, groupId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
-  const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
-  const dividerIdleClassName = 'bg-[rgb(var(--border))]/80 group-hover:bg-[rgb(var(--primary))]/75';
 
   return (
     <div
@@ -244,22 +242,41 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
               className={`
                 ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
                 group relative flex-shrink-0 select-none
-                bg-transparent transition-colors
+                bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]
+                transition-colors
               `}
               onMouseDown={handleMouseDown(index)}
             >
               <div
                 className={`
-                  absolute rounded-full transition-all duration-150
+                  absolute transition-all duration-150
                   ${isHorizontal
                     ? 'inset-y-0 left-1/2 w-px -translate-x-1/2'
                     : 'inset-x-0 top-1/2 h-px -translate-y-1/2'
                   }
-                  ${isResizing && resizingIndex === index
-                    ? `${dividerActiveClassName} ${isHorizontal ? 'w-[2px]' : 'h-[2px]'}`
-                    : dividerIdleClassName
+                `}
+                style={{
+                  backgroundColor: isResizing && resizingIndex === index
+                    ? 'rgb(var(--primary))'
+                    : `rgba(var(--border), var(--appearance-split-divider-line-opacity))`,
+                  boxShadow: isResizing && resizingIndex === index
+                    ? `0 0 0 1px rgba(var(--primary), 0.32), 0 0 14px rgba(var(--primary), 0.42)`
+                    : `0 0 0 1px rgba(var(--background), 0.28), 0 0 8px rgba(var(--foreground), var(--appearance-split-divider-glow-opacity))`,
+                }}
+              />
+              <div
+                aria-hidden="true"
+                className={`
+                  pointer-events-none absolute transition-opacity duration-150
+                  ${isHorizontal
+                    ? 'inset-y-0 left-1/2 w-[3px] -translate-x-1/2'
+                    : 'inset-x-0 top-1/2 h-[3px] -translate-y-1/2'
                   }
                 `}
+                style={{
+                  backgroundColor: `rgba(var(--primary), ${isResizing && resizingIndex === index ? '0.38' : '0.18'})`,
+                  opacity: isResizing && resizingIndex === index ? 1 : undefined,
+                }}
               />
             </div>
           )}

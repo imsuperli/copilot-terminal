@@ -86,6 +86,65 @@ describe('SplitLayout', () => {
     expect(latestByPane.get('pane-b')).toBe(true);
   });
 
+  it('dims inactive panes and reduces the scrim on hover', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-a'), createPaneNode('pane-b')],
+    };
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const paneA = screen.getByTestId('pane-pane-a');
+    const paneB = screen.getByTestId('pane-pane-b');
+    const paneAFrame = paneA.parentElement as HTMLElement;
+    const paneBFrame = paneB.parentElement as HTMLElement;
+    const paneAOverlay = paneAFrame.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const paneBOverlay = paneBFrame.querySelector('[aria-hidden="true"]') as HTMLElement;
+
+    expect(paneAFrame.dataset.paneVisualState).toBe('active');
+    expect(paneAOverlay.style.opacity).toBe('0');
+    expect(paneBFrame.dataset.paneVisualState).toBe('inactive');
+    expect(paneBOverlay.style.opacity).toBe('var(--appearance-pane-inactive-scrim-opacity)');
+
+    fireEvent.mouseEnter(paneBFrame);
+
+    expect(paneBFrame.dataset.paneVisualState).toBe('hover');
+    expect(paneBOverlay.style.opacity).toBe('var(--appearance-pane-hover-scrim-opacity)');
+  });
+
+  it('dims the active pane when its window is not active', () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive={false}
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const pane = screen.getByTestId('pane-pane-a');
+    const frame = pane.parentElement as HTMLElement;
+    const overlay = frame.querySelector('[aria-hidden="true"]') as HTMLElement;
+
+    expect(frame.dataset.paneVisualState).toBe('window-inactive');
+    expect(overlay.style.opacity).toBe('var(--appearance-pane-window-inactive-scrim-opacity)');
+  });
+
   it('keeps existing pane mounted when root changes from single pane to split', () => {
     const paneA = createPaneNode('pane-a');
 
@@ -311,13 +370,16 @@ describe('SplitLayout', () => {
 
     const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
     expect(separator.className).toContain('w-2');
-    expect(separator.className).toContain('bg-transparent');
+    expect(separator.className).toContain('bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]');
 
     const dividerIndicator = separator.firstElementChild;
     expect(dividerIndicator).not.toBeNull();
     expect(dividerIndicator?.className).toContain('w-px');
-    expect(dividerIndicator?.className).toContain('bg-[rgb(var(--border)/0.85)]');
-    expect(dividerIndicator?.className).not.toContain('shadow-');
+    expect(dividerIndicator?.className).toContain('transition-all');
+
+    const dividerGlow = dividerIndicator?.nextElementSibling;
+    expect(dividerGlow).not.toBeNull();
+    expect(dividerGlow?.className).toContain('w-[3px]');
   });
 
   it('renders chat panes through the shared layout renderer', () => {
