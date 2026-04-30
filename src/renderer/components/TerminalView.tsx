@@ -4,7 +4,7 @@ import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { useShallow } from 'zustand/react/shallow';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, MessageSquare } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, MessageSquare, Pin } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { findPanePath, getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -70,6 +70,7 @@ import { destroySSHWindowFamilyResources } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
 import { getInactiveWindowStatus, getStartablePanes, hasAnyLiveTerminalSession, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import { appearanceTitlebarSurfaceStyle } from '../utils/appearance';
+import { usePaneNoteStore } from '../stores/paneNoteStore';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -406,6 +407,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
   const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
   const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
+  const openPaneNoteDraft = usePaneNoteStore((state) => state.openDraft);
 
   const destroyRemoteWindows = useCallback(
     async (windowIds: string[]) => {
@@ -898,6 +900,72 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     dragBrowserTool(node);
   }, [dragBrowserTool]);
 
+  const noteToolButtonRef = useRef<HTMLButtonElement | null>(null);
+  const noteToolDragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const [isDraggingNoteTool, setIsDraggingNoteTool] = useState(false);
+
+  const finishNoteToolDrag = useCallback(() => {
+    noteToolDragStateRef.current = null;
+    setIsDraggingNoteTool(false);
+  }, []);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const state = noteToolDragStateRef.current;
+      if (!state || event.pointerId !== state.pointerId) {
+        return;
+      }
+
+      if (!state.dragging) {
+        const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
+        if (distance < 4) {
+          return;
+        }
+
+        state.dragging = true;
+        setIsDraggingNoteTool(true);
+      }
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const state = noteToolDragStateRef.current;
+      if (!state || event.pointerId !== state.pointerId) {
+        return;
+      }
+
+      const activePane = activeTerminalPane;
+      if (state.dragging && activePane) {
+        openPaneNoteDraft(terminalWindow.id, activePane.id);
+      }
+
+      finishNoteToolDrag();
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      const state = noteToolDragStateRef.current;
+      if (!state || event.pointerId !== state.pointerId) {
+        return;
+      }
+
+      finishNoteToolDrag();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+    };
+  }, [activeTerminalPane, finishNoteToolDrag, openPaneNoteDraft, terminalWindow.id]);
+
   const handleBrowserPaneDrop = useCallback((
     item: BrowserDropDragItem,
     result: PaneDropResult,
@@ -1241,7 +1309,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
 
   const titleBarActions = useMemo(() => {
-    if (!showFloatingChrome || !titleBarActionsSlot) {
+    if (!showFloatingChrome) {
       return null;
     }
 
@@ -1250,7 +1318,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const floatingMutedIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`;
     const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
 
-    return createPortal(
+    const actionsContent = (
       <div
         data-testid="terminal-floating-actions"
         className="pointer-events-auto flex max-w-full justify-end pr-1"
@@ -1416,6 +1484,38 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </button>
             </AppTooltip>
 
+            <AppTooltip content={t('paneNote.create')} placement="toolbar-trailing">
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('paneNote.create')}
+                ref={noteToolButtonRef}
+                onMouseDown={preventMouseButtonFocus}
+                onClick={() => {
+                  if (!activeTerminalPane) {
+                    return;
+                  }
+
+                  openPaneNoteDraft(terminalWindow.id, activeTerminalPane.id);
+                }}
+                onPointerDown={(event) => {
+                  if (!activeTerminalPane || event.button !== 0) {
+                    return;
+                  }
+
+                  noteToolDragStateRef.current = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    dragging: false,
+                  };
+                }}
+                className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${isDraggingNoteTool ? 'cursor-grabbing bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]' : 'cursor-grab text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] active:cursor-grabbing'}`}
+              >
+                <Pin size={14} />
+              </button>
+            </AppTooltip>
+
             {activePaneCapabilities?.canOpenSFTP && !hasChatPaneInWindow && (
               <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">
                 <button
@@ -1512,9 +1612,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
           </div>
         </div>
-      </div>,
-      titleBarActionsSlot,
+      </div>
     );
+
+    if (titleBarActionsSlot) {
+      return createPortal(actionsContent, titleBarActionsSlot);
+    }
+
+    return actionsContent;
   }, [
     activePaneCapabilities?.canManagePortForwards,
     activePaneCapabilities?.canOpenLocalFolder,

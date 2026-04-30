@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pin, PinOff, StickyNote, X } from 'lucide-react';
+import { Pin, PinOff, X } from 'lucide-react';
 import { useI18n } from '../i18n';
 import type { PaneNoteRecord } from '../stores/paneNoteStore';
 import { usePaneNoteStore } from '../stores/paneNoteStore';
@@ -157,34 +157,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   };
 
   if (!hasNote && !isEditing) {
-    return (
-      <div
-        ref={rootRef}
-        className={`pointer-events-none absolute top-2 z-30 ${side === 'left' ? 'left-2' : 'right-2'}`}
-      >
-        <button
-          type="button"
-          aria-label={t('paneNote.create')}
-          className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)] text-[rgb(var(--muted-foreground))] shadow-[0_10px_28px_rgba(15,23,42,0.22)] backdrop-blur transition-colors hover:border-[rgb(var(--primary))] hover:text-[rgb(var(--foreground))]"
-          onClick={(event) => {
-            event.stopPropagation();
-            setDraft('');
-            setIsEditing(true);
-            closeDraft(windowId, paneId);
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setDraft('');
-            setIsEditing(true);
-            closeDraft(windowId, paneId);
-            void handlePaste();
-          }}
-        >
-          <StickyNote size={14} />
-        </button>
-      </div>
-    );
+    return null;
   }
 
   const effectiveSide = dragPreviewSide ?? side;
@@ -218,7 +191,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
             type="button"
             aria-label={t('paneNote.expand')}
             title={note?.text}
-            className={`inline-flex max-w-[12rem] items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-3 py-1.5 text-left text-[11px] text-[rgb(var(--foreground))] shadow-[0_12px_24px_rgba(15,23,42,0.24)] backdrop-blur transition-all ${isDragging ? 'opacity-100 ring-1 ring-[rgb(var(--primary))]' : 'opacity-70 hover:opacity-100'}`}
+            className={`inline-flex h-7 max-w-[13rem] items-center rounded-md border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.06)] px-2.5 text-left text-[11px] text-[rgba(255,255,255,0.84)] shadow-[0_8px_18px_rgba(15,23,42,0.14)] backdrop-blur-lg transition-all ${isDragging ? 'opacity-100 ring-1 ring-[rgb(var(--primary))]' : 'opacity-52 hover:h-8 hover:max-w-[18rem] hover:bg-[rgba(24,24,27,0.72)] hover:text-[rgb(var(--foreground))] hover:opacity-100'}`}
             onClick={(event) => {
               event.stopPropagation();
               setIsEditing(true);
@@ -229,7 +202,6 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
               void handlePaste();
             }}
           >
-            <StickyNote size={12} className="shrink-0 text-[rgb(var(--warning))]" />
             <span className="truncate">{previewText}</span>
           </button>
         </div>
@@ -237,7 +209,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
 
       {shouldExpand ? (
         <div
-          className={`pointer-events-auto w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_90%,rgb(var(--warning))_10%)] shadow-[0_18px_40px_rgba(15,23,42,0.28)] backdrop-blur transition-all ${isCompact ? 'opacity-72' : 'opacity-100'} ${isDragging ? 'ring-1 ring-[rgb(var(--primary))]' : ''}`}
+          className={`pointer-events-auto w-[min(16rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-[rgba(255,255,255,0.12)] bg-[rgba(24,24,27,0.82)] shadow-[0_14px_30px_rgba(15,23,42,0.22)] backdrop-blur-xl transition-all ${isCompact ? 'opacity-76' : 'opacity-100'} ${isDragging ? 'ring-1 ring-[rgb(var(--primary))]' : ''}`}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -246,18 +218,14 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
           }}
         >
           <div
-            className="flex cursor-grab items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-3 py-2 active:cursor-grabbing"
+            className="flex cursor-grab items-center justify-end gap-1 border-b border-[rgba(255,255,255,0.08)] px-2 py-1 active:cursor-grabbing"
             onPointerDown={startDrag}
           >
-            <div className="flex min-w-0 items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[rgb(var(--muted-foreground))]">
-              <StickyNote size={12} className="shrink-0 text-[rgb(var(--warning))]" />
-              <span className="truncate">{t('paneNote.title')}</span>
-            </div>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 aria-label={isPinned ? t('paneNote.unpin') : t('paneNote.pin')}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                 onClick={() => {
                   if (!hasNote) {
                     return;
@@ -270,7 +238,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
               <button
                 type="button"
                 aria-label={t('paneNote.delete')}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                 onClick={() => {
                   removeNote(windowId, paneId);
                   setDraft('');
@@ -282,16 +250,16 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
             </div>
           </div>
 
-          <div className="p-3">
+          <div className="p-2">
             {isEditing ? (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <textarea
                   value={draft}
                   autoFocus
                   rows={4}
                   maxLength={240}
                   placeholder={t('paneNote.placeholder')}
-                  className="w-full resize-none rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-2 text-sm text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
+                  className="w-full resize-none rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
                   onChange={(event) => setDraft(event.target.value)}
                   onClick={(event) => event.stopPropagation()}
                   onContextMenu={(event) => {
@@ -316,8 +284,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                     commitDraft();
                   }}
                 />
-                <div className="flex items-center justify-between gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
-                  <span>{t('paneNote.shortcutHint')}</span>
+                <div className="flex items-center justify-end gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
                   <span>{draft.trim().length}/240</span>
                 </div>
               </div>
