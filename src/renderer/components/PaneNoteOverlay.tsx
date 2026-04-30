@@ -234,14 +234,14 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
         >
           <div className="p-2">
             {isEditing ? (
-              <div className="flex items-start gap-1.5">
+              <div className="relative">
                 <textarea
                   value={draft}
                   autoFocus
-                  rows={4}
+                  rows={2}
                   maxLength={240}
                   placeholder={t('paneNote.placeholder')}
-                  className="min-w-0 flex-1 resize-none rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
+                  className="block min-h-[3.25rem] w-full resize-none overflow-hidden rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5 pr-7 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
                   onChange={(event) => setDraft(event.target.value)}
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => event.stopPropagation()}
@@ -270,7 +270,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                 <button
                   type="button"
                   aria-label={t('paneNote.delete')}
-                  className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                  className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                   onPointerDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -281,21 +281,21 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="flex items-start gap-1.5">
+              <div className="relative pr-6">
                 <button
                   type="button"
                   aria-label={t('paneNote.edit')}
-                  className="min-w-0 flex-1 text-left"
+                  className="block w-full text-left"
                   onClick={() => setIsEditing(true)}
                 >
-                  <div className="whitespace-pre-wrap break-words pr-1 text-sm leading-6 text-[rgb(var(--foreground))]">
+                  <div className="line-clamp-2 whitespace-pre-wrap break-words text-[12px] leading-5 text-[rgb(var(--foreground))]">
                     {note?.text}
                   </div>
                 </button>
                 <button
                   type="button"
                   aria-label={t('paneNote.delete')}
-                  className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                  className="absolute right-0 top-0 inline-flex h-5 w-5 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                   onPointerDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
