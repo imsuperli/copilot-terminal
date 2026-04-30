@@ -300,7 +300,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setIsEditing(true)}
                 >
-                  <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-5 text-[rgb(var(--foreground))]">
+                  <div className="line-clamp-2 break-words text-[12px] leading-5 text-[rgb(var(--foreground))]">
                     {note?.text}
                   </div>
                 </button>
