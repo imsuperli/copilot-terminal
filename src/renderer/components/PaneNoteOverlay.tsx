@@ -60,9 +60,13 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
     const lines = widthSourceText.split('\n').map((line) => line.trimEnd().length);
     return Math.max(12, Math.min(24, ...lines, 12));
   }, [widthSourceText]);
+  const displayLongestLineLength = useMemo(() => {
+    const lines = (note?.text ?? '').split('\n').map((line) => line.trimEnd().length);
+    return Math.max(14, Math.min(34, ...lines, 14));
+  }, [note?.text]);
   const expandedCardStyle = {
-    width: `${longestLineLength + 3}ch`,
-    maxWidth: 'min(15.5rem, calc(100vw - 1.5rem))',
+    width: `${(isEditing ? longestLineLength : displayLongestLineLength) + 3}ch`,
+    maxWidth: isEditing ? 'min(15.5rem, calc(100vw - 1.5rem))' : 'min(22rem, calc(100vw - 1.5rem))',
   } as const;
 
   const previewText = useMemo(() => {
@@ -219,7 +223,6 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
             className={`inline-flex h-7 max-w-[13rem] items-center rounded-md border border-[rgba(255,255,255,0.24)] bg-[linear-gradient(180deg,rgba(255,255,255,0.20),rgba(255,255,255,0.06))] px-2.5 text-left text-[11px] text-[rgba(255,255,255,0.92)] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_10px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl transition-all ${isDragging ? 'opacity-100 ring-1 ring-[rgb(var(--primary))]' : 'opacity-58 hover:h-8 hover:max-w-[16rem] hover:border-[rgba(255,255,255,0.18)] hover:bg-[rgba(24,24,27,0.82)] hover:text-[rgb(var(--foreground))] hover:opacity-100 hover:shadow-[0_14px_28px_rgba(15,23,42,0.24)]'}`}
             onClick={(event) => {
               event.stopPropagation();
-              setIsEditing(true);
             }}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -303,7 +306,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setIsEditing(true)}
                 >
-                  <div className="line-clamp-2 whitespace-pre-wrap break-words text-[12px] leading-5 text-[rgb(var(--foreground))]">
+                  <div className="max-h-[10rem] overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-5 text-[rgb(var(--foreground))]">
                     {note?.text}
                   </div>
                 </button>
