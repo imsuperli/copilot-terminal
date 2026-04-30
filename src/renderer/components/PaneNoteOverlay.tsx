@@ -55,10 +55,10 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   const shouldExpand = isEditing || (hasNote ? isNoteHovered : false);
   const shouldShowCollapsedChip = hasNote && !shouldExpand;
   const widthSourceText = ((isEditing ? draft : note?.text) || t('paneNote.placeholder')).replace(/\s+/g, ' ').trim();
-  const singleLineLength = useMemo(() => Math.max(12, Math.min(30, widthSourceText.length)), [widthSourceText]);
+  const singleLineLength = useMemo(() => Math.max(14, Math.min(38, widthSourceText.length)), [widthSourceText]);
   const expandedCardStyle = {
-    width: `${singleLineLength + 4}ch`,
-    maxWidth: isEditing ? 'min(18rem, calc(100vw - 1.5rem))' : 'min(20rem, calc(100vw - 1.5rem))',
+    width: `${singleLineLength + 5}ch`,
+    maxWidth: isEditing ? 'min(21rem, calc(100vw - 1.5rem))' : 'min(24rem, calc(100vw - 1.5rem))',
   } as const;
 
   const previewText = useMemo(() => {
