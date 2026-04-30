@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { platform, tmpdir } from 'os';
-import { appendFileSync, existsSync } from 'fs';
+import { appendFileSync, chmodSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -1111,6 +1111,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 鍒涘缓鐪熷疄鐨?PTY 杩涚▼锛堜娇鐢?node-pty锛?
    */
   private createRealPty(config: TerminalConfig, executable: string, args: string[]): any {
+    this.ensureNodePtySpawnHelperExecutable();
+
     // 鑾峰彇鏈€鏂扮殑绯荤粺鐜鍙橀噺锛圵indows 浠庢敞鍐岃〃璇诲彇锛宮acOS/Linux 浣跨敤 process.env锛?
     const latestEnv = this.getSpawnEnvironment(executable);
 
@@ -1220,6 +1222,34 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         executableExists: existsSync(executable),
       });
       throw error;
+    }
+  }
+
+  private ensureNodePtySpawnHelperExecutable(): void {
+    if (platform() !== 'darwin') {
+      return;
+    }
+
+    const helperCandidates = [
+      path.join(process.cwd(), 'node_modules', 'node-pty', 'prebuilds', 'darwin-arm64', 'spawn-helper'),
+      path.join(process.cwd(), 'node_modules', 'node-pty', 'prebuilds', 'darwin-x64', 'spawn-helper'),
+      path.join(__dirname, '..', '..', '..', 'node_modules', 'node-pty', 'prebuilds', 'darwin-arm64', 'spawn-helper'),
+      path.join(__dirname, '..', '..', '..', 'node_modules', 'node-pty', 'prebuilds', 'darwin-x64', 'spawn-helper'),
+    ];
+
+    for (const helperPath of helperCandidates) {
+      if (!existsSync(helperPath)) {
+        continue;
+      }
+
+      try {
+        chmodSync(helperPath, 0o755);
+      } catch (error) {
+        console.error('[ProcessManager] Failed to chmod node-pty spawn-helper:', {
+          helperPath,
+          error,
+        });
+      }
     }
   }
 

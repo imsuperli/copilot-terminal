@@ -3,6 +3,7 @@ import { ProcessManager } from '../ProcessManager';
 import { ProcessStatus } from '../../types/process';
 import { TmuxCompatService } from '../TmuxCompatService';
 import { WindowStatus } from '../../../shared/types/window';
+import * as fs from 'fs';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import * as path from 'path';
@@ -166,6 +167,38 @@ describe('ProcessManager', () => {
         );
         expect(processManager.getProcessStatus(handle.pid)?.command).toBe(command);
       } finally {
+        spawnSpy.mockRestore();
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('repairs node-pty spawn-helper execute permissions on macOS before spawning', async () => {
+      if (process.platform !== 'darwin') {
+        return;
+      }
+
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-node-pty-'));
+      const helperPath = path.join(tempDir, 'node_modules', 'node-pty', 'prebuilds', 'darwin-arm64', 'spawn-helper');
+      writeFileSync(helperPath, '');
+      fs.chmodSync(helperPath, 0o600);
+
+      const originalCwd = process.cwd();
+      const ptyModule = getPtyModule();
+      const spawnSpy = vi.spyOn(ptyModule, 'spawn');
+      spawnSpy.mockImplementation(() => makeMockPtyProcess(4323) as any);
+
+      try {
+        process.chdir(tempDir);
+        const processManagerForMac = new ProcessManager();
+
+        await processManagerForMac.spawnTerminal({
+          workingDirectory: testWorkingDir,
+          command: '/bin/zsh',
+        });
+
+        expect(fs.statSync(helperPath).mode & 0o777).toBe(0o755);
+      } finally {
+        process.chdir(originalCwd);
         spawnSpy.mockRestore();
         rmSync(tempDir, { recursive: true, force: true });
       }
