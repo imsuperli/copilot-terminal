@@ -100,7 +100,10 @@ describe('GroupSplitLayout', () => {
 
     const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
     expect(separator.className).toContain('w-2');
-    expect(separator.className).toContain('bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]');
+    expect(separator.className).toContain('bg-transparent');
+    expect(separator).toHaveStyle({
+      backgroundColor: 'rgb(var(--border) / var(--appearance-split-divider-track-opacity))',
+    });
 
     const dividerIndicator = separator.firstElementChild;
     expect(dividerIndicator).not.toBeNull();

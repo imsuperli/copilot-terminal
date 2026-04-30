@@ -285,9 +285,12 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               className={`
                 ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
                 group relative flex-shrink-0 select-none
-                bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]
+                bg-transparent
                 transition-colors
               `}
+              style={{
+                backgroundColor: 'rgb(var(--border) / var(--appearance-split-divider-track-opacity))',
+              }}
               onMouseDown={handleMouseDown(index)}
             >
               <div
@@ -301,10 +304,10 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                 style={{
                   backgroundColor: isResizing && resizingIndex === index
                     ? 'rgb(var(--primary))'
-                    : `rgba(var(--border), var(--appearance-split-divider-line-opacity))`,
+                    : 'rgb(var(--border) / var(--appearance-split-divider-line-opacity))',
                   boxShadow: isResizing && resizingIndex === index
-                    ? `0 0 0 1px rgba(var(--primary), 0.32), 0 0 14px rgba(var(--primary), 0.42)`
-                    : `0 0 0 1px rgba(var(--background), 0.28), 0 0 8px rgba(var(--foreground), var(--appearance-split-divider-glow-opacity))`,
+                    ? '0 0 0 1px rgb(var(--primary) / 0.32), 0 0 14px rgb(var(--primary) / 0.42)'
+                    : '0 0 0 1px rgb(var(--background) / 0.28), 0 0 8px rgb(var(--foreground) / var(--appearance-split-divider-glow-opacity))',
                 }}
               />
               <div
@@ -317,7 +320,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                   }
                 `}
                 style={{
-                  backgroundColor: `rgba(var(--primary), ${isResizing && resizingIndex === index ? '0.38' : '0.18'})`,
+                  backgroundColor: `rgb(var(--primary) / ${isResizing && resizingIndex === index ? '0.38' : '0.18'})`,
                   opacity: isResizing && resizingIndex === index ? 1 : undefined,
                 }}
               />

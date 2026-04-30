@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SplitLayout } from '../SplitLayout';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 import { useWindowStore } from '../../stores/windowStore';
-import { __resetPaneNoteStoreForTests, getPaneNote } from '../../stores/paneNoteStore';
+import { __resetPaneNoteStoreForTests, getPaneNote, usePaneNoteStore } from '../../stores/paneNoteStore';
 
 const mountCounts: Record<string, number> = {};
 const unmountCounts: Record<string, number> = {};
@@ -147,7 +147,7 @@ describe('SplitLayout', () => {
     expect(overlay.style.opacity).toBe('var(--appearance-pane-window-inactive-scrim-opacity)');
   });
 
-  it('creates a pane note, collapses when inactive, and expands on hover', () => {
+  it('creates a pane note, collapses when inactive, and expands on hover', async () => {
     const layout: LayoutNode = createPaneNode('pane-a');
 
     const { rerender } = render(
@@ -164,9 +164,9 @@ describe('SplitLayout', () => {
     const pane = screen.getByTestId('pane-pane-a');
     const frame = pane.parentElement as HTMLElement;
 
-    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+    usePaneNoteStore.getState().openDraft('win-1', 'pane-a');
 
-    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
     fireEvent.change(textarea, { target: { value: 'Investigating deploy failure' } });
     fireEvent.blur(textarea);
 
@@ -197,7 +197,7 @@ describe('SplitLayout', () => {
     expect(screen.getByText('Investigating deploy failure')).toBeInTheDocument();
   });
 
-  it('keeps a pinned note expanded when the pane is inactive', () => {
+  it('keeps a pinned note expanded when the pane is inactive', async () => {
     const layout: LayoutNode = createPaneNode('pane-a');
 
     const { rerender } = render(
@@ -214,9 +214,9 @@ describe('SplitLayout', () => {
     const pane = screen.getByTestId('pane-pane-a');
     const frame = pane.parentElement as HTMLElement;
 
-    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+    usePaneNoteStore.getState().openDraft('win-1', 'pane-a');
 
-    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
     fireEvent.change(textarea, { target: { value: 'Pinned note' } });
     fireEvent.blur(textarea);
 
@@ -243,7 +243,7 @@ describe('SplitLayout', () => {
     });
   });
 
-  it('cleans up pane notes when a pane is removed from the layout', () => {
+  it('cleans up pane notes when a pane is removed from the layout', async () => {
     const layout: LayoutNode = createPaneNode('pane-a');
 
     const { rerender } = render(
@@ -258,11 +258,10 @@ describe('SplitLayout', () => {
     );
 
     const pane = screen.getByTestId('pane-pane-a');
-    const frame = pane.parentElement as HTMLElement;
 
-    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+    usePaneNoteStore.getState().openDraft('win-1', 'pane-a');
 
-    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
     fireEvent.change(textarea, { target: { value: 'Temporary note' } });
     fireEvent.blur(textarea);
 
@@ -286,7 +285,7 @@ describe('SplitLayout', () => {
     expect(getPaneNote('win-1', 'pane-a')).toBeUndefined();
   });
 
-  it('allows dragging a pane note between top-right and top-left snap positions', () => {
+  it('allows dragging a pane note between top-right and top-left snap positions', async () => {
     const layout: LayoutNode = createPaneNode('pane-a');
 
     render(
@@ -314,13 +313,16 @@ describe('SplitLayout', () => {
       toJSON: () => ({}),
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+    usePaneNoteStore.getState().openDraft('win-1', 'pane-a');
 
-    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
     fireEvent.change(textarea, { target: { value: 'Move me' } });
     fireEvent.blur(textarea);
 
-    const header = screen.getByText('便签').closest('.cursor-grab') as HTMLElement;
+    const header = document.querySelector('[data-pane-note-side] .cursor-grab') as HTMLElement | null;
+    if (!header) {
+      throw new Error('expected pane note drag header');
+    }
     fireEvent.pointerDown(header, { button: 0, pointerId: 1, clientX: 360, clientY: 12 });
     fireEvent.pointerMove(document, { pointerId: 1, clientX: 40, clientY: 12 });
     fireEvent.pointerUp(document, { pointerId: 1, clientX: 40, clientY: 12 });
@@ -353,10 +355,9 @@ describe('SplitLayout', () => {
       />
     );
 
-    const createButton = screen.getByRole('button', { name: '创建便签' });
-    fireEvent.contextMenu(createButton);
-
+    usePaneNoteStore.getState().openDraft('win-1', 'pane-a');
     const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
+    fireEvent.contextMenu(textarea);
 
     await waitFor(() => {
       expect((textarea as HTMLTextAreaElement).value).toBe('clipboard note');
@@ -588,7 +589,10 @@ describe('SplitLayout', () => {
 
     const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
     expect(separator.className).toContain('w-2');
-    expect(separator.className).toContain('bg-[rgba(var(--border),var(--appearance-split-divider-track-opacity))]');
+    expect(separator.className).toContain('bg-transparent');
+    expect(separator).toHaveStyle({
+      backgroundColor: 'rgb(var(--border) / var(--appearance-split-divider-track-opacity))',
+    });
 
     const dividerIndicator = separator.firstElementChild;
     expect(dividerIndicator).not.toBeNull();
