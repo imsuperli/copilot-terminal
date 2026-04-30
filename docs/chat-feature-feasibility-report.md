@@ -1,12 +1,12 @@
 # 远程终端 Chat 功能可行性及方案报告
 
-> 基于 Chaterm 项目源码分析，评估在 Copilot Terminal 中实现类似功能的可行性。
+> 基于 Chaterm 项目源码分析，评估在 Synapse 中实现类似功能的可行性。
 
 ## 1. Chaterm 核心架构分析
 
 ### 1.1 技术栈
 
-| 层级 | Chaterm | Copilot Terminal |
+| 层级 | Chaterm | Synapse |
 |------|---------|-----------------|
 | 框架 | Electron + Vue 3 | Electron + React 19 |
 | 终端 | xterm.js + ssh2 + node-pty | xterm.js + ssh2 + node-pty |
@@ -395,7 +395,7 @@ interface ToolCall {
 
 ## 8. 总结
 
-在 Copilot Terminal 中实现远程终端 Chat 功能是**完全可行**的。项目已有的 SSH 基础设施、Pane 分屏系统、IPC 架构为此功能提供了 70% 的底层支撑。主要工作量在于:
+在 Synapse 中实现远程终端 Chat 功能是**完全可行**的。项目已有的 SSH 基础设施、Pane 分屏系统、IPC 架构为此功能提供了 70% 的底层支撑。主要工作量在于:
 
 1. **LLM API 集成层** — 最核心的新增模块，建议从 Anthropic Claude API 开始
 2. **Chat UI 组件** — 需要新建，但可复用现有 UI 体系 (Radix + Tailwind)

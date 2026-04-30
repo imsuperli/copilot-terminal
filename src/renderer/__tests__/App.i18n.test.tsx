@@ -20,7 +20,7 @@ describe('App i18n', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Welcome to Copilot-Terminal')).toBeInTheDocument();
+    expect(await screen.findByText('Welcome to Synapse')).toBeInTheDocument();
     expect(screen.getByText('Create your first terminal window to get started')).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('en-US');
   });

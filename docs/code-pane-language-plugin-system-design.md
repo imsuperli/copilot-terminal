@@ -260,9 +260,9 @@ Plugin Handlers / Language Handlers
 ```json
 {
   "schemaVersion": 1,
-  "id": "com.copilot-terminal.java",
+  "id": "com.synapse.java",
   "name": "Java Language Support",
-  "publisher": "copilot-terminal",
+  "publisher": "synapse",
   "version": "1.0.0",
   "description": "Java support powered by Eclipse JDT Language Server.",
   "homepage": "https://example.com/plugins/java",
@@ -340,9 +340,9 @@ Plugin Handlers / Language Handlers
   "generatedAt": "2026-04-12T00:00:00.000Z",
   "plugins": [
     {
-      "id": "com.copilot-terminal.java",
+      "id": "com.synapse.java",
       "name": "Java Language Support",
-      "publisher": "copilot-terminal",
+      "publisher": "synapse",
       "latestVersion": "1.0.0",
       "summary": "Java support powered by Eclipse JDT Language Server.",
       "categories": ["language"],
@@ -384,10 +384,10 @@ Plugin Handlers / Language Handlers
 {
   "schemaVersion": 1,
   "plugins": {
-    "com.copilot-terminal.java": {
+    "com.synapse.java": {
       "source": "marketplace",
       "installedVersion": "1.0.0",
-      "installPath": "/.../plugins/packages/com.copilot-terminal.java/1.0.0",
+      "installPath": "/.../plugins/packages/com.synapse.java/1.0.0",
       "enabledByDefault": false,
       "status": "installed",
       "lastCheckedAt": "2026-04-12T00:00:00.000Z",
@@ -430,7 +430,7 @@ plugins?: WorkspacePluginSettings;
 - `disabledPluginIds`
   - 当前工作区显式禁用的插件
 - `languageBindings`
-  - 例如 `"java" -> "com.copilot-terminal.java"`
+  - 例如 `"java" -> "com.synapse.java"`
 - `pluginSettings`
   - 工作区级覆盖项，例如 Java 项目的 workspace data 路径
 
@@ -462,7 +462,7 @@ ${userData}/
     registry.json
     catalog-cache.json
     packages/
-      com.copilot-terminal.java/
+      com.synapse.java/
         1.0.0/
           plugin.json
           server/
@@ -471,9 +471,9 @@ ${userData}/
       *.tmp
     runtime/
       logs/
-        com.copilot-terminal.java.log
+        com.synapse.java.log
       workspace/
-        com.copilot-terminal.java/
+        com.synapse.java/
           <hash(resolvedProjectRoot)>/
 ```
 
@@ -784,7 +784,7 @@ diagnostics 不适合全都走请求-响应模式。
 
 例如：
 
-- 全局默认：`python -> com.copilot-terminal.python`
+- 全局默认：`python -> com.synapse.python`
 - 当前工作区：`python -> com.company.internal.python`
 
 ## 10.4 依赖检查体验

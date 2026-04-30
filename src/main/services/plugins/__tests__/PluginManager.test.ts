@@ -13,7 +13,7 @@ describe('PluginManager', () => {
   let installerService: PluginInstallerService;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-plugin-manager-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-plugin-manager-'));
     registryStore = new PluginRegistryStore({
       filePath: path.join(tempDir, 'registry.json'),
     });

@@ -20,7 +20,7 @@ describe('App - Dark Theme and Design Tokens', () => {
 
   it('styles the title bar app name with the current text token', async () => {
     await renderApp();
-    expect(screen.getByText('Copilot-Terminal')).toHaveClass(
+    expect(screen.getByText('Synapse')).toHaveClass(
       'text-sm',
       'font-medium',
       'text-[rgb(var(--titlebar-foreground))]',
@@ -53,7 +53,7 @@ describe('App - Dark Theme and Design Tokens', () => {
 
   it('styles the empty state heading and description with current tokens', async () => {
     await renderApp();
-    expect(screen.getByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' })).toHaveClass(
+    expect(screen.getByRole('heading', { level: 2, name: '欢迎使用 Synapse' })).toHaveClass(
       'text-[rgb(var(--foreground))]',
       'mb-2',
     );

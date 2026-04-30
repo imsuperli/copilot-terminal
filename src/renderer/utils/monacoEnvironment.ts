@@ -54,7 +54,7 @@ export async function ensureMonacoEnvironment(): Promise<MonacoModule> {
         },
       };
 
-      monaco.editor.defineTheme('copilot-terminal-dark', {
+      monaco.editor.defineTheme('synapse-dark', {
         base: 'vs-dark',
         inherit: true,
         rules: [
@@ -134,7 +134,7 @@ export async function ensureMonacoEnvironment(): Promise<MonacoModule> {
           'diffEditor.removedLineBackground': '#450a0a3d',
         },
       });
-      monaco.editor.setTheme('copilot-terminal-dark');
+      monaco.editor.setTheme('synapse-dark');
       monacoReady = true;
     }
 

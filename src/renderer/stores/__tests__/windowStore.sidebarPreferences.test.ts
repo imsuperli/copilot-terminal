@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
+const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'synapse:terminal-sidebar-preferences';
 
 describe('windowStore terminal sidebar preferences', () => {
   beforeEach(() => {

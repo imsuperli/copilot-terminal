@@ -29,7 +29,7 @@ describe('App - Main Window and Basic Layout', () => {
   it('renders the current empty state copy', async () => {
     await renderApp();
     expect(
-      await screen.findByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' }),
+      await screen.findByRole('heading', { level: 2, name: '欢迎使用 Synapse' }),
     ).toHaveClass('text-2xl', 'font-semibold', 'text-[rgb(var(--foreground))]', 'mb-2');
     expect(screen.getByText('创建你的第一个终端窗口开始工作')).toBeInTheDocument();
   });

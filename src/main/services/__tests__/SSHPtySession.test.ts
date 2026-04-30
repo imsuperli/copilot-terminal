@@ -356,7 +356,7 @@ describe('SSHPtySession', () => {
       .mockResolvedValueOnce(firstChannel)
       .mockResolvedValueOnce(recoveredChannel);
     const release = vi.fn().mockResolvedValue(undefined);
-    const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-ssh-zmodem-'));
+    const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-ssh-zmodem-'));
     const filePath = path.join(tempDir, 'download.bin');
     let offerHandler: ((offer: unknown) => void) | null = null;
     let detectionCount = 0;

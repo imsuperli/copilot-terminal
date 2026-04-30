@@ -24,7 +24,7 @@
 
 当前仓库已配置两个远端：
 
-- `github` -> `git@github.com:lchpersonal/copilot-terminal.git`
+- `github` -> `git@github.com:lchpersonal/synapse.git`
 - `origin` -> 公司 Git 远端
 
 当前本地分支是 `master`，GitHub 远端对应分支是 `main`。
@@ -48,7 +48,7 @@ git stash push -u -m "pre-rewrite"
 建议先创建一个 bundle 备份文件：
 
 ```powershell
-git bundle create ..\copilot-terminal-pre-rewrite.bundle --all
+git bundle create ..\synapse-pre-rewrite.bundle --all
 ```
 
 这一步很重要，万一改写后不满意，还可以恢复。

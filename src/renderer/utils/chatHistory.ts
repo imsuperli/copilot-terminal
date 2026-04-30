@@ -14,7 +14,8 @@ export interface ChatConversationHistoryEntry {
   agent?: AgentTaskSnapshot;
 }
 
-const CHAT_CONVERSATION_HISTORY_STORAGE_KEY = 'copilot-terminal:chat-conversation-history:v1';
+const CHAT_CONVERSATION_HISTORY_STORAGE_KEY = 'synapse:chat-conversation-history:v1';
+const LEGACY_CHAT_CONVERSATION_HISTORY_STORAGE_KEY = 'copilot-terminal:chat-conversation-history:v1';
 const MAX_HISTORY_ENTRIES_PER_WINDOW = 24;
 
 function getRendererLocalStorage(): Storage | null {
@@ -54,7 +55,8 @@ function readAllConversationHistory(): ChatConversationHistoryEntry[] {
   }
 
   try {
-    const rawValue = storage.getItem(CHAT_CONVERSATION_HISTORY_STORAGE_KEY);
+    const rawValue = storage.getItem(CHAT_CONVERSATION_HISTORY_STORAGE_KEY)
+      ?? storage.getItem(LEGACY_CHAT_CONVERSATION_HISTORY_STORAGE_KEY);
     if (!rawValue) {
       return [];
     }
@@ -85,6 +87,7 @@ function writeAllConversationHistory(entries: ChatConversationHistoryEntry[]): v
 
   try {
     storage.setItem(CHAT_CONVERSATION_HISTORY_STORAGE_KEY, JSON.stringify(entries));
+    storage.removeItem(LEGACY_CHAT_CONVERSATION_HISTORY_STORAGE_KEY);
   } catch (error) {
     console.error('[chatHistory] Failed to persist conversation history:', error);
   }

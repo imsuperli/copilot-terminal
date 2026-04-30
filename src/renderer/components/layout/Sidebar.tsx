@@ -51,7 +51,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  appName = 'Copilot-Terminal',
+  appName = 'Synapse',
   version = '0.1.0',
   onCreateWindow,
   onCreateGroup,

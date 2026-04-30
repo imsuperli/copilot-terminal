@@ -15,12 +15,12 @@ describe('AboutPanel', () => {
       <AboutPanel
         open={true}
         onClose={() => {}}
-        appName="Copilot-Terminal"
+        appName="Synapse"
         version="2.0.0"
       />
     );
 
-    const logo = screen.getByAltText('Copilot-Terminal Logo');
+    const logo = screen.getByAltText('Synapse Logo');
     expect(logo).toHaveAttribute('src', 'http://localhost:3000/dist/renderer/resources/icon.png');
   });
 });

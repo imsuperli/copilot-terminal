@@ -281,7 +281,7 @@ All operations trigger auto-save via WorkspaceManager.
 
 #### Persistence
 
-Groups are persisted to `%APPDATA%/copilot-terminal/workspace.json`:
+Groups are persisted to `%APPDATA%/synapse/workspace.json`:
 ```json
 {
   "windows": [...],
@@ -350,7 +350,7 @@ Global quick navigation panel for frequently accessed URLs and folders:
 - **Purpose**: Quick access to frequently used websites and project folders
 - **UI**: Card-based grid layout with auto-detected icons (Globe for URLs, Folder for paths)
 - **Configuration**: Managed in Settings Panel → Quick Navigation tab
-- **Storage**: Saved in `%APPDATA%/copilot-terminal/settings.json` under `quickNav.items`
+- **Storage**: Saved in `%APPDATA%/synapse/settings.json` under `quickNav.items`
 
 **Features**:
 - Auto-detect type (URL vs folder path)
@@ -367,7 +367,7 @@ See `docs/quick-nav-feature.md` for detailed documentation.
 
 ### tmux Compatibility Layer (Claude Code Agent Teams)
 
-Provides fake tmux environment so Claude Code can use its Agent Teams multi-pane workflow inside Copilot Terminal. Three-layer architecture:
+Provides fake tmux environment so Claude Code can use its Agent Teams multi-pane workflow inside Synapse. Three-layer architecture:
 
 1. **Fake tmux Shim** (`resources/bin/tmux-shim.js` + `tmux.cmd`/`tmux`): Intercepts `tmux` commands, sends JSON RPC to main process via Named Pipe (Windows) or Unix Socket.
 
@@ -395,7 +395,7 @@ See `docs/claude-code-tmux-compatibility.md`, `docs/claude-code-agent-teams-tmux
 
 ## Important File Paths
 
-- Workspace persistence: `%APPDATA%/copilot-terminal/workspace.json`
+- Workspace persistence: `%APPDATA%/synapse/workspace.json`
 - Auto-save interval: 5 seconds (configurable in `AutoSaveManager`)
 - Status polling interval: 1s active / 5s inactive (configurable in `StatusPoller`)
 

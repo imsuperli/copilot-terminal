@@ -9,7 +9,7 @@ describe('PluginRegistryStore', () => {
   let filePath: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-plugin-registry-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-plugin-registry-'));
     filePath = path.join(tempDir, 'registry.json');
   });
 

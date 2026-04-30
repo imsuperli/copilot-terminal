@@ -7,7 +7,7 @@ describe('EmptyState', () => {
   it('should render guidance text', () => {
     render(<EmptyState />);
 
-    expect(screen.getByText('欢迎使用 Copilot-Terminal')).toBeInTheDocument();
+    expect(screen.getByText('欢迎使用 Synapse')).toBeInTheDocument();
   });
 
   it('should render create window button', () => {
@@ -39,7 +39,7 @@ describe('EmptyState', () => {
   it('should render guidance text with correct styling', () => {
     render(<EmptyState />);
 
-    const text = screen.getByText('欢迎使用 Copilot-Terminal');
+    const text = screen.getByText('欢迎使用 Synapse');
     expect(text).toHaveClass('text-xl', 'text-text-primary', 'mb-6');
   });
 

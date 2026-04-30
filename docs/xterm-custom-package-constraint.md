@@ -34,7 +34,7 @@
 项目目录结构：
 
 ```text
-copilot-terminal/
+synapse/
 ├─ vendor/
 │  └─ xterm/
 │     ├─ xterm-xterm-6.0.0-custom.tgz

@@ -56,7 +56,7 @@
 ## 数据存储
 
 快捷导航配置保存在应用设置中：
-- 位置：`%APPDATA%/copilot-terminal/settings.json`
+- 位置：`%APPDATA%/synapse/settings.json`
 - 字段：`quickNav.items`
 
 ## 技术实现

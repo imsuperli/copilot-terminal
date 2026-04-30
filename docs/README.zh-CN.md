@@ -1,10 +1,10 @@
-﻿# Copilot-Terminal
+﻿# Synapse
 
 [返回首页](../README.md) | [English](README.en.md)
 
 ## 简介
 
-`Copilot-Terminal` 是一个面向开发场景的桌面终端窗口管理工具，基于 Electron、React、TypeScript 和 xterm.js 构建。
+`Synapse` 是一个面向开发场景的桌面终端窗口管理工具，基于 Electron、React、TypeScript 和 xterm.js 构建。
 
 相比传统“一个窗口一个终端”或“标签页堆叠”的方式，它更强调对多个项目终端的统一管理：
 
@@ -134,7 +134,7 @@
 
 ```text
 pc_program/
-├─ copilot-terminal/
+├─ synapse/
 └─ xterm.js-master/
    ├─ xterm-xterm-6.0.0-custom.tgz
    └─ addons/
@@ -311,8 +311,8 @@ npm run dist:rebuild
 
 当前工作区会落盘到：
 
-- Windows：`%APPDATA%/copilot-terminal/workspace.json`
-- macOS：`~/Library/Application Support/copilot-terminal/workspace.json`
+- Windows：`%APPDATA%/synapse/workspace.json`
+- macOS：`~/Library/Application Support/synapse/workspace.json`
 - Linux：对应系统的 Electron `userData` 目录下的 `workspace.json`
 
 说明：

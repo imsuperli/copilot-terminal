@@ -1,4 +1,4 @@
-# Copilot-Terminal 使用手册（中文）
+# Synapse 使用手册（中文）
 
 ## 目录
 
@@ -21,7 +21,7 @@
 
 ### 方式一：下载安装包（推荐）
 
-1. 访问 [Releases 页面](https://github.com/your-repo/copilot-terminal/releases)
+1. 访问 [Releases 页面](https://github.com/imsuperli/synapse/releases)
 2. 下载适合你操作系统的安装包：
    - Windows: `.exe` 安装程序或 `.zip` 压缩包
    - macOS: `.dmg` 镜像文件
@@ -32,8 +32,8 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/your-repo/copilot-terminal.git
-cd copilot-terminal
+git clone https://github.com/imsuperli/synapse.git
+cd synapse
 
 # 2. 安装依赖（注意：需要先准备 xterm.js 自定义包）
 npm install
@@ -48,7 +48,7 @@ npm run dev
 
 ## 基本概念
 
-Copilot-Terminal 采用三层嵌套结构来组织终端会话：
+Synapse 采用三层嵌套结构来组织终端会话：
 
 ```
 窗口组（WindowGroup）
@@ -102,7 +102,7 @@ Copilot-Terminal 采用三层嵌套结构来组织终端会话：
 
 ## 界面布局
 
-Copilot-Terminal 提供两种主要视图：
+Synapse 提供两种主要视图：
 
 ### 统一视图（Unified View）
 
@@ -243,7 +243,7 @@ Copilot-Terminal 提供两种主要视图：
 ### 上传位置说明
 
 - 当前位置：优先使用当前 SSH pane 的工作目录；若不可用，会自动回退到 `~` 或 `/tmp`
-- 临时缓存目录：优先使用 `~/.cache/copilot-terminal/images`，失败时回退到 `/tmp`
+- 临时缓存目录：优先使用 `~/.cache/synapse/images`，失败时回退到 `/tmp`
 - 自定义目录：使用你指定的远端目录；若目录不存在，应用会尝试远端执行 `mkdir -p`
 
 ### 失败与限制
@@ -394,9 +394,9 @@ Running > WaitingForInput > Paused > Exited
 
 ### 自动保存
 
-- Copilot-Terminal 会自动保存工作区状态
+- Synapse 会自动保存工作区状态
 - 保存间隔：5 秒（可配置）
-- 保存位置：`%APPDATA%/copilot-terminal/workspace.json`（Windows）
+- 保存位置：`%APPDATA%/synapse/workspace.json`（Windows）
 
 ### 保存内容
 
@@ -416,7 +416,7 @@ Running > WaitingForInput > Paused > Exited
 ### 手动备份
 
 你可以手动备份工作区文件：
-1. 找到 `%APPDATA%/copilot-terminal/workspace.json`
+1. 找到 `%APPDATA%/synapse/workspace.json`
 2. 复制到安全位置
 3. 需要恢复时，替换当前的 `workspace.json` 文件
 
@@ -474,7 +474,7 @@ A: 在设置面板中可以配置默认 Shell。Windows 优先使用 PowerShell 
 
 ## 获取帮助
 
-- **GitHub Issues**: [提交问题](https://github.com/your-repo/copilot-terminal/issues)
+- **GitHub Issues**: [提交问题](https://github.com/imsuperli/synapse/issues)
 - **文档**: [完整文档](README.zh-CN.md)
 - **开发者指南**: [CLAUDE.md](../CLAUDE.md)
 

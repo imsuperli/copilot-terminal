@@ -44,7 +44,7 @@ describe('paneSessionActions', () => {
 
     const pane = {
       id: 'ssh-pane-1',
-      cwd: '~/develop/copilot-terminal',
+      cwd: '~/develop/synapse',
       command: '',
       status: WindowStatus.Paused,
       pid: null,
@@ -75,7 +75,7 @@ describe('paneSessionActions', () => {
       windowId: 'ssh-window-1',
       paneId: 'ssh-pane-1',
       profileId: 'ssh-profile-1',
-      remoteCwd: '~/develop/copilot-terminal',
+      remoteCwd: '~/develop/synapse',
     }));
     expect(result).toEqual({
       pid: 1001,

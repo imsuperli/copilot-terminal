@@ -9,7 +9,7 @@ describe('SSHKnownHostsStore', () => {
   let filePath: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-known-hosts-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-known-hosts-'));
     filePath = path.join(tempDir, 'ssh-known-hosts.json');
   });
 

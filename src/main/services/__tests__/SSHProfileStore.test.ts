@@ -9,7 +9,7 @@ describe('SSHProfileStore', () => {
   let filePath: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-ssh-profiles-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-ssh-profiles-'));
     filePath = path.join(tempDir, 'ssh-profiles.json');
   });
 

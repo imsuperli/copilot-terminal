@@ -10,7 +10,7 @@ describe('PluginCapabilityResolver', () => {
   let registryStore: PluginRegistryStore;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-plugin-capability-resolver-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-plugin-capability-resolver-'));
     registryStore = new PluginRegistryStore({
       filePath: path.join(tempDir, 'registry.json'),
     });

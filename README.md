@@ -1,4 +1,4 @@
-﻿# Copilot-Terminal
+﻿# Synapse
 
 [English](docs/README.en.md) | [简体中文](docs/README.zh-CN.md)
 
@@ -8,7 +8,7 @@ It provides a unified card view to manage multiple project terminals and an imme
 
 ## Homepage Preview
 
-![Copilot-Terminal Homepage Preview](docs/assets/homepage-preview.png)
+![Synapse Homepage Preview](docs/assets/homepage-preview.png)
 
 > The repository currently lacks real interface screenshots. The above preview image shows the overall layout. Real screenshots can be added later by replacing this image resource.
 
@@ -68,7 +68,7 @@ It provides a unified card view to manage multiple project terminals and an imme
 > **macOS Users**: Since the app is not signed with an Apple Developer certificate, macOS Gatekeeper may block it with a "damaged" or "can't be opened" warning. Run the following command to fix it:
 >
 > ```bash
-> xattr -cr /Applications/Copilot-Terminal.app
+> xattr -cr /Applications/Synapse.app
 > ```
 >
 > Then open the app again. This only needs to be done once after installation.

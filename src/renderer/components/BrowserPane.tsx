@@ -14,7 +14,7 @@ import {
   idePopupSubtlePanelClassName,
 } from './ui/ide-popup';
 
-const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
+const BROWSER_PARTITION = 'persist:synapse-browser';
 const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[var(--appearance-pane-background-strong)]';
 
 function normalizeRgbChannels(value: string): string | null {

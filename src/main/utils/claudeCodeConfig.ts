@@ -37,7 +37,7 @@ export class ClaudeCodeConfig {
 
     // 检查是否是我们自己的配置
     const command = config.statusLine.command || '';
-    if ((command.includes('copilot-terminal') || command.includes('Copilot-Terminal')) && command.includes('statusline')) {
+    if ((command.includes('synapse') || command.includes('Synapse')) && command.includes('statusline')) {
       return null; // 是我们自己的配置，不算冲突
     }
 
@@ -199,6 +199,6 @@ export class ClaudeCodeConfig {
     }
 
     const command = config.statusLine.command || '';
-    return (command.includes('copilot-terminal') || command.includes('Copilot-Terminal')) && command.includes('statusline');
+    return (command.includes('synapse') || command.includes('Synapse')) && command.includes('statusline');
   }
 }

@@ -4,7 +4,7 @@ import path from 'path';
 
 export type ChatDebugLevel = 'INFO' | 'WARN' | 'ERROR';
 
-const CHAT_DEBUG_LOG_FILENAME = 'copilot-terminal-chat-debug.log';
+const CHAT_DEBUG_LOG_FILENAME = 'synapse-chat-debug.log';
 const MAX_STRING_LENGTH = 800;
 const MAX_ARRAY_ITEMS = 50;
 const MAX_OBJECT_DEPTH = 6;

@@ -46,7 +46,7 @@ describe('WorkspaceManager tilde cwd normalization', () => {
             id: 'pane-1',
             pane: {
               id: 'pane-1',
-              cwd: '~/develop/copilot-terminal',
+              cwd: '~/develop/synapse',
               command: 'bash',
               backend: 'local',
             },
@@ -75,9 +75,9 @@ describe('WorkspaceManager tilde cwd normalization', () => {
       throw new Error('expected pane layout');
     }
 
-    expect(paneLayout.pane.cwd).toBe(path.join(homedir(), 'develop', 'copilot-terminal'));
+    expect(paneLayout.pane.cwd).toBe(path.join(homedir(), 'develop', 'synapse'));
 
     const persisted = await fs.readJson(workspacePath);
-    expect(persisted.windows[0].layout.pane.cwd).toBe(path.join(homedir(), 'develop', 'copilot-terminal'));
+    expect(persisted.windows[0].layout.pane.cwd).toBe(path.join(homedir(), 'develop', 'synapse'));
   });
 });

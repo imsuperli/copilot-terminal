@@ -2,7 +2,7 @@ import { render, waitFor, type RenderResult } from '@testing-library/react';
 import { expect } from 'vitest';
 import App from '../App';
 
-export async function renderApp(expectedAppName = 'Copilot-Terminal'): Promise<RenderResult> {
+export async function renderApp(expectedAppName = 'Synapse'): Promise<RenderResult> {
   const view = render(<App />);
 
   await waitFor(() => {

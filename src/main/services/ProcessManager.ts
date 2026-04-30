@@ -1519,7 +1519,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   private getTmuxDebugLogFilePath(): string {
-    return path.join(tmpdir(), 'copilot-terminal-tmux-debug.log');
+    return path.join(tmpdir(), 'synapse-tmux-debug.log');
   }
 
   private appendTmuxDebugFile(

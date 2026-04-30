@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * tmux-shim.js - Fake tmux shim for Copilot Terminal
+ * tmux-shim.js - Fake tmux shim for Synapse
  *
  * This script masquerades as the real tmux binary. When Claude Code invokes
  * "tmux <args>", this shim intercepts the call, sends an RPC request to the
- * Copilot Terminal main process via named pipe (Windows) or Unix socket,
+ * Synapse main process via named pipe (Windows) or Unix socket,
  * and relays the response back to stdout/stderr with the correct exit code.
  *
  * Required environment variables (injected by ProcessManager):

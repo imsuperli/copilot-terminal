@@ -57,8 +57,8 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
   constructor() {
     // 获取用户数据目录
-    // Windows: %APPDATA%/copilot-terminal
-    // macOS: ~/Library/Application Support/copilot-terminal
+    // Windows: %APPDATA%/synapse
+    // macOS: ~/Library/Application Support/synapse
     const userDataPath = app.getPath('userData');
     this.workspacePath = path.join(userDataPath, 'workspace.json');
     this.tempPath = `${this.workspacePath}.tmp`;

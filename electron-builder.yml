@@ -1,5 +1,5 @@
-appId: com.copilot.terminal
-productName: Copilot-Terminal
+appId: com.synapse
+productName: Synapse
 publish: null
 directories:
   output: release

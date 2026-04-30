@@ -27,7 +27,7 @@ describe('SSHVaultService', () => {
   let filePath: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-ssh-vault-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-ssh-vault-'));
     filePath = path.join(tempDir, 'ssh-vault.json');
   });
 

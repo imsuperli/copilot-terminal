@@ -28,7 +28,7 @@ describe('PluginCatalogService', () => {
             {
               id: 'official.java-jdtls',
               name: 'Java (JDTLS)',
-              publisher: 'Copilot Terminal',
+              publisher: 'Synapse',
               latestVersion: '0.1.0',
               platforms: [
                 {
@@ -66,7 +66,7 @@ describe('PluginCatalogService', () => {
             {
               id: 'official.java-jdtls',
               name: 'Java (JDTLS)',
-              publisher: 'Copilot Terminal',
+              publisher: 'Synapse',
               latestVersion: '0.1.0',
               platforms: [
                 {

@@ -5,11 +5,11 @@
     {
       "id": "official.java-jdtls",
       "name": "Java (JDTLS)",
-      "publisher": "Copilot Terminal",
+      "publisher": "Synapse",
       "latestVersion": "0.2.1",
       "summary": "Java language support powered by Eclipse JDT Language Server for Java 8+ projects.",
       "description": "Java language support powered by Eclipse JDT Language Server for Java 8+ projects.",
-      "homepage": "https://github.com/imsuperli/copilot-terminal",
+      "homepage": "https://github.com/imsuperli/synapse",
       "license": "MIT",
       "categories": [
         "language"
@@ -70,11 +70,11 @@
     {
       "id": "official.python-pyright",
       "name": "Python (Pyright)",
-      "publisher": "Copilot Terminal",
+      "publisher": "Synapse",
       "latestVersion": "0.2.0",
       "summary": "Python language support powered by bundled Pyright release packages or external Pyright/BasedPyright binaries.",
       "description": "Python language support powered by bundled Pyright release packages or external Pyright/BasedPyright binaries.",
-      "homepage": "https://github.com/imsuperli/copilot-terminal",
+      "homepage": "https://github.com/imsuperli/synapse",
       "license": "MIT",
       "categories": [
         "language"

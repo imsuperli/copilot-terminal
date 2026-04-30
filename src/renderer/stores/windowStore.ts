@@ -377,7 +377,8 @@ function removePaneNotesForWindow(window: Window | undefined): void {
 export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
 export type TerminalSidebarFilter = 'all' | 'local' | 'ssh' | 'archived';
 
-export const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
+export const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'synapse:terminal-sidebar-preferences';
+const LEGACY_TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
 
 const DEFAULT_TERMINAL_SIDEBAR_SECTIONS: Record<TerminalSidebarSection, boolean> = {
   archived: false,
@@ -425,7 +426,8 @@ function loadTerminalSidebarPreferences(): {
   }
 
   try {
-    const rawValue = storage.getItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY);
+    const rawValue = storage.getItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY)
+      ?? storage.getItem(LEGACY_TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY);
     if (!rawValue) {
       return {
         filter: DEFAULT_TERMINAL_SIDEBAR_FILTER,
@@ -475,6 +477,7 @@ function persistTerminalSidebarPreferences(
       TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY,
       JSON.stringify({ filter, sections }),
     );
+    storage.removeItem(LEGACY_TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY);
   } catch (error) {
     console.error('[windowStore] Failed to persist terminal sidebar preferences:', error);
   }

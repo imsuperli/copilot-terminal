@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "official.java-jdtls",
   "name": "Java (JDTLS)",
-  "publisher": "Copilot Terminal",
+  "publisher": "Synapse",
   "version": "0.2.1",
   "description": "Java language support powered by Eclipse JDT Language Server for Java 8+ projects.",
-  "homepage": "https://github.com/imsuperli/copilot-terminal",
+  "homepage": "https://github.com/imsuperli/synapse",
   "license": "MIT",
   "categories": [
     "language"

@@ -19,7 +19,7 @@ describe('official.java-jdtls proxy', () => {
     ['java bin directory', (javaHomePath: string) => path.join(javaHomePath, 'bin')],
     ['java executable path', (javaHomePath: string) => path.join(javaHomePath, 'bin', 'java')],
   ])('uses the configured JDK 21 runtime when java.home is a %s', async (_label, resolveJavaHome) => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-java-proxy-'));
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-java-proxy-'));
     tempDirectories.push(tempDir);
 
     const oldJavaHomePath = path.join(tempDir, 'jdk-8');

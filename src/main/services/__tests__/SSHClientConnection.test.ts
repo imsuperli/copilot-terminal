@@ -62,7 +62,7 @@ describe('SSHClientConnection', () => {
       expect.objectContaining({
         env: expect.objectContaining({
           COLORTERM: 'truecolor',
-          TERM_PROGRAM: 'Copilot-Terminal',
+          TERM_PROGRAM: 'Synapse',
           LANG: 'zh_CN.UTF-8',
           LC_CTYPE: expect.any(String),
         }),

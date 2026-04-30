@@ -85,7 +85,7 @@ describe('SSHZmodemController', () => {
   });
 
   it('saves received files to the chosen path during a receive session', async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-zmodem-'));
+    const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-zmodem-'));
     const filePath = path.join(tempDir, 'remote.bin');
     let offerHandler: ((offer: unknown) => void) | null = null;
 
@@ -140,7 +140,7 @@ describe('SSHZmodemController', () => {
 
 describe('sendZmodemFilesFromPaths', () => {
   it('streams file content from the accepted offset and preserves metadata', async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-zmodem-'));
+    const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-zmodem-'));
     const filePath = path.join(tempDir, 'payload.bin');
     const content = Buffer.alloc(9000);
     for (let index = 0; index < content.length; index += 1) {
@@ -183,7 +183,7 @@ describe('sendZmodemFilesFromPaths', () => {
 
 describe('receiveZmodemOfferToPath', () => {
   it('writes accepted payloads to disk', async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-zmodem-'));
+    const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-zmodem-'));
     const filePath = path.join(tempDir, 'received.bin');
     const offer = {
       accept: vi.fn().mockResolvedValue([

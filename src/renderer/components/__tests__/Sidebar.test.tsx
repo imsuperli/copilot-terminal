@@ -7,7 +7,7 @@ import { createSinglePaneWindow } from '../../utils/layoutHelpers';
 import { createGroup } from '../../utils/groupLayoutHelpers';
 import { WindowStatus, type Window } from '../../types/window';
 
-const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
+const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'synapse:terminal-sidebar-preferences';
 
 vi.mock('../SidebarWindowItem', () => ({
   SidebarWindowItem: ({ window }: { window: { name: string } }) => <div>{window.name}</div>,
@@ -321,8 +321,8 @@ describe('Terminal Sidebar', () => {
       />,
     );
 
-    expect(screen.queryByAltText('Copilot-Terminal Logo')).not.toBeInTheDocument();
-    expect(screen.queryByText('Copilot Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Synapse Logo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Synapse')).not.toBeInTheDocument();
     expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '打开代码面板' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新建终端' })).toBeInTheDocument();

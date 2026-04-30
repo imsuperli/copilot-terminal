@@ -330,7 +330,7 @@ function AppContent() {
   const [sshPasswordPromptRequest, setSSHPasswordPromptRequest] = useState<SSHPasswordPromptRequest | null>(null);
   const [appNotice, setAppNotice] = useState<{ message: string; tone: 'error' | 'success' } | null>(null);
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
-    name: 'Copilot-Terminal',
+    name: 'Synapse',
     version: '1.0.0',
   });
   const [appearance, setAppearance] = useState<AppearanceSettings>(() => getAppearanceFromSettings());

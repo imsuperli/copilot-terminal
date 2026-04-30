@@ -2332,7 +2332,7 @@ describe('ChatPane', () => {
       } as any,
     });
 
-    window.localStorage.setItem('copilot-terminal:chat-conversation-history:v1', JSON.stringify([
+    window.localStorage.setItem('synapse:chat-conversation-history:v1', JSON.stringify([
       {
         id: 'conversation-latest',
         windowId: 'win-1',

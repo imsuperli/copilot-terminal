@@ -41,7 +41,7 @@ export const zhCNMessages = {
   'status.notStarted': '未启动',
   'status.noOutput': '无输出',
 
-  'emptyState.title': '欢迎使用 Copilot-Terminal',
+  'emptyState.title': '欢迎使用 Synapse',
   'emptyState.description': '创建你的第一个终端窗口开始工作',
 
   'statusBar.ariaLabel': '窗格状态统计：运行中 {running} 个，等待输入 {waiting} 个，未启动 {paused} 个',
@@ -726,7 +726,7 @@ export const zhCNMessages = {
   'settings.statusLine.savedDescription': '插件将在下次启动 Claude Code CLI 时生效',
   'settings.tab.tmux': 'tmux 兼容',
   'settings.tmux.enableTitle': '启用 tmux 兼容模式',
-  'settings.tmux.enableDescription': '为 Claude Code Agent Teams 提供 fake tmux 环境，使其多窗格工作流可在 Copilot Terminal 中运行。',
+  'settings.tmux.enableDescription': '为 Claude Code Agent Teams 提供 fake tmux 环境，使其多窗格工作流可在 Synapse 中运行。',
   'settings.tmux.agentTeamsEnvTitle': 'Claude Agent Teams 环境变量',
   'settings.tmux.agentTeamsEnvDescription': '启用后会自动为终端会话注入此变量。没有它时，Claude Code CLI 不会调用 tmux 命令。',
   'settings.tmux.autoInjectPathTitle': '自动注入 PATH',
@@ -1403,7 +1403,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'status.notStarted': 'Not started',
   'status.noOutput': 'No output',
 
-  'emptyState.title': 'Welcome to Copilot-Terminal',
+  'emptyState.title': 'Welcome to Synapse',
   'emptyState.description': 'Create your first terminal window to get started',
 
   'statusBar.ariaLabel': 'Pane status summary: {running} running, {waiting} waiting, {paused} not started',
@@ -2087,7 +2087,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'settings.statusLine.savedDescription': 'The plugin will take effect the next time Claude Code CLI starts',
   'settings.tab.tmux': 'tmux Compat',
   'settings.tmux.enableTitle': 'Enable tmux compatibility mode',
-  'settings.tmux.enableDescription': 'Provide a fake tmux environment for Claude Code Agent Teams, enabling its multi-pane workflow inside Copilot Terminal.',
+  'settings.tmux.enableDescription': 'Provide a fake tmux environment for Claude Code Agent Teams, enabling its multi-pane workflow inside Synapse.',
   'settings.tmux.agentTeamsEnvTitle': 'Claude Agent Teams environment',
   'settings.tmux.agentTeamsEnvDescription': 'When enabled, this value is injected into terminal sessions automatically. Without it, Claude Code CLI will not invoke tmux commands.',
   'settings.tmux.autoInjectPathTitle': 'Auto-inject PATH',

@@ -1612,7 +1612,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
   }
 
   private getTmuxDebugLogFilePath(): string {
-    return path.join(os.tmpdir(), 'copilot-terminal-tmux-debug.log');
+    return path.join(os.tmpdir(), 'synapse-tmux-debug.log');
   }
 
   private appendTmuxDebugFile(request: TmuxCommandRequest | undefined, message: string, extra?: unknown): void {

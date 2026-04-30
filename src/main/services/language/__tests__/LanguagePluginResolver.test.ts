@@ -12,7 +12,7 @@ describe('LanguagePluginResolver', () => {
   let resolver: LanguagePluginResolver;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-language-resolver-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-language-resolver-'));
     registryStore = new PluginRegistryStore({
       filePath: path.join(tempDir, 'registry.json'),
     });

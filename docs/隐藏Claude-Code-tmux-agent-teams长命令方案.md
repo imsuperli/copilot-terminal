@@ -2,10 +2,10 @@
 
 ## 问题描述
 
-当使用 Copilot Terminal 的 tmux 兼容层启动 Claude Code Agent Teams 时，Claude Code 会自动输入一条非常长的初始化命令，例如：
+当使用 Synapse 的 tmux 兼容层启动 Claude Code Agent Teams 时，Claude Code 会自动输入一条非常长的初始化命令，例如：
 
 ```powershell
-Set-Location -LiteralPath 'D:\tmp'; $env:CLAUDECODE = '1'; $env:CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1'; $env:ANTHROPIC_BASE_URL = 'https://subus.imds.ai/'; $env:TMUX = '\.pipeausome-tmux-default,44236,0'; $env:TMUX_PANE = '%3'; $env:AUSOME_TERMINAL_WINDOW_ID = 'd5658017-b574-414d-b02c-7441881bbcb8'; $env:AUSOME_TERMINAL_PANE_ID = '342f8da9-d7bc-4699-a3b9-30274b846c1d'; $env:AUSOME_TMUX_RPC = '\\.\pipe\ausome-tmux-d5658017-b574-414d-b02c-7441881bbcb8'; $env:AUSOME_TMUX_LOG_FILE = 'C:\Users\licheng2\AppData\Local\Temp\copilot-terminal-tmux-debug.log'; & 'node' 'D:\ProgramData\nodejs\node\_global\node_modules\@anthropic-ai\claude-code\cli.js' '--agent-id' 'con-debater@crystalline-wishing-scott' '--agent-name' 'con-debater' '--team-name' 'crystalline-wishing-scott' '--agent-color' 'green' '--parent-session-id' 'cc1d2799-965c-4fcd-82d5-44067190f6f0' '--agent-type' 'general-purpose' '--dangerously-skip-permissions' '--model' 'claude-opus-4-6'
+Set-Location -LiteralPath 'D:\tmp'; $env:CLAUDECODE = '1'; $env:CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1'; $env:ANTHROPIC_BASE_URL = 'https://subus.imds.ai/'; $env:TMUX = '\.pipeausome-tmux-default,44236,0'; $env:TMUX_PANE = '%3'; $env:AUSOME_TERMINAL_WINDOW_ID = 'd5658017-b574-414d-b02c-7441881bbcb8'; $env:AUSOME_TERMINAL_PANE_ID = '342f8da9-d7bc-4699-a3b9-30274b846c1d'; $env:AUSOME_TMUX_RPC = '\\.\pipe\ausome-tmux-d5658017-b574-414d-b02c-7441881bbcb8'; $env:AUSOME_TMUX_LOG_FILE = 'C:\Users\licheng2\AppData\Local\Temp\synapse-tmux-debug.log'; & 'node' 'D:\ProgramData\nodejs\node\_global\node_modules\@anthropic-ai\claude-code\cli.js' '--agent-id' 'con-debater@crystalline-wishing-scott' '--agent-name' 'con-debater' '--team-name' 'crystalline-wishing-scott' '--agent-color' 'green' '--parent-session-id' 'cc1d2799-965c-4fcd-82d5-44067190f6f0' '--agent-type' 'general-purpose' '--dangerously-skip-permissions' '--model' 'claude-opus-4-6'
 ```
 
 **问题影响：**

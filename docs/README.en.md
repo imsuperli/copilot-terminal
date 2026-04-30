@@ -1,10 +1,10 @@
-﻿# Copilot-Terminal
+﻿# Synapse
 
 [Home](../README.md) | [简体中文](README.zh-CN.md)
 
 ## Overview
 
-`Copilot-Terminal` is a desktop terminal workspace manager built with Electron, React, TypeScript, and xterm.js.
+`Synapse` is a desktop terminal workspace manager built with Electron, React, TypeScript, and xterm.js.
 
 Instead of treating terminals as isolated windows or endless tabs, it focuses on organizing multiple project terminals in one place:
 
@@ -136,7 +136,7 @@ A recommended directory layout looks like this:
 
 ```text
 pc_program/
-├─ copilot-terminal/
+├─ synapse/
 └─ xterm.js-master/
    ├─ xterm-xterm-6.0.0-custom.tgz
    └─ addons/
@@ -322,8 +322,8 @@ The app stores its data in Electron's `userData` directory.
 
 The current workspace is saved to:
 
-- Windows: `%APPDATA%/copilot-terminal/workspace.json`
-- macOS: `~/Library/Application Support/copilot-terminal/workspace.json`
+- Windows: `%APPDATA%/synapse/workspace.json`
+- macOS: `~/Library/Application Support/synapse/workspace.json`
 - Linux: `workspace.json` under Electron's platform-specific `userData` directory
 
 Notes:

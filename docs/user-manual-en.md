@@ -1,4 +1,4 @@
-# Copilot-Terminal User Manual (English)
+# Synapse User Manual (English)
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@
 
 ### Option 1: Download Installer (Recommended)
 
-1. Visit the [Releases page](https://github.com/your-repo/copilot-terminal/releases)
+1. Visit the [Releases page](https://github.com/imsuperli/synapse/releases)
 2. Download the installer for your operating system:
    - Windows: `.exe` installer or `.zip` archive
    - macOS: `.dmg` disk image
@@ -32,8 +32,8 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-repo/copilot-terminal.git
-cd copilot-terminal
+git clone https://github.com/imsuperli/synapse.git
+cd synapse
 
 # 2. Install dependencies (Note: requires xterm.js custom package)
 npm install
@@ -48,7 +48,7 @@ npm run dev
 
 ## Basic Concepts
 
-Copilot-Terminal uses a three-layer nested structure to organize terminal sessions:
+Synapse uses a three-layer nested structure to organize terminal sessions:
 
 ```
 Window Group (WindowGroup)
@@ -102,7 +102,7 @@ Priority: Running > WaitingForInput > Paused > Exited
 
 ## Interface Layout
 
-Copilot-Terminal provides two main views:
+Synapse provides two main views:
 
 ### Unified View
 
@@ -243,7 +243,7 @@ In `Settings -> Advanced -> SSH Terminal`, you can configure:
 ### Upload Location Behavior
 
 - Current directory: prefers the active SSH pane working directory, then falls back to `~` or `/tmp`
-- Temporary cache directory: prefers `~/.cache/copilot-terminal/images`, then falls back to `/tmp`
+- Temporary cache directory: prefers `~/.cache/synapse/images`, then falls back to `/tmp`
 - Custom directory: uses the configured remote directory and attempts `mkdir -p` when needed
 
 ### Failures and Limits
@@ -394,9 +394,9 @@ Quick navigation is a global panel for quickly accessing frequently used website
 
 ### Auto-save
 
-- Copilot-Terminal automatically saves workspace state
+- Synapse automatically saves workspace state
 - Save interval: 5 seconds (configurable)
-- Save location: `%APPDATA%/copilot-terminal/workspace.json` (Windows)
+- Save location: `%APPDATA%/synapse/workspace.json` (Windows)
 
 ### Saved Content
 
@@ -416,7 +416,7 @@ Workspace file contains:
 ### Manual Backup
 
 You can manually backup the workspace file:
-1. Locate `%APPDATA%/copilot-terminal/workspace.json`
+1. Locate `%APPDATA%/synapse/workspace.json`
 2. Copy to a safe location
 3. To restore, replace the current `workspace.json` file
 
@@ -474,7 +474,7 @@ A: You can configure the default shell in the settings panel. On Windows, PowerS
 
 ## Get Help
 
-- **GitHub Issues**: [Submit an issue](https://github.com/your-repo/copilot-terminal/issues)
+- **GitHub Issues**: [Submit an issue](https://github.com/imsuperli/synapse/issues)
 - **Documentation**: [Complete Documentation](README.en.md)
 - **Developer Guide**: [CLAUDE.md](../CLAUDE.md)
 

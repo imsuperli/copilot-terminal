@@ -166,7 +166,7 @@ describe('WorkspaceManager', () => {
                       id: 'ssh-pane-1',
                       pane: {
                         id: 'ssh-pane-1',
-                        cwd: '~/develop/copilot-terminal',
+                        cwd: '~/develop/synapse',
                         command: '',
                         backend: 'ssh',
                         status: 'running' as any,
@@ -214,7 +214,7 @@ describe('WorkspaceManager', () => {
               id: 'ssh-pane-1',
               pane: {
                 id: 'ssh-pane-1',
-                cwd: '~/develop/copilot-terminal',
+                cwd: '~/develop/synapse',
                 command: '',
                 status: 'paused',
                 pid: null,
@@ -225,7 +225,7 @@ describe('WorkspaceManager', () => {
                   port: 8022,
                   user: 'u0_a123',
                   authType: 'password',
-                  remoteCwd: '~/develop/copilot-terminal',
+                  remoteCwd: '~/develop/synapse',
                   reuseSession: true,
                 },
               },
@@ -248,7 +248,7 @@ describe('WorkspaceManager', () => {
       await workspaceManager.saveWorkspace(workspace);
 
       const saved = await fs.readJson(workspacePath);
-      expect(saved.windows[0].layout.pane.cwd).toBe('~/develop/copilot-terminal');
+      expect(saved.windows[0].layout.pane.cwd).toBe('~/develop/synapse');
       expect(saved.windows[0].layout.pane.ssh).toEqual({
         profileId: 'ssh-profile-1',
       });
@@ -788,7 +788,7 @@ describe('WorkspaceManager', () => {
                       id: 'ssh-pane-1',
                       pane: {
                         id: 'ssh-pane-1',
-                        cwd: '~/develop/copilot-terminal',
+                        cwd: '~/develop/synapse',
                         command: '',
                         backend: 'ssh',
                         status: 'paused',

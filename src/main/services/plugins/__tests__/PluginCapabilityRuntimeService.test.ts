@@ -12,7 +12,7 @@ describe('PluginCapabilityRuntimeService', () => {
   let runtimeRootPath: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-plugin-runtime-service-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-plugin-runtime-service-'));
     registryStore = new PluginRegistryStore({
       filePath: path.join(tempDir, 'registry.json'),
     });

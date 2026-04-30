@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, protocol, net } from 'electron';
+import fs from 'fs-extra';
 import path from 'path';
 import { ProcessManager } from './services/ProcessManager';
 import { StatusPoller } from './services/StatusPoller';
@@ -47,10 +48,29 @@ import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
 import { normalizeImagePath, toFileUrl } from '../shared/utils/appImage';
 
-const APP_DISPLAY_NAME = 'Copilot-Terminal';
-const USER_DATA_DIR_NAME = 'copilot-terminal';
+const APP_DISPLAY_NAME = 'Synapse';
+const USER_DATA_DIR_NAME = 'synapse';
+const LEGACY_USER_DATA_DIR_NAME = 'copilot-terminal';
+
+function migrateLegacyUserDataDirectory(): void {
+  const appDataPath = app.getPath('appData');
+  const nextUserDataPath = path.join(appDataPath, USER_DATA_DIR_NAME);
+  const legacyUserDataPath = path.join(appDataPath, LEGACY_USER_DATA_DIR_NAME);
+
+  if (!fs.existsSync(legacyUserDataPath) || fs.existsSync(nextUserDataPath)) {
+    return;
+  }
+
+  try {
+    fs.moveSync(legacyUserDataPath, nextUserDataPath, { overwrite: false });
+    console.log(`[main] Migrated userData directory from ${legacyUserDataPath} to ${nextUserDataPath}`);
+  } catch (error) {
+    console.error('[main] Failed to migrate legacy userData directory:', error);
+  }
+}
 
 app.setName(APP_DISPLAY_NAME);
+migrateLegacyUserDataDirectory();
 app.setPath('userData', path.join(app.getPath('appData'), USER_DATA_DIR_NAME));
 
 let mainWindow: BrowserWindow | null = null;

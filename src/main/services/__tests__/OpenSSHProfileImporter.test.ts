@@ -9,7 +9,7 @@ describe('OpenSSHProfileImporter', () => {
   let sshDir: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-openssh-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-openssh-'));
     sshDir = path.join(tempDir, '.ssh');
     await fs.ensureDir(path.join(sshDir, 'conf.d'));
   });

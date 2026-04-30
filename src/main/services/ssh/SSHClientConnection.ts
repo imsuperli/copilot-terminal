@@ -1116,7 +1116,7 @@ function buildRemoteShellEnv(): Record<string, string> {
   const utf8Locale = resolvePreferredUtf8Locale();
   const env: Record<string, string> = {
     COLORTERM: 'truecolor',
-    TERM_PROGRAM: 'Copilot-Terminal',
+    TERM_PROGRAM: 'Synapse',
     LANG: process.env.LANG || utf8Locale,
     LC_CTYPE: process.env.LC_CTYPE || process.env.LANG || utf8Locale,
   };

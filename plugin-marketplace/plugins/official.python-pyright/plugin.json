@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "official.python-pyright",
   "name": "Python (Pyright)",
-  "publisher": "Copilot Terminal",
+  "publisher": "Synapse",
   "version": "0.2.0",
   "description": "Python language support powered by bundled Pyright release packages or external Pyright/BasedPyright binaries.",
-  "homepage": "https://github.com/imsuperli/copilot-terminal",
+  "homepage": "https://github.com/imsuperli/synapse",
   "license": "MIT",
   "categories": [
     "language"

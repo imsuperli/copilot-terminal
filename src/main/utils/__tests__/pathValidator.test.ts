@@ -14,7 +14,7 @@ describe('PathValidator', () => {
   });
 
   it('validates an existing directory when the input uses a tilde home path', () => {
-    const tempDir = mkdtempSync(path.join(homedir(), 'copilot-terminal-path-validator-'));
+    const tempDir = mkdtempSync(path.join(homedir(), 'synapse-path-validator-'));
     tempDirs.push(tempDir);
 
     const tildePath = tempDir.replace(homedir(), '~');
@@ -25,7 +25,7 @@ describe('PathValidator', () => {
   });
 
   it('returns a creatable absolute path when the input uses a tilde home path', () => {
-    const baseDir = mkdtempSync(path.join(homedir(), 'copilot-terminal-creatable-'));
+    const baseDir = mkdtempSync(path.join(homedir(), 'synapse-creatable-'));
     tempDirs.push(baseDir);
 
     const nestedPath = path.join(baseDir, 'nested', 'workspace');

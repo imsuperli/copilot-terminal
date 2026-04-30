@@ -1561,7 +1561,7 @@ class LanguageServerSession {
         },
         initializationOptions: inflateSettings(this.resolution.mergedSettings),
         clientInfo: {
-          name: 'copilot-terminal',
+          name: 'synapse',
           version: '3.0.0',
         },
       });

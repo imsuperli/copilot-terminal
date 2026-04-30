@@ -7,6 +7,9 @@ const mockLoadFile = vi.fn();
 const mockOn = vi.fn();
 const mockSetName = vi.fn();
 const mockSetPath = vi.fn();
+const mockSetApplicationMenu = vi.fn();
+const mockBuildFromTemplate = vi.fn(() => ({}));
+const mockRegisterSchemesAsPrivileged = vi.fn();
 const mockGetPath = vi.fn((name: string) => {
   if (name === 'appData') {
     return '/mock/app/data';
@@ -16,9 +19,28 @@ const mockGetPath = vi.fn((name: string) => {
 });
 const mockWebContents = {
   openDevTools: vi.fn(),
+  on: vi.fn(),
 };
 const mockNativeTheme = {
   themeSource: 'system',
+};
+const mockScreen = {
+  getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
+  getDisplayNearestPoint: vi.fn(() => ({
+    workArea: {
+      width: 1024,
+      height: 768,
+      x: 0,
+      y: 0,
+    },
+  })),
+};
+const mockProtocol = {
+  registerSchemesAsPrivileged: mockRegisterSchemesAsPrivileged,
+  handle: vi.fn(),
+};
+const mockNet = {
+  fetch: vi.fn(),
 };
 
 vi.mock('electron', () => ({
@@ -34,7 +56,14 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
   },
+  Menu: {
+    setApplicationMenu: mockSetApplicationMenu,
+    buildFromTemplate: mockBuildFromTemplate,
+  },
   nativeTheme: mockNativeTheme,
+  screen: mockScreen,
+  protocol: mockProtocol,
+  net: mockNet,
 }));
 
 describe('Electron Main Process', () => {
@@ -57,14 +86,14 @@ describe('Electron Main Process', () => {
   });
 
   describe('Window Configuration', () => {
-    it('should pin userData to the copilot-terminal directory', async () => {
+    it('should pin userData to the synapse directory', async () => {
       await import('../index');
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(mockSetName).toHaveBeenCalledWith('Copilot-Terminal');
+      expect(mockSetName).toHaveBeenCalledWith('Synapse');
       expect(mockSetPath).toHaveBeenCalledWith(
         'userData',
-        '/mock/app/data/copilot-terminal',
+        '/mock/app/data/synapse',
       );
     });
 

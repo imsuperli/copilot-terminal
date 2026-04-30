@@ -90,7 +90,7 @@ export class TmuxRpcServer {
 
   constructor(config: TmuxRpcServerConfig) {
     this.config = config;
-    this.fallbackLogFilePath = config.logFilePath ?? path.join(tmpdir(), 'copilot-terminal-tmux-debug.log');
+    this.fallbackLogFilePath = config.logFilePath ?? path.join(tmpdir(), 'synapse-tmux-debug.log');
   }
 
   /**

@@ -18,7 +18,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   title = '',
   gitBranch,
   showAppName = false,
-  appName = 'Copilot Terminal',
+  appName = 'Synapse',
   onReturn,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);

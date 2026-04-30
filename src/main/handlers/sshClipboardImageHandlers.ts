@@ -12,7 +12,7 @@ import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
 
 const DEFAULT_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const DEFAULT_TEMP_REMOTE_CACHE_DIR = '~/.cache/copilot-terminal/images';
+const DEFAULT_TEMP_REMOTE_CACHE_DIR = '~/.cache/synapse/images';
 
 export function registerSSHClipboardImageHandlers(ctx: HandlerContext) {
   ipcMain.handle('try-paste-ssh-clipboard-image', async (_event, config: TryPasteSSHClipboardImageConfig) => {

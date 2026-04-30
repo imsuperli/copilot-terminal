@@ -537,7 +537,7 @@ describe('TerminalView SSH toolbar', () => {
       id: 'win-ssh-2',
       paneId: 'pane-ssh-2',
       name: 'Prod SSH B',
-      cwd: '~/develop/copilot-terminal',
+      cwd: '~/develop/synapse',
       remoteCwd: '~',
       ephemeral: true,
       sshTabOwnerWindowId: 'win-ssh-1',
@@ -584,10 +584,10 @@ describe('TerminalView SSH toolbar', () => {
       sourcePaneId: 'pane-ssh-2',
       targetWindowId: expect.any(String),
       targetPaneId: expect.any(String),
-      remoteCwd: '~/develop/copilot-terminal',
+      remoteCwd: '~/develop/synapse',
       sourceSsh: {
         profileId: 'profile-1',
-        remoteCwd: '~/develop/copilot-terminal',
+        remoteCwd: '~/develop/synapse',
       },
     }));
 
@@ -604,7 +604,7 @@ describe('TerminalView SSH toolbar', () => {
       id: 'win-ssh-runtime-cwd',
       paneId: 'pane-ssh-runtime-cwd',
       name: 'Prod SSH Runtime',
-      cwd: '~/develop/copilot-terminal',
+      cwd: '~/develop/synapse',
       remoteCwd: '~',
     });
 
@@ -625,7 +625,7 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    expect(screen.getByText('copilot-terminal')).toBeInTheDocument();
+    expect(screen.getByText('synapse')).toBeInTheDocument();
     expect(screen.queryByText('~')).not.toBeInTheDocument();
   });
 

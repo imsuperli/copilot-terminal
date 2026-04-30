@@ -29,7 +29,7 @@ describe('CustomTitleBar', () => {
       <CustomTitleBar
         title="Workspace"
         showAppName={true}
-        appName="Copilot-Terminal"
+        appName="Synapse"
       />,
     );
 

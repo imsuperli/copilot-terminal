@@ -144,7 +144,7 @@ describe('ProcessManager', () => {
     });
 
     it('passes shell arguments through to the real PTY spawn path', async () => {
-      const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-shell-'));
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-shell-'));
       const shellPath = path.join(tempDir, process.platform === 'win32' ? 'custom shell.exe' : 'custom shell');
       writeFileSync(shellPath, '');
 
@@ -172,7 +172,7 @@ describe('ProcessManager', () => {
     });
 
     it('keeps an explicit shell path with spaces as the executable when no args are provided', async () => {
-      const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-shell-'));
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-shell-'));
       const shellPath = path.join(tempDir, process.platform === 'win32' ? 'custom shell.exe' : 'custom shell');
       writeFileSync(shellPath, '');
 
@@ -198,7 +198,7 @@ describe('ProcessManager', () => {
     });
 
     it('skips forcing a macOS login shell when tmux shim PATH injection is enabled', () => {
-      const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-shell-'));
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-shell-'));
       const shellPath = path.join(tempDir, 'zsh');
       writeFileSync(shellPath, '');
       const originalPlatform = process.platform;
@@ -223,7 +223,7 @@ describe('ProcessManager', () => {
     });
 
     it('still forces a macOS login shell when tmux shim PATH injection is disabled', () => {
-      const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-shell-'));
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'synapse-shell-'));
       const shellPath = path.join(tempDir, 'zsh');
       writeFileSync(shellPath, '');
       const originalPlatform = process.platform;

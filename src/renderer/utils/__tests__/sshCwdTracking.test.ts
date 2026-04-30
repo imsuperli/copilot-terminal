@@ -21,11 +21,11 @@ describe('extractLatestOsc7RemoteCwd', () => {
 
   it('accepts home-relative terminal title paths when they are consistent with the tracked cwd', () => {
     expect(
-      extractLatestOsc7RemoteCwd('\u001b]0;u0_a123@phone: ~/develop/copilot-terminal\u0007', {
+      extractLatestOsc7RemoteCwd('\u001b]0;u0_a123@phone: ~/develop/synapse\u0007', {
         cwd: '~/develop',
         homeCwd: null,
       }),
-    ).toBe('~/develop/copilot-terminal');
+    ).toBe('~/develop/synapse');
   });
 
   it('parses OSC 633 cwd markers when shell integration is present', () => {
@@ -60,9 +60,9 @@ describe('applyTerminalInputToSSHCwdTracker', () => {
   it('still infers explicit relative cd targets when the path separator is present', () => {
     const state = createSSHCwdTrackerState('~/develop');
 
-    const result = applyTerminalInputToSSHCwdTracker(state, 'cd copilot-terminal/\r');
+    const result = applyTerminalInputToSSHCwdTracker(state, 'cd synapse/\r');
 
-    expect(result.resolvedCwd).toBe('~/develop/copilot-terminal');
-    expect(result.nextState.cwd).toBe('~/develop/copilot-terminal');
+    expect(result.resolvedCwd).toBe('~/develop/synapse');
+    expect(result.nextState.cwd).toBe('~/develop/synapse');
   });
 });

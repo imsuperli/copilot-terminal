@@ -26,7 +26,7 @@ describe('ChatProviderVaultService', () => {
   let filePath: string;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-chat-vault-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-chat-vault-'));
     filePath = path.join(tempDir, 'chat-provider-vault.json');
   });
 

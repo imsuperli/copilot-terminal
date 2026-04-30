@@ -1,5 +1,5 @@
 {
-  "name": "copilot-terminal",
+  "name": "synapse",
   "version": "3.0.0",
   "description": "A modern terminal window manager built with Electron",
   "main": "dist/main/index.js",

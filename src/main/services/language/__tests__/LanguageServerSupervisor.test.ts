@@ -18,7 +18,7 @@ describe('LanguageServerSupervisor', () => {
   let supervisor: LanguageServerSupervisor | null = null;
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-language-supervisor-'));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-language-supervisor-'));
   });
 
   afterEach(async () => {
