@@ -4,9 +4,11 @@ import { TerminalPane } from './TerminalPane';
 import { BrowserPane } from './BrowserPane';
 import { CodePane } from './CodePane';
 import { ChatPane } from './ChatPane';
+import { PaneNoteOverlay } from './PaneNoteOverlay';
 import { getPaneCount } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
+import { usePaneNoteStore } from '../stores/paneNoteStore';
 import { isBrowserPane, isChatPane, isCodePane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
@@ -48,6 +50,35 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
 }) => {
   const { t } = useI18n();
   const updateSplitSizes = useWindowStore((state) => state.updateSplitSizes);
+  const removeNote = usePaneNoteStore((state) => state.removeNote);
+  const paneIds = getPaneCount(layout) > 0 && layout
+    ? new Set(
+      (function collectPaneIds(node: LayoutNode): string[] {
+        if (node.type === 'pane') {
+          return [node.id];
+        }
+
+        return node.children.flatMap((child) => collectPaneIds(child));
+      })(layout),
+    )
+    : new Set<string>();
+
+  useEffect(() => {
+    const noteEntries = Object.keys(usePaneNoteStore.getState().notes);
+
+    for (const entry of noteEntries) {
+      const separatorIndex = entry.indexOf('::');
+      if (separatorIndex < 0) {
+        continue;
+      }
+
+      const entryWindowId = entry.slice(0, separatorIndex);
+      const entryPaneId = entry.slice(separatorIndex + 2);
+      if (entryWindowId === windowId && !paneIds.has(entryPaneId)) {
+        removeNote(windowId, entryPaneId);
+      }
+    }
+  }, [layout, paneIds, removeNote, windowId]);
 
   // 防御性检查：如果 layout 为 undefined 或 null，返回空
   if (!layout) {
@@ -313,14 +344,20 @@ interface LayoutNodeRendererProps {
 }
 
 interface PaneVisualFrameProps {
+  windowId?: string;
+  paneId?: string;
   isActive: boolean;
   isWindowActive: boolean;
+  showPaneNote?: boolean;
   children: React.ReactNode;
 }
 
 const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
+  windowId,
+  paneId,
   isActive,
   isWindowActive,
+  showPaneNote = false,
   children,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -349,6 +386,15 @@ const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       {children}
+      {showPaneNote && windowId && paneId ? (
+        <PaneNoteOverlay
+          windowId={windowId}
+          paneId={paneId}
+          isActive={isActive}
+          isWindowActive={isWindowActive}
+          isPaneHovered={isHovered}
+        />
+      ) : null}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-10 transition-opacity duration-150"
@@ -590,10 +636,14 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
 }) => {
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
+    const showPaneNote = !isBrowserPane(layout.pane) && !isCodePane(layout.pane) && !isChatPane(layout.pane);
     const paneContent = (
       <PaneVisualFrame
+        windowId={windowId}
+        paneId={layout.id}
         isActive={isActive}
         isWindowActive={isWindowActive}
+        showPaneNote={showPaneNote}
       >
         {isBrowserPane(layout.pane)
       ? (

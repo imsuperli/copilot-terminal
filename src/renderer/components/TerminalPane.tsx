@@ -15,6 +15,7 @@ import {
   type TerminalLinkInteractionPayload,
 } from '../utils/terminalLinks';
 import { AppTooltip } from './ui/AppTooltip';
+import { PaneNoteHeaderButton } from './PaneNoteHeaderButton';
 import { useWindowStore } from '../stores/windowStore';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
@@ -1420,7 +1421,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
               {pane.title || pane.agentName}
             </span>
           </div>
-          <div className="flex min-h-6 min-w-6 items-center justify-center">
+          <div className="flex min-h-6 items-center justify-center gap-1">
+            <PaneNoteHeaderButton
+              windowId={windowId}
+              paneId={pane.id}
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--warning)/0.40)] hover:bg-[rgb(var(--warning)/0.14)] hover:text-[rgb(var(--foreground))] shadow-lg"
+            />
             {showCloseButton && (
               <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
                 <button

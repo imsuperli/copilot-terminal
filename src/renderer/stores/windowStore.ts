@@ -23,6 +23,7 @@ import {
 import { getPersistableWindows } from '../utils/sshWindowBindings';
 import { isLegacyPausedStatus } from '../utils/windowLifecycle';
 import { updateSettingsCategories } from './categoryHelpers';
+import { usePaneNoteStore } from './paneNoteStore';
 
 // 全局标志：是否启用自动保存
 let autoSaveEnabled = true;
@@ -362,6 +363,17 @@ function isRuntimeOnlyCodePaneUpdate(previousCode: CodePaneState | undefined, ne
   return previousCode.selectedPath !== nextCode.selectedPath;
 }
 
+function removePaneNotesForWindow(window: Window | undefined): void {
+  if (!window) {
+    return;
+  }
+
+  const removeNote = usePaneNoteStore.getState().removeNote;
+  for (const pane of getAllPanes(window.layout)) {
+    removeNote(window.id, pane.id);
+  }
+}
+
 export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
 export type TerminalSidebarFilter = 'all' | 'local' | 'ssh' | 'archived';
 
@@ -673,6 +685,7 @@ export const useWindowStore = create<WindowStore>()(
     removeWindow: (id) => {
       let didChange = false;
       let shouldPersistChange = false;
+      let removedWindow: Window | undefined;
       set((state) => {
         const existingWindow = state.windows.find((window) => window.id === id);
         if (!existingWindow) {
@@ -681,6 +694,7 @@ export const useWindowStore = create<WindowStore>()(
 
         didChange = true;
         shouldPersistChange = !existingWindow.ephemeral;
+        removedWindow = existingWindow;
         state.windows = state.windows.filter(w => w.id !== id);
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
@@ -718,6 +732,8 @@ export const useWindowStore = create<WindowStore>()(
           }
         }
       });
+
+      removePaneNotesForWindow(removedWindow);
 
       if (didChange && shouldPersistChange) {
         const { windows, groups, customCategories } = get();
@@ -1185,6 +1201,7 @@ export const useWindowStore = create<WindowStore>()(
 
     // 清空所有窗口（用于工作区恢复）
     clearWindows: () => {
+      const existingWindows = get().windows;
       set((state) => {
         state.windows = [];
         state.activeWindowId = null;
@@ -1193,6 +1210,7 @@ export const useWindowStore = create<WindowStore>()(
         state.activeGroupId = null;
         state.groupMruList = [];
       });
+      existingWindows.forEach((window) => removePaneNotesForWindow(window));
       // 不触发自动保存，因为这是恢复过程的一部分
     },
 

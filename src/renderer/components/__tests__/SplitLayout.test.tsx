@@ -1,9 +1,10 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SplitLayout } from '../SplitLayout';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 import { useWindowStore } from '../../stores/windowStore';
+import { __resetPaneNoteStoreForTests, getPaneNote } from '../../stores/paneNoteStore';
 
 const mountCounts: Record<string, number> = {};
 const unmountCounts: Record<string, number> = {};
@@ -56,6 +57,7 @@ describe('SplitLayout', () => {
     Object.keys(mountCounts).forEach((key) => delete mountCounts[key]);
     Object.keys(unmountCounts).forEach((key) => delete unmountCounts[key]);
     receivedProps.length = 0;
+    __resetPaneNoteStoreForTests();
   });
 
   it('passes isWindowActive to panes in split layout', () => {
@@ -109,8 +111,8 @@ describe('SplitLayout', () => {
     const paneB = screen.getByTestId('pane-pane-b');
     const paneAFrame = paneA.parentElement as HTMLElement;
     const paneBFrame = paneB.parentElement as HTMLElement;
-    const paneAOverlay = paneAFrame.querySelector('[aria-hidden="true"]') as HTMLElement;
-    const paneBOverlay = paneBFrame.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const paneAOverlay = Array.from(paneAFrame.querySelectorAll('[aria-hidden="true"]')).at(-1) as HTMLElement;
+    const paneBOverlay = Array.from(paneBFrame.querySelectorAll('[aria-hidden="true"]')).at(-1) as HTMLElement;
 
     expect(paneAFrame.dataset.paneVisualState).toBe('active');
     expect(paneAOverlay.style.opacity).toBe('0');
@@ -139,10 +141,226 @@ describe('SplitLayout', () => {
 
     const pane = screen.getByTestId('pane-pane-a');
     const frame = pane.parentElement as HTMLElement;
-    const overlay = frame.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const overlay = Array.from(frame.querySelectorAll('[aria-hidden="true"]')).at(-1) as HTMLElement;
 
     expect(frame.dataset.paneVisualState).toBe('window-inactive');
     expect(overlay.style.opacity).toBe('var(--appearance-pane-window-inactive-scrim-opacity)');
+  });
+
+  it('creates a pane note, collapses when inactive, and expands on hover', () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+
+    const { rerender } = render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const pane = screen.getByTestId('pane-pane-a');
+    const frame = pane.parentElement as HTMLElement;
+
+    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+
+    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    fireEvent.change(textarea, { target: { value: 'Investigating deploy failure' } });
+    fireEvent.blur(textarea);
+
+    expect(getPaneNote('win-1', 'pane-a')).toEqual({
+      text: 'Investigating deploy failure',
+      pinned: false,
+      side: 'right',
+    });
+
+    fireEvent.mouseLeave(frame);
+
+    rerender(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="other-pane"
+        isWindowActive={false}
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: '展开便签' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '编辑便签' })).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(frame);
+
+    expect(screen.getByText('Investigating deploy failure')).toBeInTheDocument();
+  });
+
+  it('keeps a pinned note expanded when the pane is inactive', () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+
+    const { rerender } = render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const pane = screen.getByTestId('pane-pane-a');
+    const frame = pane.parentElement as HTMLElement;
+
+    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+
+    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    fireEvent.change(textarea, { target: { value: 'Pinned note' } });
+    fireEvent.blur(textarea);
+
+    fireEvent.click(screen.getByRole('button', { name: '钉住便签' }));
+
+    fireEvent.mouseLeave(frame);
+
+    rerender(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="other-pane"
+        isWindowActive={false}
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Pinned note')).toBeInTheDocument();
+    expect(getPaneNote('win-1', 'pane-a')).toEqual({
+      text: 'Pinned note',
+      pinned: true,
+      side: 'right',
+    });
+  });
+
+  it('cleans up pane notes when a pane is removed from the layout', () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+
+    const { rerender } = render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const pane = screen.getByTestId('pane-pane-a');
+    const frame = pane.parentElement as HTMLElement;
+
+    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+
+    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    fireEvent.change(textarea, { target: { value: 'Temporary note' } });
+    fireEvent.blur(textarea);
+
+    expect(getPaneNote('win-1', 'pane-a')).toEqual({
+      text: 'Temporary note',
+      pinned: false,
+      side: 'right',
+    });
+
+    rerender(
+      <SplitLayout
+        windowId="win-1"
+        layout={createPaneNode('pane-b')}
+        activePaneId="pane-b"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    expect(getPaneNote('win-1', 'pane-a')).toBeUndefined();
+  });
+
+  it('allows dragging a pane note between top-right and top-left snap positions', () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const pane = screen.getByTestId('pane-pane-a');
+    const frame = pane.parentElement as HTMLElement;
+    vi.spyOn(frame, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 300,
+      top: 0,
+      right: 400,
+      bottom: 300,
+      left: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '创建便签' }));
+
+    const textarea = screen.getByPlaceholderText('记录这个窗格当前在做什么');
+    fireEvent.change(textarea, { target: { value: 'Move me' } });
+    fireEvent.blur(textarea);
+
+    const header = screen.getByText('便签').closest('.cursor-grab') as HTMLElement;
+    fireEvent.pointerDown(header, { button: 0, pointerId: 1, clientX: 360, clientY: 12 });
+    fireEvent.pointerMove(document, { pointerId: 1, clientX: 40, clientY: 12 });
+    fireEvent.pointerUp(document, { pointerId: 1, clientX: 40, clientY: 12 });
+
+    expect(getPaneNote('win-1', 'pane-a')).toEqual({
+      text: 'Move me',
+      pinned: false,
+      side: 'left',
+    });
+
+    const overlay = screen.getByText('Move me').closest('[data-pane-note-side]') as HTMLElement;
+    expect(overlay.dataset.paneNoteSide).toBe('left');
+  });
+
+  it('pastes clipboard text on right click without opening a menu', async () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'clipboard note',
+    } as any);
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const createButton = screen.getByRole('button', { name: '创建便签' });
+    fireEvent.contextMenu(createButton);
+
+    const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
+
+    await waitFor(() => {
+      expect((textarea as HTMLTextAreaElement).value).toBe('clipboard note');
+    });
   });
 
   it('keeps existing pane mounted when root changes from single pane to split', () => {
