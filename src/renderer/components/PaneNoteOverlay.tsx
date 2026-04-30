@@ -37,6 +37,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   const [draft, setDraft] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isNoteHovered, setIsNoteHovered] = useState(false);
   const [dragPreviewSide, setDragPreviewSide] = useState<PaneNoteRecord['side'] | null>(null);
 
   useEffect(() => {
@@ -52,9 +53,17 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   const isFocused = isActive && isWindowActive;
   const hasNote = Boolean(note?.text);
   const side = note?.side ?? draftSide ?? 'right';
-  const shouldExpand = isEditing || (hasNote ? (isFocused || isPaneHovered) : false);
+  const shouldExpand = isEditing || (hasNote ? (isFocused || isNoteHovered) : false);
   const shouldShowCollapsedChip = hasNote && !shouldExpand;
-  const isCompact = hasNote && !isEditing && !isPaneHovered && !isFocused;
+  const widthSourceText = (isEditing ? draft : note?.text) || t('paneNote.placeholder');
+  const longestLineLength = useMemo(() => {
+    const lines = widthSourceText.split('\n').map((line) => line.trimEnd().length);
+    return Math.max(12, Math.min(24, ...lines, 12));
+  }, [widthSourceText]);
+  const expandedCardStyle = {
+    width: `${longestLineLength + 3}ch`,
+    maxWidth: 'min(15.5rem, calc(100vw - 1.5rem))',
+  } as const;
 
   const previewText = useMemo(() => {
     if (!note?.text) {
@@ -199,13 +208,15 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
       {shouldShowCollapsedChip ? (
         <div
           className="pointer-events-auto"
+          onMouseEnter={() => setIsNoteHovered(true)}
+          onMouseLeave={() => setIsNoteHovered(false)}
           onPointerDown={startDrag}
         >
           <button
             type="button"
             aria-label={t('paneNote.expand')}
             title={note?.text}
-            className={`inline-flex h-7 max-w-[13rem] items-center rounded-md border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.06)] px-2.5 text-left text-[11px] text-[rgba(255,255,255,0.84)] shadow-[0_8px_18px_rgba(15,23,42,0.14)] backdrop-blur-lg transition-all ${isDragging ? 'opacity-100 ring-1 ring-[rgb(var(--primary))]' : 'opacity-52 hover:h-8 hover:max-w-[18rem] hover:bg-[rgba(24,24,27,0.72)] hover:text-[rgb(var(--foreground))] hover:opacity-100'}`}
+            className={`inline-flex h-7 max-w-[13rem] items-center rounded-md border border-[rgba(255,255,255,0.24)] bg-[linear-gradient(180deg,rgba(255,255,255,0.20),rgba(255,255,255,0.06))] px-2.5 text-left text-[11px] text-[rgba(255,255,255,0.92)] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_10px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl transition-all ${isDragging ? 'opacity-100 ring-1 ring-[rgb(var(--primary))]' : 'opacity-58 hover:h-8 hover:max-w-[16rem] hover:border-[rgba(255,255,255,0.18)] hover:bg-[rgba(24,24,27,0.82)] hover:text-[rgb(var(--foreground))] hover:opacity-100 hover:shadow-[0_14px_28px_rgba(15,23,42,0.24)]'}`}
             onClick={(event) => {
               event.stopPropagation();
               setIsEditing(true);
@@ -223,13 +234,16 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
 
       {shouldExpand ? (
         <div
-          className={`pointer-events-auto w-[min(16rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-[rgba(255,255,255,0.12)] bg-[rgba(24,24,27,0.82)] shadow-[0_14px_30px_rgba(15,23,42,0.22)] backdrop-blur-xl transition-all ${isCompact ? 'opacity-76' : 'opacity-100'} ${isDragging ? 'ring-1 ring-[rgb(var(--primary))]' : ''}`}
+          className={`pointer-events-auto overflow-hidden rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(24,24,27,0.84)] shadow-[0_16px_34px_rgba(15,23,42,0.24)] backdrop-blur-xl transition-all ${isDragging ? 'ring-1 ring-[rgb(var(--primary))]' : ''}`}
+          style={expandedCardStyle}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => {
             event.preventDefault();
             event.stopPropagation();
             void handlePaste();
           }}
+          onMouseEnter={() => setIsNoteHovered(true)}
+          onMouseLeave={() => setIsNoteHovered(false)}
           onPointerDown={isEditing ? undefined : startDrag}
         >
           <div className="p-2">
@@ -241,7 +255,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                   rows={2}
                   maxLength={240}
                   placeholder={t('paneNote.placeholder')}
-                  className="block min-h-[3.25rem] w-full resize-none overflow-hidden rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5 pr-7 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
+                  className="block min-h-[3.05rem] w-full resize-none overflow-hidden rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.05)] px-2 py-1.5 pr-7 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
                   onChange={(event) => setDraft(event.target.value)}
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => event.stopPropagation()}
@@ -286,6 +300,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                   type="button"
                   aria-label={t('paneNote.edit')}
                   className="block w-full text-left"
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setIsEditing(true)}
                 >
                   <div className="line-clamp-2 whitespace-pre-wrap break-words text-[12px] leading-5 text-[rgb(var(--foreground))]">
