@@ -306,9 +306,6 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                     commitDraft();
                   }}
                 />
-                <div className="flex items-center justify-end gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
-                  <span>{draft.trim().length}/240</span>
-                </div>
               </div>
             ) : (
               <button
