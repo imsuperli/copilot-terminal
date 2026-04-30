@@ -10,10 +10,10 @@ import { normalizeImagePath } from './appImage';
 
 export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   skin: {
-    presetId: 'midnight',
+    presetId: 'obsidian',
     kind: 'gradient',
-    gradient: 'radial-gradient(circle at 16% 14%, rgba(182, 106, 255, 0.32), transparent 30%), radial-gradient(circle at 82% 20%, rgba(104, 110, 255, 0.20), transparent 28%), linear-gradient(140deg, #090611 0%, #171126 50%, #0c0716 100%)',
-    dim: 0.36,
+    gradient: 'linear-gradient(135deg, #0b0d11 0%, #1b1f27 58%, #090b0e 100%)',
+    dim: 0.42,
     blur: 0,
     motion: 'none',
   },
