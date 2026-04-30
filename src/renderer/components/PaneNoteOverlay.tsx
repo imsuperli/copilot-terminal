@@ -50,23 +50,15 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
     }
   }, [isDraftOpen]);
 
-  const isFocused = isActive && isWindowActive;
   const hasNote = Boolean(note?.text);
   const side = note?.side ?? draftSide ?? 'right';
-  const shouldExpand = isEditing || (hasNote ? (isFocused || isNoteHovered) : false);
+  const shouldExpand = isEditing || (hasNote ? isNoteHovered : false);
   const shouldShowCollapsedChip = hasNote && !shouldExpand;
-  const widthSourceText = (isEditing ? draft : note?.text) || t('paneNote.placeholder');
-  const longestLineLength = useMemo(() => {
-    const lines = widthSourceText.split('\n').map((line) => line.trimEnd().length);
-    return Math.max(12, Math.min(24, ...lines, 12));
-  }, [widthSourceText]);
-  const displayLongestLineLength = useMemo(() => {
-    const lines = (note?.text ?? '').split('\n').map((line) => line.trimEnd().length);
-    return Math.max(14, Math.min(34, ...lines, 14));
-  }, [note?.text]);
+  const widthSourceText = ((isEditing ? draft : note?.text) || t('paneNote.placeholder')).replace(/\s+/g, ' ').trim();
+  const singleLineLength = useMemo(() => Math.max(12, Math.min(30, widthSourceText.length)), [widthSourceText]);
   const expandedCardStyle = {
-    width: `${(isEditing ? longestLineLength : displayLongestLineLength) + 3}ch`,
-    maxWidth: isEditing ? 'min(15.5rem, calc(100vw - 1.5rem))' : 'min(22rem, calc(100vw - 1.5rem))',
+    width: `${singleLineLength + 4}ch`,
+    maxWidth: isEditing ? 'min(18rem, calc(100vw - 1.5rem))' : 'min(20rem, calc(100vw - 1.5rem))',
   } as const;
 
   const previewText = useMemo(() => {
@@ -121,7 +113,8 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
         return;
       }
 
-      const nextDraft = draft ? `${draft}\n${clipboardText}` : clipboardText;
+      const normalizedClipboardText = clipboardText.replace(/\s*\n+\s*/g, ' ');
+      const nextDraft = draft ? `${draft} ${normalizedClipboardText}` : normalizedClipboardText;
       setDraft(nextDraft);
       setIsEditing(true);
     } catch {
@@ -223,6 +216,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
             className={`inline-flex h-7 max-w-[13rem] items-center rounded-md border border-[rgba(255,255,255,0.24)] bg-[linear-gradient(180deg,rgba(255,255,255,0.20),rgba(255,255,255,0.06))] px-2.5 text-left text-[11px] text-[rgba(255,255,255,0.92)] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_10px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl transition-all ${isDragging ? 'opacity-100 ring-1 ring-[rgb(var(--primary))]' : 'opacity-58 hover:h-8 hover:max-w-[16rem] hover:border-[rgba(255,255,255,0.18)] hover:bg-[rgba(24,24,27,0.82)] hover:text-[rgb(var(--foreground))] hover:opacity-100 hover:shadow-[0_14px_28px_rgba(15,23,42,0.24)]'}`}
             onClick={(event) => {
               event.stopPropagation();
+              setIsEditing(true);
             }}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -252,14 +246,14 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
           <div className="p-2">
             {isEditing ? (
               <div className="relative">
-                <textarea
+                <input
+                  type="text"
                   value={draft}
                   autoFocus
-                  rows={2}
                   maxLength={240}
                   placeholder={t('paneNote.placeholder')}
-                  className="block min-h-[3.05rem] w-full resize-none overflow-hidden rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.05)] px-2 py-1.5 pr-7 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
-                  onChange={(event) => setDraft(event.target.value)}
+                  className="block h-8 w-full rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.05)] px-2 pr-7 text-[12px] leading-8 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
+                  onChange={(event) => setDraft(event.target.value.replace(/\s*\n+\s*/g, ' '))}
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => event.stopPropagation()}
                   onContextMenu={(event) => {
@@ -268,7 +262,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                     void handlePaste();
                   }}
                   onKeyDown={(event) => {
-                    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                    if (event.key === 'Enter' || ((event.metaKey || event.ctrlKey) && event.key === 'Enter')) {
                       event.preventDefault();
                       commitDraft();
                       return;
@@ -306,7 +300,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setIsEditing(true)}
                 >
-                  <div className="max-h-[10rem] overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-5 text-[rgb(var(--foreground))]">
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-5 text-[rgb(var(--foreground))]">
                     {note?.text}
                   </div>
                 </button>

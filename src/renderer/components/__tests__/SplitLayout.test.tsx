@@ -386,6 +386,7 @@ describe('SplitLayout', () => {
     fireEvent.change(textarea, { target: { value: 'Delete me' } });
     fireEvent.blur(textarea);
 
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '展开便签' }));
     fireEvent.click(screen.getByRole('button', { name: '删除便签' }));
 
     expect(getPaneNote('win-1', 'pane-a')).toBeUndefined();
