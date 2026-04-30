@@ -11,6 +11,7 @@ interface PaneNoteStore {
   draftOpenKeys: Record<string, true>;
   setNote: (windowId: string, paneId: string, note: PaneNoteRecord) => void;
   removeNote: (windowId: string, paneId: string) => void;
+  removeWindowNotes: (windowId: string) => void;
   setPinned: (windowId: string, paneId: string, pinned: boolean) => void;
   setSide: (windowId: string, paneId: string, side: PaneNoteRecord['side']) => void;
   openDraft: (windowId: string, paneId: string) => void;
@@ -75,6 +76,34 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
       const nextDraftOpenKeys = { ...state.draftOpenKeys };
       delete nextDraftOpenKeys[key];
       return { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys };
+    });
+  },
+  removeWindowNotes: (windowId) => {
+    const keyPrefix = `${windowId}::`;
+
+    set((state) => {
+      let didChange = false;
+      const nextNotes = { ...state.notes };
+      const nextDraftOpenKeys = { ...state.draftOpenKeys };
+
+      for (const key of Object.keys(state.notes)) {
+        if (!key.startsWith(keyPrefix)) {
+          continue;
+        }
+        delete nextNotes[key];
+        delete nextDraftOpenKeys[key];
+        didChange = true;
+      }
+
+      for (const key of Object.keys(state.draftOpenKeys)) {
+        if (!key.startsWith(keyPrefix) || key in state.notes) {
+          continue;
+        }
+        delete nextDraftOpenKeys[key];
+        didChange = true;
+      }
+
+      return didChange ? { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys } : state;
     });
   },
   setPinned: (windowId, paneId, pinned) => {
@@ -147,5 +176,5 @@ export function getPaneNote(windowId: string, paneId: string): PaneNoteRecord | 
 }
 
 export function __resetPaneNoteStoreForTests(): void {
-  usePaneNoteStore.setState({ notes: {} });
+  usePaneNoteStore.setState({ notes: {}, draftOpenKeys: {} });
 }

@@ -364,6 +364,32 @@ describe('SplitLayout', () => {
     });
   });
 
+  it('removes a pane note when the delete button is clicked', async () => {
+    const layout: LayoutNode = createPaneNode('pane-a');
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    usePaneNoteStore.getState().openDraft('win-1', 'pane-a');
+
+    const textarea = await screen.findByPlaceholderText('记录这个窗格当前在做什么');
+    fireEvent.change(textarea, { target: { value: 'Delete me' } });
+    fireEvent.blur(textarea);
+
+    fireEvent.click(screen.getByRole('button', { name: '删除便签' }));
+
+    expect(getPaneNote('win-1', 'pane-a')).toBeUndefined();
+    expect(screen.queryByText('Delete me')).not.toBeInTheDocument();
+  });
+
   it('keeps existing pane mounted when root changes from single pane to split', () => {
     const paneA = createPaneNode('pane-a');
 

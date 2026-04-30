@@ -1,6 +1,7 @@
 import type { IpcResponse } from '../../shared/types/electron-api';
 import { Window } from '../types/window';
 import { useWindowStore } from '../stores/windowStore';
+import { usePaneNoteStore } from '../stores/paneNoteStore';
 import { getDestroyableSSHWindowIds, isEphemeralSSHCloneWindow } from './sshWindowBindings';
 
 function assertIpcSuccess(response: IpcResponse<void> | undefined, fallbackMessage: string): void {
@@ -19,6 +20,7 @@ async function destroyWindowResources(windowId: string): Promise<void> {
 
 export async function destroyWindowResourcesKeepRecord(windowId: string): Promise<void> {
   await destroyWindowResources(windowId);
+  usePaneNoteStore.getState().removeWindowNotes(windowId);
 
   const { getWindowById, clearWindowRuntimeSession } = useWindowStore.getState();
   const targetWindow = getWindowById(windowId);
@@ -36,6 +38,7 @@ export async function destroyWindowResourcesKeepRecord(windowId: string): Promis
 
 export async function destroyWindowResourcesAndRemoveRecord(windowId: string): Promise<void> {
   await destroyWindowResources(windowId);
+  usePaneNoteStore.getState().removeWindowNotes(windowId);
   useWindowStore.getState().removeWindow(windowId);
 }
 

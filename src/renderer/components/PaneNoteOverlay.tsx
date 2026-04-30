@@ -10,6 +10,7 @@ interface PaneNoteOverlayProps {
   isActive: boolean;
   isWindowActive: boolean;
   isPaneHovered: boolean;
+  avoidTopRightInset?: number;
 }
 
 function resolveDropSide(clientX: number, rect: DOMRect): PaneNoteRecord['side'] {
@@ -22,6 +23,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   isActive,
   isWindowActive,
   isPaneHovered,
+  avoidTopRightInset = 0,
 }) => {
   const { t } = useI18n();
   const note = usePaneNoteStore((state) => state.notes[`${windowId}::${paneId}`]);
@@ -161,12 +163,25 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   }
 
   const effectiveSide = dragPreviewSide ?? side;
-  const rootSideClassName = effectiveSide === 'left' ? 'left-2 items-start' : 'right-2 items-end';
+  const rootSideClassName = effectiveSide === 'left' ? 'items-start' : 'items-end';
+  const rootStyle = effectiveSide === 'left'
+    ? { left: '0.5rem' }
+    : { right: `calc(0.5rem + ${avoidTopRightInset}px)` };
+
+  const handleRemove = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    removeNote(windowId, paneId);
+    closeDraft(windowId, paneId);
+    setDraft('');
+    setIsEditing(false);
+  };
 
   return (
     <div
       ref={rootRef}
       className={`pointer-events-none absolute top-2 z-30 flex max-w-[min(20rem,calc(100%-1rem))] flex-col gap-2 ${rootSideClassName}`}
+      style={rootStyle}
       data-pane-note-side={effectiveSide}
     >
       {isDragging ? (
@@ -218,15 +233,21 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
           }}
         >
           <div
-            className="flex cursor-grab items-center justify-end gap-1 border-b border-[rgba(255,255,255,0.08)] px-2 py-1 active:cursor-grabbing"
-            onPointerDown={startDrag}
+            className="flex items-center justify-between gap-2 border-b border-[rgba(255,255,255,0.08)] px-2 py-1"
           >
+            <div
+              className="h-6 flex-1 cursor-grab rounded-md active:cursor-grabbing"
+              aria-hidden="true"
+              onPointerDown={startDrag}
+            />
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 aria-label={isPinned ? t('paneNote.unpin') : t('paneNote.pin')}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
-                onClick={() => {
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
                   if (!hasNote) {
                     return;
                   }
@@ -239,11 +260,11 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                 type="button"
                 aria-label={t('paneNote.delete')}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
-                onClick={() => {
-                  removeNote(windowId, paneId);
-                  setDraft('');
-                  setIsEditing(false);
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
                 }}
+                onClick={handleRemove}
               >
                 <X size={14} />
               </button>

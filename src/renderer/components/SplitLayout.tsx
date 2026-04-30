@@ -361,6 +361,7 @@ interface PaneVisualFrameProps {
   isActive: boolean;
   isWindowActive: boolean;
   showPaneNote?: boolean;
+  paneNoteRightInset?: number;
   children: React.ReactNode;
 }
 
@@ -370,6 +371,7 @@ const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
   isActive,
   isWindowActive,
   showPaneNote = false,
+  paneNoteRightInset = 0,
   children,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -405,6 +407,7 @@ const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
           isActive={isActive}
           isWindowActive={isWindowActive}
           isPaneHovered={isHovered}
+          avoidTopRightInset={paneNoteRightInset}
         />
       ) : null}
       <div
@@ -649,6 +652,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
     const showPaneNote = !isBrowserPane(layout.pane) && !isCodePane(layout.pane) && !isChatPane(layout.pane);
+    const paneNoteRightInset = showPaneNote && totalPaneCount > 1 ? 32 : 0;
     const paneContent = (
       <PaneVisualFrame
         windowId={windowId}
@@ -656,6 +660,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
         isActive={isActive}
         isWindowActive={isWindowActive}
         showPaneNote={showPaneNote}
+        paneNoteRightInset={paneNoteRightInset}
       >
         {isBrowserPane(layout.pane)
       ? (

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 import { destroyWindowResourcesKeepRecord } from '../windowDestruction';
+import { getPaneNote, usePaneNoteStore } from '../../stores/paneNoteStore';
 
 function createRunningWindow(): Window {
   return {
@@ -37,6 +38,7 @@ describe('destroyWindowResourcesKeepRecord', () => {
       activeGroupId: null,
       groupMruList: [],
     });
+    usePaneNoteStore.setState({ notes: {}, draftOpenKeys: {} });
   });
 
   it('destroys main-process resources but keeps the renderer window record', async () => {
@@ -56,5 +58,25 @@ describe('destroyWindowResourcesKeepRecord', () => {
       expect(storedWindow.layout.pane.pid).toBeNull();
       expect(storedWindow.layout.pane.sessionId).toBeUndefined();
     }
+  });
+
+  it('clears pane notes when destroying a window but keeping its record', async () => {
+    const terminalWindow = createRunningWindow();
+    useWindowStore.setState({ windows: [terminalWindow] });
+    usePaneNoteStore.getState().setNote(terminalWindow.id, 'pane-1', {
+      text: 'Temporary task',
+      pinned: false,
+      side: 'right',
+    });
+
+    expect(getPaneNote(terminalWindow.id, 'pane-1')).toEqual({
+      text: 'Temporary task',
+      pinned: false,
+      side: 'right',
+    });
+
+    await destroyWindowResourcesKeepRecord(terminalWindow.id);
+
+    expect(getPaneNote(terminalWindow.id, 'pane-1')).toBeUndefined();
   });
 });
