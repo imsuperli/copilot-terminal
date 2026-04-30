@@ -51,6 +51,9 @@ import { normalizeImagePath, toFileUrl } from '../shared/utils/appImage';
 const APP_DISPLAY_NAME = 'Synapse';
 const USER_DATA_DIR_NAME = 'synapse';
 const LEGACY_USER_DATA_DIR_NAME = 'copilot-terminal';
+const APP_ICON_PATH = process.platform === 'win32'
+  ? path.join(__dirname, '../../resources/icon.ico')
+  : path.join(__dirname, '../../resources/icon.png');
 
 function migrateLegacyUserDataDirectory(): void {
   const appDataPath = app.getPath('appData');
@@ -159,7 +162,7 @@ function createWindow() {
     minHeight: 360,
     backgroundColor: '#0a0a0a',
     title: '',
-    icon: path.join(__dirname, '../../resources/icon.png'),
+    icon: APP_ICON_PATH,
     show: false, // 创建时不显示，等待渲染进程通知
     frame: false, // 使用自定义标题栏
     fullscreenable: true,
