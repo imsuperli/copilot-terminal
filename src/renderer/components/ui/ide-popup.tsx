@@ -71,7 +71,7 @@ export const idePopupCardClassName = joinClassNames(
 
 export const idePopupTooltipClassName = joinClassNames(
   'z-[1100] rounded-lg border border-[rgb(var(--border))] px-2 py-1 text-xs text-[rgb(var(--foreground))]',
-  'bg-[linear-gradient(180deg,var(--appearance-pane-background-strong)_0%,var(--appearance-pane-background)_100%)]',
+  'bg-[rgb(var(--card))]',
   'shadow-[0_16px_38px_rgba(0,0,0,0.28)] ring-1 ring-white/5',
 );
 
