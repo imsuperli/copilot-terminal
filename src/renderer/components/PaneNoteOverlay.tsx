@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pin, PinOff, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useI18n } from '../i18n';
 import type { PaneNoteRecord } from '../stores/paneNoteStore';
 import { usePaneNoteStore } from '../stores/paneNoteStore';
@@ -31,7 +31,6 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   const draftSide = usePaneNoteStore((state) => state.draftSides[`${windowId}::${paneId}`]);
   const setNote = usePaneNoteStore((state) => state.setNote);
   const removeNote = usePaneNoteStore((state) => state.removeNote);
-  const setPinned = usePaneNoteStore((state) => state.setPinned);
   const setSide = usePaneNoteStore((state) => state.setSide);
   const closeDraft = usePaneNoteStore((state) => state.closeDraft);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -51,12 +50,11 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   }, [isDraftOpen]);
 
   const isFocused = isActive && isWindowActive;
-  const isPinned = note?.pinned ?? false;
   const hasNote = Boolean(note?.text);
   const side = note?.side ?? draftSide ?? 'right';
-  const shouldExpand = isEditing || isPinned || (hasNote ? (isFocused || isPaneHovered) : false);
+  const shouldExpand = isEditing || (hasNote ? (isFocused || isPaneHovered) : false);
   const shouldShowCollapsedChip = hasNote && !shouldExpand;
-  const isCompact = hasNote && !isPinned && !isEditing && !isPaneHovered && !isFocused;
+  const isCompact = hasNote && !isEditing && !isPaneHovered && !isFocused;
 
   const previewText = useMemo(() => {
     if (!note?.text) {
@@ -77,7 +75,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
 
     setNote(windowId, paneId, {
       text: trimmedDraft,
-      pinned: note?.pinned ?? false,
+      pinned: false,
       side,
     });
     closeDraft(windowId, paneId);
@@ -232,58 +230,21 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
             event.stopPropagation();
             void handlePaste();
           }}
+          onPointerDown={isEditing ? undefined : startDrag}
         >
-          <div
-            className="flex items-center justify-between gap-2 border-b border-[rgba(255,255,255,0.08)] px-2 py-1"
-          >
-            <div
-              className="h-6 flex-1 cursor-grab rounded-md active:cursor-grabbing"
-              aria-hidden="true"
-              onPointerDown={startDrag}
-            />
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label={isPinned ? t('paneNote.unpin') : t('paneNote.pin')}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (!hasNote) {
-                    return;
-                  }
-                  setPinned(windowId, paneId, !isPinned);
-                }}
-              >
-                {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
-              </button>
-              <button
-                type="button"
-                aria-label={t('paneNote.delete')}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onClick={handleRemove}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-
           <div className="p-2">
             {isEditing ? (
-              <div className="space-y-1">
+              <div className="flex items-start gap-1.5">
                 <textarea
                   value={draft}
                   autoFocus
                   rows={4}
                   maxLength={240}
                   placeholder={t('paneNote.placeholder')}
-                  className="w-full resize-none rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
+                  className="min-w-0 flex-1 resize-none rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5 text-[12px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20"
                   onChange={(event) => setDraft(event.target.value)}
                   onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -306,18 +267,44 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
                     commitDraft();
                   }}
                 />
+                <button
+                  type="button"
+                  aria-label={t('paneNote.delete')}
+                  className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={handleRemove}
+                >
+                  <X size={12} />
+                </button>
               </div>
             ) : (
-              <button
-                type="button"
-                aria-label={t('paneNote.edit')}
-                className="w-full text-left"
-                onClick={() => setIsEditing(true)}
-              >
-                <div className="whitespace-pre-wrap break-words text-sm leading-6 text-[rgb(var(--foreground))]">
-                  {note?.text}
-                </div>
-              </button>
+              <div className="flex items-start gap-1.5">
+                <button
+                  type="button"
+                  aria-label={t('paneNote.edit')}
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <div className="whitespace-pre-wrap break-words pr-1 text-sm leading-6 text-[rgb(var(--foreground))]">
+                    {note?.text}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  aria-label={t('paneNote.delete')}
+                  className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={handleRemove}
+                >
+                  <X size={12} />
+                </button>
+              </div>
             )}
           </div>
         </div>

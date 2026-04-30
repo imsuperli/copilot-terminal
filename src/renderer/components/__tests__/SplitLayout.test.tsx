@@ -201,7 +201,7 @@ describe('SplitLayout', () => {
     expect(screen.getByText('Investigating deploy failure')).toBeInTheDocument();
   });
 
-  it('keeps a pinned note expanded when the pane is inactive', async () => {
+  it('collapses a note when the pane becomes inactive', async () => {
     const layout: LayoutNode = createPaneNode('pane-a');
 
     const { rerender } = render(
@@ -224,8 +224,6 @@ describe('SplitLayout', () => {
     fireEvent.change(textarea, { target: { value: 'Pinned note' } });
     fireEvent.blur(textarea);
 
-    fireEvent.click(screen.getByRole('button', { name: '钉住便签' }));
-
     fireEvent.mouseLeave(frame);
 
     rerender(
@@ -239,10 +237,10 @@ describe('SplitLayout', () => {
       />
     );
 
-    expect(screen.getByText('Pinned note')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展开便签' })).toBeInTheDocument();
     expect(getPaneNote('win-1', 'pane-a')).toEqual({
       text: 'Pinned note',
-      pinned: true,
+      pinned: false,
       side: 'right',
     });
   });
@@ -323,11 +321,11 @@ describe('SplitLayout', () => {
     fireEvent.change(textarea, { target: { value: 'Move me' } });
     fireEvent.blur(textarea);
 
-    const header = document.querySelector('[data-pane-note-side] .cursor-grab') as HTMLElement | null;
-    if (!header) {
-      throw new Error('expected pane note drag header');
+    const noteCard = screen.getByText('Move me').closest('[data-pane-note-side] > div:last-child') as HTMLElement | null;
+    if (!noteCard) {
+      throw new Error('expected pane note card');
     }
-    fireEvent.pointerDown(header, { button: 0, pointerId: 1, clientX: 360, clientY: 12 });
+    fireEvent.pointerDown(noteCard, { button: 0, pointerId: 1, clientX: 360, clientY: 12 });
     fireEvent.pointerMove(document, { pointerId: 1, clientX: 40, clientY: 12 });
     fireEvent.pointerUp(document, { pointerId: 1, clientX: 40, clientY: 12 });
 
