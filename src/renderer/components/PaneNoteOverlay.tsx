@@ -28,6 +28,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   const { t } = useI18n();
   const note = usePaneNoteStore((state) => state.notes[`${windowId}::${paneId}`]);
   const isDraftOpen = usePaneNoteStore((state) => Boolean(state.draftOpenKeys[`${windowId}::${paneId}`]));
+  const draftSide = usePaneNoteStore((state) => state.draftSides[`${windowId}::${paneId}`]);
   const setNote = usePaneNoteStore((state) => state.setNote);
   const removeNote = usePaneNoteStore((state) => state.removeNote);
   const setPinned = usePaneNoteStore((state) => state.setPinned);
@@ -52,7 +53,7 @@ export const PaneNoteOverlay: React.FC<PaneNoteOverlayProps> = ({
   const isFocused = isActive && isWindowActive;
   const isPinned = note?.pinned ?? false;
   const hasNote = Boolean(note?.text);
-  const side = note?.side ?? 'right';
+  const side = note?.side ?? draftSide ?? 'right';
   const shouldExpand = isEditing || isPinned || (hasNote ? (isFocused || isPaneHovered) : false);
   const shouldShowCollapsedChip = hasNote && !shouldExpand;
   const isCompact = hasNote && !isPinned && !isEditing && !isPaneHovered && !isFocused;

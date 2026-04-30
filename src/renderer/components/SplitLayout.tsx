@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useDrop } from 'react-dnd';
 import { LayoutNode, SplitNode, Pane } from '../types/window';
 import { TerminalPane } from './TerminalPane';
 import { BrowserPane } from './BrowserPane';
@@ -362,6 +363,7 @@ interface PaneVisualFrameProps {
   isWindowActive: boolean;
   showPaneNote?: boolean;
   paneNoteRightInset?: number;
+  noteDropEnabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -372,9 +374,12 @@ const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
   isWindowActive,
   showPaneNote = false,
   paneNoteRightInset = 0,
+  noteDropEnabled = false,
   children,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const openDraft = usePaneNoteStore((state) => state.openDraft);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const overlayOpacity = isActive && isWindowActive
     ? 0
@@ -384,8 +389,35 @@ const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
         ? 'var(--appearance-pane-window-inactive-scrim-opacity)'
         : 'var(--appearance-pane-inactive-scrim-opacity)';
 
+  const [{ isOver: isNoteToolOver }, noteDrop] = useDrop<
+    { type: 'PANE_NOTE_TOOL'; windowId: string },
+    void,
+    { isOver: boolean }
+  >(() => ({
+    accept: 'PANE_NOTE_TOOL',
+    canDrop: () => Boolean(noteDropEnabled && windowId && paneId),
+    drop: (_item, monitor) => {
+      if (!windowId || !paneId || !noteDropEnabled) {
+        return;
+      }
+
+      const clientOffset = monitor.getClientOffset();
+      const rect = containerRef.current?.getBoundingClientRect();
+      const side = clientOffset && rect
+        ? (clientOffset.x - rect.left <= rect.width / 2 ? 'left' : 'right')
+        : 'right';
+      openDraft(windowId, paneId, side);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver({ shallow: true }),
+    }),
+  }), [noteDropEnabled, openDraft, paneId, windowId]);
+
+  noteDrop(containerRef);
+
   return (
     <div
+      ref={containerRef}
       className="relative h-full min-h-0 min-w-0 overflow-hidden"
       data-pane-visual-state={
         isActive && isWindowActive
@@ -408,6 +440,12 @@ const PaneVisualFrame: React.FC<PaneVisualFrameProps> = ({
           isWindowActive={isWindowActive}
           isPaneHovered={isHovered}
           avoidTopRightInset={paneNoteRightInset}
+        />
+      ) : null}
+      {noteDropEnabled && isNoteToolOver ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border border-[rgb(var(--warning)/0.45)] bg-[rgb(var(--warning)/0.08)] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.22)]"
         />
       ) : null}
       <div
@@ -652,6 +690,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
     const showPaneNote = !isBrowserPane(layout.pane) && !isCodePane(layout.pane) && !isChatPane(layout.pane);
+    const noteDropEnabled = showPaneNote;
     const paneNoteRightInset = showPaneNote && totalPaneCount > 1 ? 32 : 0;
     const paneContent = (
       <PaneVisualFrame
@@ -661,6 +700,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
         isWindowActive={isWindowActive}
         showPaneNote={showPaneNote}
         paneNoteRightInset={paneNoteRightInset}
+        noteDropEnabled={noteDropEnabled}
       >
         {isBrowserPane(layout.pane)
       ? (

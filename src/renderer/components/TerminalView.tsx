@@ -900,71 +900,29 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     dragBrowserTool(node);
   }, [dragBrowserTool]);
 
-  const noteToolButtonRef = useRef<HTMLButtonElement | null>(null);
-  const noteToolDragStateRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    dragging: boolean;
-  } | null>(null);
-  const [isDraggingNoteTool, setIsDraggingNoteTool] = useState(false);
-
-  const finishNoteToolDrag = useCallback(() => {
-    noteToolDragStateRef.current = null;
-    setIsDraggingNoteTool(false);
-  }, []);
+  const [{ isDragging: isDraggingNoteTool }, dragNoteTool, previewNoteTool] = useDrag<
+    { type: 'PANE_NOTE_TOOL'; windowId: string },
+    unknown,
+    { isDragging: boolean }
+  >(() => ({
+    type: 'PANE_NOTE_TOOL',
+    canDrag: Boolean(activeTerminalPane),
+    item: () => ({
+      type: 'PANE_NOTE_TOOL',
+      windowId: terminalWindow.id,
+    }),
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [activeTerminalPane, terminalWindow.id]);
 
   useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      const state = noteToolDragStateRef.current;
-      if (!state || event.pointerId !== state.pointerId) {
-        return;
-      }
+    previewNoteTool(getEmptyImage(), { captureDraggingState: true });
+  }, [previewNoteTool]);
 
-      if (!state.dragging) {
-        const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
-        if (distance < 4) {
-          return;
-        }
-
-        state.dragging = true;
-        setIsDraggingNoteTool(true);
-      }
-    };
-
-    const handlePointerUp = (event: PointerEvent) => {
-      const state = noteToolDragStateRef.current;
-      if (!state || event.pointerId !== state.pointerId) {
-        return;
-      }
-
-      const activePane = activeTerminalPane;
-      if (state.dragging && activePane) {
-        openPaneNoteDraft(terminalWindow.id, activePane.id);
-      }
-
-      finishNoteToolDrag();
-    };
-
-    const handlePointerCancel = (event: PointerEvent) => {
-      const state = noteToolDragStateRef.current;
-      if (!state || event.pointerId !== state.pointerId) {
-        return;
-      }
-
-      finishNoteToolDrag();
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerCancel);
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerCancel);
-    };
-  }, [activeTerminalPane, finishNoteToolDrag, openPaneNoteDraft, terminalWindow.id]);
+  const noteToolButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    dragNoteTool(node);
+  }, [dragNoteTool]);
 
   const handleBrowserPaneDrop = useCallback((
     item: BrowserDropDragItem,
@@ -1497,18 +1455,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   }
 
                   openPaneNoteDraft(terminalWindow.id, activeTerminalPane.id);
-                }}
-                onPointerDown={(event) => {
-                  if (!activeTerminalPane || event.button !== 0) {
-                    return;
-                  }
-
-                  noteToolDragStateRef.current = {
-                    pointerId: event.pointerId,
-                    startX: event.clientX,
-                    startY: event.clientY,
-                    dragging: false,
-                  };
                 }}
                 className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${isDraggingNoteTool ? 'cursor-grabbing bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]' : 'cursor-grab text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] active:cursor-grabbing'}`}
               >

@@ -9,12 +9,13 @@ export interface PaneNoteRecord {
 interface PaneNoteStore {
   notes: Record<string, PaneNoteRecord>;
   draftOpenKeys: Record<string, true>;
+  draftSides: Record<string, PaneNoteRecord['side']>;
   setNote: (windowId: string, paneId: string, note: PaneNoteRecord) => void;
   removeNote: (windowId: string, paneId: string) => void;
   removeWindowNotes: (windowId: string) => void;
   setPinned: (windowId: string, paneId: string, pinned: boolean) => void;
   setSide: (windowId: string, paneId: string, side: PaneNoteRecord['side']) => void;
-  openDraft: (windowId: string, paneId: string) => void;
+  openDraft: (windowId: string, paneId: string, side?: PaneNoteRecord['side']) => void;
   closeDraft: (windowId: string, paneId: string) => void;
 }
 
@@ -25,6 +26,7 @@ function getPaneNoteKey(windowId: string, paneId: string): string {
 export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
   notes: {},
   draftOpenKeys: {},
+  draftSides: {},
   setNote: (windowId, paneId, note) => {
     const key = getPaneNoteKey(windowId, paneId);
     const trimmedText = note.text.trim();
@@ -39,7 +41,9 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
         delete nextNotes[key];
         const nextDraftOpenKeys = { ...state.draftOpenKeys };
         delete nextDraftOpenKeys[key];
-        return { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys };
+        const nextDraftSides = { ...state.draftSides };
+        delete nextDraftSides[key];
+        return { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys, draftSides: nextDraftSides };
       }
 
       const previousNote = state.notes[key];
@@ -60,6 +64,10 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
           ...state.draftOpenKeys,
           [key]: true,
         },
+        draftSides: {
+          ...state.draftSides,
+          [key]: note.side,
+        },
       };
     });
   },
@@ -75,7 +83,9 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
       delete nextNotes[key];
       const nextDraftOpenKeys = { ...state.draftOpenKeys };
       delete nextDraftOpenKeys[key];
-      return { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys };
+      const nextDraftSides = { ...state.draftSides };
+      delete nextDraftSides[key];
+      return { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys, draftSides: nextDraftSides };
     });
   },
   removeWindowNotes: (windowId) => {
@@ -85,6 +95,7 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
       let didChange = false;
       const nextNotes = { ...state.notes };
       const nextDraftOpenKeys = { ...state.draftOpenKeys };
+      const nextDraftSides = { ...state.draftSides };
 
       for (const key of Object.keys(state.notes)) {
         if (!key.startsWith(keyPrefix)) {
@@ -92,6 +103,7 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
         }
         delete nextNotes[key];
         delete nextDraftOpenKeys[key];
+        delete nextDraftSides[key];
         didChange = true;
       }
 
@@ -100,10 +112,19 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
           continue;
         }
         delete nextDraftOpenKeys[key];
+        delete nextDraftSides[key];
         didChange = true;
       }
 
-      return didChange ? { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys } : state;
+      for (const key of Object.keys(state.draftSides)) {
+        if (!key.startsWith(keyPrefix) || key in state.notes || key in state.draftOpenKeys) {
+          continue;
+        }
+        delete nextDraftSides[key];
+        didChange = true;
+      }
+
+      return didChange ? { notes: nextNotes, draftOpenKeys: nextDraftOpenKeys, draftSides: nextDraftSides } : state;
     });
   },
   setPinned: (windowId, paneId, pinned) => {
@@ -146,13 +167,17 @@ export const usePaneNoteStore = create<PaneNoteStore>((set) => ({
       };
     });
   },
-  openDraft: (windowId, paneId) => {
+  openDraft: (windowId, paneId, side) => {
     const key = getPaneNoteKey(windowId, paneId);
 
     set((state) => ({
       draftOpenKeys: {
         ...state.draftOpenKeys,
         [key]: true,
+      },
+      draftSides: {
+        ...state.draftSides,
+        [key]: side ?? state.notes[key]?.side ?? state.draftSides[key] ?? 'right',
       },
     }));
   },
@@ -176,5 +201,5 @@ export function getPaneNote(windowId: string, paneId: string): PaneNoteRecord | 
 }
 
 export function __resetPaneNoteStoreForTests(): void {
-  usePaneNoteStore.setState({ notes: {}, draftOpenKeys: {} });
+  usePaneNoteStore.setState({ notes: {}, draftOpenKeys: {}, draftSides: {} });
 }

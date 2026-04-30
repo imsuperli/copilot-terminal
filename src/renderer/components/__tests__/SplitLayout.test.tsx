@@ -6,6 +6,10 @@ import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 import { useWindowStore } from '../../stores/windowStore';
 import { __resetPaneNoteStoreForTests, getPaneNote, usePaneNoteStore } from '../../stores/paneNoteStore';
 
+vi.mock('react-dnd', () => ({
+  useDrop: () => [{ isOver: false }, () => undefined],
+}));
+
 const mountCounts: Record<string, number> = {};
 const unmountCounts: Record<string, number> = {};
 const receivedProps: Array<{ paneId: string; isWindowActive: boolean }> = [];
