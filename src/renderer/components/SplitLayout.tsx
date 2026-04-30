@@ -154,6 +154,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   const [sizes, setSizes] = useState<number[]>(splitNode.sizes);
   const [isResizing, setIsResizing] = useState(false);
   const [resizingIndex, setResizingIndex] = useState<number>(-1);
+  const [hoveredDividerIndex, setHoveredDividerIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const childRefs = useRef<Array<HTMLDivElement | null>>([]);
   const sizesRef = useRef<number[]>(sizes);
@@ -289,8 +290,12 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                 transition-colors
               `}
               style={{
-                backgroundColor: 'rgb(var(--border) / var(--appearance-split-divider-track-opacity))',
+                backgroundColor: hoveredDividerIndex === index
+                  ? 'rgb(var(--border) / calc(var(--appearance-split-divider-track-opacity) + 0.12))'
+                  : 'rgb(var(--border) / var(--appearance-split-divider-track-opacity))',
               }}
+              onMouseEnter={() => setHoveredDividerIndex(index)}
+              onMouseLeave={() => setHoveredDividerIndex((current) => (current === index ? null : current))}
               onMouseDown={handleMouseDown(index)}
             >
               <div
@@ -304,9 +309,13 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                 style={{
                   backgroundColor: isResizing && resizingIndex === index
                     ? 'rgb(var(--primary))'
+                    : hoveredDividerIndex === index
+                      ? 'rgb(var(--primary) / 0.72)'
                     : 'rgb(var(--border) / var(--appearance-split-divider-line-opacity))',
                   boxShadow: isResizing && resizingIndex === index
                     ? '0 0 0 1px rgb(var(--primary) / 0.32), 0 0 14px rgb(var(--primary) / 0.42)'
+                    : hoveredDividerIndex === index
+                      ? '0 0 0 1px rgb(var(--primary) / 0.18), 0 0 12px rgb(var(--primary) / 0.24)'
                     : '0 0 0 1px rgb(var(--background) / 0.28), 0 0 8px rgb(var(--foreground) / var(--appearance-split-divider-glow-opacity))',
                 }}
               />
@@ -320,8 +329,8 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                   }
                 `}
                 style={{
-                  backgroundColor: `rgb(var(--primary) / ${isResizing && resizingIndex === index ? '0.38' : '0.18'})`,
-                  opacity: isResizing && resizingIndex === index ? 1 : undefined,
+                  backgroundColor: `rgb(var(--primary) / ${isResizing && resizingIndex === index ? '0.38' : hoveredDividerIndex === index ? '0.28' : '0.18'})`,
+                  opacity: isResizing && resizingIndex === index ? 1 : hoveredDividerIndex === index ? 1 : undefined,
                 }}
               />
             </div>

@@ -604,6 +604,38 @@ describe('SplitLayout', () => {
     expect(dividerGlow?.className).toContain('w-[3px]');
   });
 
+  it('brightens the separator on hover before resizing starts', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-a'), createPaneNode('pane-b')],
+    };
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
+    const dividerIndicator = separator.firstElementChild as HTMLElement;
+    const dividerGlow = dividerIndicator.nextElementSibling as HTMLElement;
+
+    fireEvent.mouseEnter(separator);
+
+    expect(separator).toHaveStyle({
+      backgroundColor: 'rgb(var(--border) / calc(var(--appearance-split-divider-track-opacity) + 0.12))',
+    });
+    expect(dividerIndicator.style.backgroundColor).toBe('rgb(var(--primary) / 0.72)');
+    expect(dividerGlow.style.opacity).toBe('1');
+  });
+
   it('renders chat panes through the shared layout renderer', () => {
     const layout: LayoutNode = {
       type: 'pane',

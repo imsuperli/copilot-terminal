@@ -115,6 +115,46 @@ describe('GroupSplitLayout', () => {
     expect(dividerGlow?.className).toContain('w-[3px]');
   });
 
+  it('brightens the group separator on hover before resizing starts', () => {
+    const layout = createGroupLayout();
+
+    useWindowStore.setState({
+      windows: [createWindow('win-a'), createWindow('win-b')],
+      groups: [{
+        id: 'group-1',
+        name: 'Group 1',
+        layout,
+        activeWindowId: 'win-a',
+        createdAt: '2026-04-11T00:00:00.000Z',
+        lastActiveAt: '2026-04-11T00:00:00.000Z',
+      }],
+    });
+
+    render(
+      <GroupSplitLayout
+        groupId="group-1"
+        layout={layout}
+        activeWindowId="win-a"
+        isGroupActive
+        onWindowActivate={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        onReturn={vi.fn()}
+      />
+    );
+
+    const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
+    const dividerIndicator = separator.firstElementChild as HTMLElement;
+    const dividerGlow = dividerIndicator.nextElementSibling as HTMLElement;
+
+    fireEvent.mouseEnter(separator);
+
+    expect(separator).toHaveStyle({
+      backgroundColor: 'rgb(var(--border) / calc(var(--appearance-split-divider-track-opacity) + 0.12))',
+    });
+    expect(dividerIndicator.style.backgroundColor).toBe('rgb(var(--primary) / 0.72)');
+    expect(dividerGlow.style.opacity).toBe('1');
+  });
+
   it('highlights the active group window without adding an outer border', () => {
     const layout = createGroupLayout();
 
