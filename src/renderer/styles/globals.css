@@ -68,9 +68,9 @@
     --appearance-pane-background: rgba(var(--terminal-background-rgb), 0);
     --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0);
     --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.18);
-    --appearance-pane-hover-scrim-opacity: 0.08;
-    --appearance-pane-window-inactive-scrim-opacity: 0.1;
-    --appearance-pane-inactive-scrim-opacity: 0.16;
+    --appearance-pane-hover-scrim-opacity: 0.035;
+    --appearance-pane-window-inactive-scrim-opacity: 0.11;
+    --appearance-pane-inactive-scrim-opacity: 0.18;
     --appearance-split-divider-track-opacity: 0.2;
     --appearance-split-divider-line-opacity: 0.88;
     --appearance-split-divider-glow-opacity: 0.18;

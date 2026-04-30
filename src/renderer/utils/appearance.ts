@@ -700,91 +700,55 @@ function resolvePaneChromeOpacity(appearance: AppearanceSettings): number {
 function resolvePaneHoverScrimOpacity(appearance: AppearanceSettings): number {
   if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
     if (appearance.readabilityMode === 'readability') {
-      return 0.035;
+      return 0.025;
     }
 
     if (appearance.readabilityMode === 'immersive') {
-      return 0.02;
+      return 0.012;
     }
 
-    return 0.028;
+    return 0.018;
   }
 
   if (hasImageBackdrop(appearance)) {
-    if (appearance.readabilityMode === 'readability') {
-      return 0.08;
-    }
-
-    if (appearance.readabilityMode === 'immersive') {
-      return 0.05;
-    }
-
-    return 0.065;
-  }
-
-  if (appearance.readabilityMode === 'readability') {
-    return 0.07;
-  }
-
-  if (appearance.readabilityMode === 'immersive') {
-    return 0.04;
-  }
-
-  return 0.055;
-}
-
-function resolvePaneWindowInactiveScrimOpacity(appearance: AppearanceSettings): number {
-  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
     if (appearance.readabilityMode === 'readability') {
       return 0.055;
     }
 
     if (appearance.readabilityMode === 'immersive') {
-      return 0.03;
+      return 0.032;
     }
 
-    return 0.042;
-  }
-
-  if (hasImageBackdrop(appearance)) {
-    if (appearance.readabilityMode === 'readability') {
-      return 0.12;
-    }
-
-    if (appearance.readabilityMode === 'immersive') {
-      return 0.08;
-    }
-
-    return 0.1;
+    return 0.04;
   }
 
   if (appearance.readabilityMode === 'readability') {
-    return 0.1;
+    return 0.05;
   }
 
   if (appearance.readabilityMode === 'immersive') {
-    return 0.06;
+    return 0.025;
   }
 
-  return 0.08;
+  return 0.035;
 }
 
-function resolvePaneInactiveScrimOpacity(appearance: AppearanceSettings): number {
+function resolvePaneWindowInactiveScrimOpacity(appearance: AppearanceSettings): number {
   if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
     if (appearance.readabilityMode === 'readability') {
-      return 0.09;
+      return 0.075;
     }
 
     if (appearance.readabilityMode === 'immersive') {
-      return 0.05;
+      return 0.042;
     }
 
-    return 0.07;
+    return 0.058;
   }
 
   if (hasImageBackdrop(appearance)) {
     if (appearance.readabilityMode === 'readability') {
-      return 0.18;
+      return 0.17;
     }
 
     if (appearance.readabilityMode === 'immersive') {
@@ -795,14 +759,50 @@ function resolvePaneInactiveScrimOpacity(appearance: AppearanceSettings): number
   }
 
   if (appearance.readabilityMode === 'readability') {
-    return 0.15;
+    return 0.14;
   }
 
   if (appearance.readabilityMode === 'immersive') {
-    return 0.09;
+    return 0.085;
   }
 
-  return 0.12;
+  return 0.11;
+}
+
+function resolvePaneInactiveScrimOpacity(appearance: AppearanceSettings): number {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.12;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.07;
+    }
+
+    return 0.095;
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.26;
+    }
+
+    if (appearance.readabilityMode === 'immersive') {
+      return 0.16;
+    }
+
+    return 0.2;
+  }
+
+  if (appearance.readabilityMode === 'readability') {
+    return 0.22;
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return 0.13;
+  }
+
+  return 0.18;
 }
 
 function resolveSplitDividerTrackOpacity(appearance: AppearanceSettings): number {

@@ -23,9 +23,9 @@ describe('renderer appearance utilities', () => {
     expect(style.getPropertyValue('--appearance-remote-tab-active-background')).toBe('rgb(var(--card))');
     expect(style.getPropertyValue('--appearance-remote-tab-hover-background')).toBe('rgb(var(--accent))');
     expect(style.getPropertyValue('--appearance-remote-tab-separator-color')).toBe('rgba(var(--border), 0.72)');
-    expect(style.getPropertyValue('--appearance-pane-hover-scrim-opacity')).toBe('0.055');
-    expect(style.getPropertyValue('--appearance-pane-window-inactive-scrim-opacity')).toBe('0.080');
-    expect(style.getPropertyValue('--appearance-pane-inactive-scrim-opacity')).toBe('0.120');
+    expect(style.getPropertyValue('--appearance-pane-hover-scrim-opacity')).toBe('0.035');
+    expect(style.getPropertyValue('--appearance-pane-window-inactive-scrim-opacity')).toBe('0.110');
+    expect(style.getPropertyValue('--appearance-pane-inactive-scrim-opacity')).toBe('0.180');
     expect(style.getPropertyValue('--appearance-split-divider-track-opacity')).toBe('0.200');
     expect(style.getPropertyValue('--appearance-split-divider-line-opacity')).toBe('0.880');
     expect(style.getPropertyValue('--appearance-split-divider-glow-opacity')).toBe('0.180');
@@ -68,9 +68,9 @@ describe('renderer appearance utilities', () => {
     expect(style.getPropertyValue('--appearance-pane-chrome-background')).toBe('rgba(var(--terminal-background-rgb, 12, 12, 12), 0.900)');
     expect(style.getPropertyValue('--appearance-main-surface-background')).toBe('rgba(255, 255, 255, 0.92)');
     expect(style.getPropertyValue('--appearance-sidebar-surface-background')).toBe('rgba(255, 255, 255, 0.92)');
-    expect(style.getPropertyValue('--appearance-pane-hover-scrim-opacity')).toBe('0.028');
-    expect(style.getPropertyValue('--appearance-pane-window-inactive-scrim-opacity')).toBe('0.042');
-    expect(style.getPropertyValue('--appearance-pane-inactive-scrim-opacity')).toBe('0.070');
+    expect(style.getPropertyValue('--appearance-pane-hover-scrim-opacity')).toBe('0.018');
+    expect(style.getPropertyValue('--appearance-pane-window-inactive-scrim-opacity')).toBe('0.058');
+    expect(style.getPropertyValue('--appearance-pane-inactive-scrim-opacity')).toBe('0.095');
     expect(style.getPropertyValue('--appearance-split-divider-track-opacity')).toBe('0.160');
     expect(style.getPropertyValue('--appearance-split-divider-line-opacity')).toBe('0.820');
     expect(style.getPropertyValue('--appearance-split-divider-glow-opacity')).toBe('0.100');
