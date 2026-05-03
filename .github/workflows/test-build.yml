@@ -33,7 +33,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - name: Upgrade npm to v11
+        working-directory: ${{ runner.temp }}
+        run: npm install --global npm@11.11.1
 
       - name: Install dependencies
         run: npm ci
@@ -60,7 +63,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - name: Upgrade npm to v11
+        working-directory: ${{ runner.temp }}
+        run: npm install --global npm@11.11.1
 
       - name: Install dependencies
         run: npm ci
