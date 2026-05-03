@@ -64,6 +64,26 @@ describe('useViewSwitcher', () => {
       expect(storeState.activeWindowId).toBe('window-123');
     });
 
+    it('应该立即更新本地 terminal 视图状态并清除画布激活状态', async () => {
+      vi.mocked(window.electronAPI.switchToTerminalView).mockResolvedValue(undefined);
+      const terminalWindow = createSinglePaneWindow('Test', 'D:\\repo', 'pwsh.exe');
+      terminalWindow.id = 'window-123';
+      useWindowStore.setState({
+        windows: [terminalWindow],
+        activeCanvasWorkspaceId: 'canvas-123',
+      });
+      const { result } = renderHook(() => useViewSwitcher());
+
+      await act(async () => {
+        await result.current.switchToTerminalView('window-123');
+      });
+
+      expect(result.current.currentView).toBe('terminal');
+      expect(result.current.activeWindowId).toBe('window-123');
+      expect(result.current.activeCanvasWorkspaceId).toBeNull();
+      expect(useWindowStore.getState().activeCanvasWorkspaceId).toBeNull();
+    });
+
     it('应该同步当前窗口的 active pane 到主进程', async () => {
       vi.mocked(window.electronAPI.switchToTerminalView).mockResolvedValue(undefined);
       const terminalWindow = createSinglePaneWindow('Test', 'D:\\repo', 'pwsh.exe');
@@ -135,6 +155,29 @@ describe('useViewSwitcher', () => {
 
       expect(result.current.error).toBe('切换失败');
     });
+
+    it('应该立即清除本地的画布激活状态', async () => {
+      vi.mocked(window.electronAPI.switchToUnifiedView).mockResolvedValue(undefined);
+      useWindowStore.setState({
+        activeCanvasWorkspaceId: 'canvas-123',
+      });
+      const { result } = renderHook(() => useViewSwitcher());
+
+      await act(async () => {
+        await result.current.switchToCanvasView('canvas-123');
+      });
+
+      expect(result.current.currentView).toBe('canvas');
+      expect(useWindowStore.getState().activeCanvasWorkspaceId).toBe('canvas-123');
+
+      await act(async () => {
+        await result.current.switchToUnifiedView();
+      });
+
+      expect(result.current.currentView).toBe('unified');
+      expect(result.current.activeCanvasWorkspaceId).toBeNull();
+      expect(useWindowStore.getState().activeCanvasWorkspaceId).toBeNull();
+    });
   });
 
   describe('switchToCanvasView', () => {
@@ -147,6 +190,19 @@ describe('useViewSwitcher', () => {
       });
 
       expect(window.electronAPI.switchToCanvasView).toHaveBeenCalledWith('canvas-123');
+    });
+
+    it('应该立即更新本地的视图和激活画布', async () => {
+      vi.mocked(window.electronAPI.switchToCanvasView).mockResolvedValue(undefined);
+      const { result } = renderHook(() => useViewSwitcher());
+
+      await act(async () => {
+        await result.current.switchToCanvasView('canvas-123');
+      });
+
+      expect(result.current.currentView).toBe('canvas');
+      expect(result.current.activeCanvasWorkspaceId).toBe('canvas-123');
+      expect(useWindowStore.getState().activeCanvasWorkspaceId).toBe('canvas-123');
     });
   });
 

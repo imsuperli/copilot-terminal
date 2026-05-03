@@ -3,15 +3,30 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import type { WindowCardDragItem, DropResult } from '../dnd';
 import { CardGrid } from '../CardGrid';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
+import { createGroup } from '../../utils/groupLayoutHelpers';
 
 vi.mock('../../hooks/useIDESettings', () => ({
   useIDESettings: () => ({
     enabledIDEs: [],
   }),
 }));
+
+const dropZoneProps: Array<{ onDrop: (item: WindowCardDragItem, result: DropResult) => void }> = [];
+
+vi.mock('../dnd', async () => {
+  const actual = await vi.importActual<typeof import('../dnd')>('../dnd');
+  return {
+    ...actual,
+    DropZone: ({ onDrop, children }: { onDrop: (item: WindowCardDragItem, result: DropResult) => void; children: React.ReactNode }) => {
+      dropZoneProps.push({ onDrop });
+      return <div>{children}</div>;
+    },
+  };
+});
 
 type MakeWindowOptions = Partial<Window> & {
   id: string;
@@ -65,6 +80,7 @@ function renderCardGrid(props: React.ComponentProps<typeof CardGrid> = {}) {
 describe('CardGrid', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dropZoneProps.length = 0;
     useWindowStore.setState({
       windows: [],
       groups: [],
@@ -202,7 +218,7 @@ describe('CardGrid', () => {
 
     expect(screen.getByRole('button', { name: /运行中/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /等待输入/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /已完成/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /未启动/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /出错/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /恢复中/ })).toBeInTheDocument();
   });
@@ -221,5 +237,42 @@ describe('CardGrid', () => {
 
     expect(screen.queryByText('此分类暂无终端')).not.toBeInTheDocument();
     expect(container.firstChild).toBeNull();
+  });
+
+  it('adds a dragged window into an existing group from the card grid', () => {
+    const sourceWindow = makeWindow({ id: 'source', name: 'Source Window' });
+    const groupedWindowA = makeWindow({ id: 'group-a', name: 'Group A' });
+    const groupedWindowB = makeWindow({ id: 'group-b', name: 'Group B' });
+
+    useWindowStore.setState({
+      windows: [sourceWindow, groupedWindowA, groupedWindowB],
+      groups: [
+        createGroup('Existing Group', groupedWindowA.id, groupedWindowB.id, 'horizontal'),
+      ],
+    });
+
+    renderCardGrid();
+
+    const targetDropZone = dropZoneProps.at(-1);
+    expect(targetDropZone).toBeDefined();
+
+    targetDropZone?.onDrop(
+      {
+        type: 'WINDOW_CARD',
+        windowId: sourceWindow.id,
+        windowName: sourceWindow.name,
+        source: 'cardGrid',
+      },
+      {
+        position: 'right',
+        targetGroupId: useWindowStore.getState().groups[0]?.id,
+      },
+    );
+
+    const updatedGroup = useWindowStore.getState().groups[0];
+    expect(updatedGroup).toBeDefined();
+    expect(updatedGroup && screen.getByText('Existing Group')).toBeInTheDocument();
+    expect(updatedGroup && updatedGroup.layout.type).toBe('split');
+    expect(updatedGroup && JSON.stringify(updatedGroup.layout)).toContain(sourceWindow.id);
   });
 });

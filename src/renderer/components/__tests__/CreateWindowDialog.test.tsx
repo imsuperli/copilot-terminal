@@ -252,6 +252,38 @@ describe('CreateWindowDialog', () => {
     })
   })
 
+  it('supports a local-only canvas entry flow with initial working directory and creation callback', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const onLocalWindowCreated = vi.fn()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        availableTabs={['local']}
+        initialTab="local"
+        initialWorkingDirectory="/canvas/project"
+        onLocalWindowCreated={onLocalWindowCreated}
+      />,
+    )
+
+    expect(screen.queryByRole('tab', { name: /SSH 连接/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /画布工作区/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/工作目录/)).toHaveValue('/canvas/project')
+
+    await waitFor(() => {
+      expect(mockElectronAPI.validatePath).toHaveBeenCalledWith('/canvas/project')
+    })
+
+    await user.click(screen.getByRole('button', { name: /创建/ }))
+
+    await waitFor(() => {
+      expect(onLocalWindowCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'window-1' }))
+    })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
   it('creates an ssh profile from the grouped ssh tabs', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
@@ -305,6 +337,40 @@ describe('CreateWindowDialog', () => {
       { hasPassword: true, hasPassphrase: false },
     )
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('can save and immediately connect an ssh profile when requested by canvas flow', async () => {
+    const user = userEvent.setup()
+    const onSSHProfileSaved = vi.fn()
+    const onSSHProfileConnect = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        sshEnabled={true}
+        sshProfiles={[]}
+        onSSHProfileSaved={onSSHProfileSaved}
+        onSSHProfileConnect={onSSHProfileConnect}
+        sshSubmitMode="saveAndConnect"
+      />,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
+    await user.type(screen.getByLabelText(/连接名称/), 'Prod Ubuntu')
+    await user.type(screen.getByLabelText(/主机地址/), 'example.com')
+    await user.clear(screen.getByLabelText(/^用户名/))
+    await user.type(screen.getByLabelText(/^用户名/), 'root')
+
+    await user.click(screen.getByRole('button', { name: /保存并连接 SSH/ }))
+
+    await waitFor(() => {
+      expect(onSSHProfileSaved).toHaveBeenCalled()
+      expect(onSSHProfileConnect).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'ssh-profile-1',
+        name: 'Prod Ubuntu',
+      }))
+    })
   })
 
   it('falls back to the host value when saving an ssh profile without a name', async () => {

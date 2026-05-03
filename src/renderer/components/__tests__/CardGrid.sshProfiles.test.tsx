@@ -9,6 +9,7 @@ import { useWindowStore } from '../../stores/windowStore';
 import { SSHProfile } from '../../../shared/types/ssh';
 import { Window, WindowStatus } from '../../types/window';
 import { getStatusColorValue } from '../../utils/statusHelpers';
+import { CanvasWorkspace } from '../../../shared/types/canvas';
 
 function createSSHProfile(overrides: Partial<SSHProfile> = {}): SSHProfile {
   return {
@@ -112,11 +113,38 @@ function renderCardGrid(props: ComponentProps<typeof CardGrid>) {
   );
 }
 
+function createCanvasWorkspace(overrides: Partial<CanvasWorkspace> = {}): CanvasWorkspace {
+  return {
+    id: 'canvas-1',
+    name: 'Incident Map',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    workingDirectory: '/srv/incidents',
+    blocks: [
+      {
+        id: 'note-1',
+        type: 'note',
+        x: 20,
+        y: 20,
+        width: 320,
+        height: 180,
+        zIndex: 1,
+        label: 'Checklist',
+        content: 'Investigate disk usage',
+      },
+    ],
+    viewport: { tx: 0, ty: 0, zoom: 1 },
+    nextZIndex: 2,
+    ...overrides,
+  };
+}
+
 describe('CardGrid SSH profile cards', () => {
   beforeEach(() => {
     useWindowStore.setState({
       windows: [],
       groups: [],
+      canvasWorkspaces: [],
       activeWindowId: null,
       activeGroupId: null,
       mruList: [],
@@ -160,6 +188,42 @@ describe('CardGrid SSH profile cards', () => {
     await user.click(screen.getByRole('button', { name: '复制 SSH 配置' }));
 
     expect(onDuplicateSSHProfile).toHaveBeenCalledWith(profile);
+  });
+
+  it('manages canvas workspaces directly from the unified card grid', async () => {
+    const user = userEvent.setup();
+    useWindowStore.setState({
+      canvasWorkspaces: [createCanvasWorkspace()],
+    });
+
+    renderCardGrid({ currentTab: 'all' });
+
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await user.click(await screen.findByRole('menuitem', { name: '重命名画布' }));
+
+    const renameInput = screen.getByLabelText('工作区名称');
+    await user.clear(renameInput);
+    await user.type(renameInput, 'Ops Board');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().canvasWorkspaces[0]?.name).toBe('Ops Board');
+    });
+
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await user.click(await screen.findByText('归档画布'));
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().canvasWorkspaces[0]?.archived).toBe(true);
+    });
+
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await user.click(await screen.findByText('删除画布'));
+    await user.click(screen.getByRole('button', { name: '删除' }));
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().canvasWorkspaces).toHaveLength(0);
+    });
   });
 
   it('surfaces ssh routing metadata on profile cards', () => {
@@ -216,9 +280,8 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' })).toHaveStyle({
-      borderTop: `1px solid ${getStatusColorValue(WindowStatus.Paused)}`,
-    });
+    expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }).getAttribute('style'))
+      .toContain(`border-top: 1px solid ${getStatusColorValue(WindowStatus.Paused)}`);
   });
 
   it('binds a standalone SSH runtime window back onto the SSH profile card', async () => {
@@ -621,8 +684,7 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' })).toHaveStyle({
-      borderTop: `1px solid ${getStatusColorValue(WindowStatus.Paused)}`,
-    });
+    expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }).getAttribute('style'))
+      .toContain(`border-top: 1px solid ${getStatusColorValue(WindowStatus.Paused)}`);
   });
 });

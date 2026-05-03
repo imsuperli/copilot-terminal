@@ -236,6 +236,8 @@ export interface TerminalViewProps {
   isActive: boolean;
   /** 嵌入模式：在 GroupView 中使用时隐藏侧边栏和返回按钮，但保留顶部工具栏 */
   embedded?: boolean;
+  /** 画布嵌入模式：只渲染终端内容，不显示侧栏、标题栏动作和远程标签 */
+  canvasEmbedded?: boolean;
   /** 所属组 ID（嵌入模式下传入） */
   groupId?: string;
   /** 从组中移除窗口的回调 */
@@ -259,6 +261,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onWindowSwitch,
   isActive,
   embedded = false,
+  canvasEmbedded = false,
   groupId,
   onRemoveFromGroup,
   onStopAndRemoveFromGroup,
@@ -353,8 +356,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
   const sidebarActiveWindowId = terminalWindow.id;
   const showRemoteWindowTabs = useMemo(
-    () => isStandaloneSshWindow,
-    [isStandaloneSshWindow],
+    () => isStandaloneSshWindow && !canvasEmbedded,
+    [canvasEmbedded, isStandaloneSshWindow],
   );
   const showFloatingChrome = isActive;
   const canSplitActivePane = useMemo(
@@ -372,6 +375,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [titleBarActionsSlot, setTitleBarActionsSlot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
+    if (canvasEmbedded) {
+      setTitleBarActionsSlot(null);
+      return;
+    }
+
     if (typeof document === 'undefined') {
       return;
     }
@@ -389,7 +397,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     return () => {
       window.removeEventListener('resize', syncSlot);
     };
-  }, []);
+  }, [canvasEmbedded]);
 
   // Store
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -1601,6 +1609,29 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     titleBarActionsSlot,
     visibleIDEs,
   ]);
+
+  if (canvasEmbedded) {
+    return (
+      <div className="flex h-full w-full min-w-0 overflow-hidden bg-transparent text-[rgb(var(--foreground))]">
+        <div className="relative min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <SplitLayout
+                windowId={terminalWindow.id}
+                layout={terminalWindow.layout}
+                activePaneId={terminalWindow.activePaneId}
+                isWindowActive={isActive}
+                onPaneActivate={handlePaneActivate}
+                onPaneClose={handlePaneClose}
+                onPaneExit={handlePaneExit}
+                onBrowserPaneDrop={handleBrowserPaneDrop}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full min-w-0 overflow-hidden bg-transparent text-[rgb(var(--foreground))]">

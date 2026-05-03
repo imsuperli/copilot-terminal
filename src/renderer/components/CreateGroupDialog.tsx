@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import * as Select from '@radix-ui/react-select';
-import { Check, ChevronDown } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { useWindowStore } from '../stores/windowStore';
-import { createGroup } from '../utils/groupLayoutHelpers';
+import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { useI18n } from '../i18n';
 import { getPersistableWindows } from '../utils/sshWindowBindings';
 
@@ -30,6 +28,7 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
   const windows = useWindowStore((state) => state.windows);
   const addGroup = useWindowStore((state) => state.addGroup);
   const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
+  const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
 
   const [groupName, setGroupName] = useState('');
   const [selectedWindowIds, setSelectedWindowIds] = useState<string[]>([]);
@@ -48,7 +47,6 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
     }
   }, [open]);
 
-  // 获取所有未归档的窗口（允许窗口同时属于多个组）
   const availableWindows = useMemo(() => {
     return persistableWindows.filter(w => !w.archived);
   }, [persistableWindows]);
@@ -56,9 +54,8 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 验证至少选择了 2 个窗口
     if (selectedWindowIds.length < 2) {
-      setCreateError('至少需要选择 2 个窗口');
+      setCreateError(t('groupDialog.error.minimumWindows'));
       return;
     }
 
@@ -66,10 +63,7 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
     setCreateError('');
 
     try {
-      // 生成默认组名（如果用户没有输入）
-      const finalGroupName = groupName.trim() || `组 ${new Date().toLocaleTimeString()}`;
-
-      // 创建组（使用前两个窗口创建初始布局）
+      const finalGroupName = groupName.trim() || t('groupDialog.defaultName', { count: new Date().toLocaleTimeString() });
       const newGroup = createGroup(
         finalGroupName,
         selectedWindowIds[0],
@@ -77,17 +71,20 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
         'horizontal'
       );
 
-      // TODO: 如果选择了超过 2 个窗口，需要将其他窗口添加到组中
-      // 这需要使用 addWindowToGroup 函数，但目前先创建包含前两个窗口的组
-
-      // 添加组到 store
       addGroup(newGroup);
+      for (const windowId of selectedWindowIds.slice(2)) {
+        const currentGroup = useWindowStore.getState().getGroupById(newGroup.id);
+        const targetWindowIds = currentGroup ? getAllWindowIds(currentGroup.layout) : selectedWindowIds.slice(0, 2);
+        const anchorWindowId = targetWindowIds[targetWindowIds.length - 1];
+        if (anchorWindowId) {
+          addWindowToGroupLayout(newGroup.id, anchorWindowId, windowId, 'horizontal');
+        }
+      }
 
-      // 关闭对话框并重置表单
       onOpenChange(false);
       resetForm();
     } catch (error) {
-      const errorMessage = (error as Error).message || '创建组失败，请重试';
+      const errorMessage = (error as Error).message || t('groupDialog.error.createFailed');
       setCreateError(errorMessage);
     } finally {
       setIsCreating(false);
@@ -148,17 +145,16 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
         {/* 选择窗口 */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-text-primary mb-2">
-            选择窗口 <span className="text-status-error">*</span>
+            {t('groupDialog.windowSelectionLabel')} <span className="text-status-error">*</span>
             <span className="text-xs text-text-secondary ml-2">
-              (至少选择 2 个)
+              {t('groupDialog.windowSelectionHint')}
             </span>
           </label>
 
-          {/* 显示可选窗口列表（复选框） */}
           <div className="border border-border-subtle rounded p-3 bg-bg-app max-h-64 overflow-y-auto">
             {availableWindows.length === 0 ? (
               <p className="text-sm text-text-secondary text-center py-4">
-                暂无可用窗口（所有窗口都已在组中或已归档）
+                {t('groupDialog.emptyWindows')}
               </p>
             ) : (
               <div className="space-y-2">
@@ -189,7 +185,7 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
           </div>
 
           <p className="text-xs text-text-secondary mt-2">
-            已选择 {selectedWindowIds.length} 个窗口
+            {t('groupDialog.selectedCount', { count: selectedWindowIds.length })}
           </p>
         </div>
 
@@ -218,7 +214,7 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
             disabled={selectedWindowIds.length < 2 || isCreating}
             aria-busy={isCreating}
           >
-            {isCreating ? '创建中...' : '创建组'}
+            {isCreating ? t('common.creating') : t('sidebar.createGroup')}
           </Button>
         </div>
       </form>

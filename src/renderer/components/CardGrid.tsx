@@ -16,6 +16,7 @@ import { DeleteWindowDialog } from './DeleteWindowDialog';
 import { SSHProfileCard } from './SSHProfileCard';
 import { DeleteSSHCardDialog } from './DeleteSSHCardDialog';
 import { CanvasWorkspaceCard } from './CanvasWorkspaceCard';
+import { Dialog } from './ui/Dialog';
 import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
@@ -149,6 +150,8 @@ export const CardGrid = React.memo<CardGridProps>(({
   const updateGroup = useWindowStore((state) => state.updateGroup);
   const archiveGroup = useWindowStore((state) => state.archiveGroup);
   const unarchiveGroup = useWindowStore((state) => state.unarchiveGroup);
+  const updateCanvasWorkspace = useWindowStore((state) => state.updateCanvasWorkspace);
+  const removeCanvasWorkspace = useWindowStore((state) => state.removeCanvasWorkspace);
 
   // 自定义分类
   const customCategories = useWindowStore((state) => state.customCategories);
@@ -161,6 +164,9 @@ export const CardGrid = React.memo<CardGridProps>(({
   const [sshDeleteTarget, setSSHDeleteTarget] = useState<SSHProfile | null>(null);
   const [sshDeleteError, setSSHDeleteError] = useState('');
   const [isDeletingSSHCard, setIsDeletingSSHCard] = useState(false);
+  const [editingCanvasWorkspace, setEditingCanvasWorkspace] = useState<CanvasWorkspace | null>(null);
+  const [canvasWorkspaceNameDraft, setCanvasWorkspaceNameDraft] = useState('');
+  const [canvasWorkspaceDeleteTarget, setCanvasWorkspaceDeleteTarget] = useState<CanvasWorkspace | null>(null);
   const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
   const windowById = useMemo(
     () => new Map(windows.map((window) => [window.id, window])),
@@ -492,7 +498,9 @@ export const CardGrid = React.memo<CardGridProps>(({
       if (item.type === 'canvasWorkspace') {
         return (
           item.data.name.toLowerCase().includes(query)
+          || (item.data.workingDirectory?.toLowerCase().includes(query) ?? false)
           || item.data.blocks.some((block) => (block.label ?? '').toLowerCase().includes(query))
+          || item.data.blocks.some((block) => block.type === 'note' && block.content.toLowerCase().includes(query))
         );
       }
 
@@ -584,6 +592,44 @@ export const CardGrid = React.memo<CardGridProps>(({
   const handleDuplicateSSHProfile = useCallback((profile: SSHProfile) => {
     onDuplicateSSHProfile?.(profile);
   }, [onDuplicateSSHProfile]);
+
+  const handleEditCanvasWorkspace = useCallback((canvasWorkspace: CanvasWorkspace) => {
+    setEditingCanvasWorkspace(canvasWorkspace);
+    setCanvasWorkspaceNameDraft(canvasWorkspace.name);
+  }, []);
+
+  const handleArchiveCanvasWorkspace = useCallback((canvasWorkspace: CanvasWorkspace) => {
+    updateCanvasWorkspace(canvasWorkspace.id, { archived: true });
+  }, [updateCanvasWorkspace]);
+
+  const handleUnarchiveCanvasWorkspace = useCallback((canvasWorkspace: CanvasWorkspace) => {
+    updateCanvasWorkspace(canvasWorkspace.id, { archived: false });
+  }, [updateCanvasWorkspace]);
+
+  const handleDeleteCanvasWorkspace = useCallback((canvasWorkspace: CanvasWorkspace) => {
+    setCanvasWorkspaceDeleteTarget(canvasWorkspace);
+  }, []);
+
+  const handleSaveCanvasWorkspaceEdit = useCallback(() => {
+    if (!editingCanvasWorkspace) {
+      return;
+    }
+
+    updateCanvasWorkspace(editingCanvasWorkspace.id, {
+      name: canvasWorkspaceNameDraft.trim() || editingCanvasWorkspace.name,
+    });
+    setEditingCanvasWorkspace(null);
+    setCanvasWorkspaceNameDraft('');
+  }, [canvasWorkspaceNameDraft, editingCanvasWorkspace, updateCanvasWorkspace]);
+
+  const confirmDeleteCanvasWorkspace = useCallback(() => {
+    if (!canvasWorkspaceDeleteTarget) {
+      return;
+    }
+
+    removeCanvasWorkspace(canvasWorkspaceDeleteTarget.id);
+    setCanvasWorkspaceDeleteTarget(null);
+  }, [canvasWorkspaceDeleteTarget, removeCanvasWorkspace]);
 
   const handleCardClick = useCallback(
     async (win: Window) => {
@@ -754,8 +800,6 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   const handleGroupClick = useCallback(
     async (group: WindowGroup) => {
-      // TODO: 等待任务 #5 完成后实现组视图
-      // 点击组卡片后，应该打开组视图（显示组内所有窗口的终端）
       onEnterGroup?.(group);
     },
     [onEnterGroup]
@@ -832,7 +876,6 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   const handleDeleteGroup = useCallback(async (groupId: string) => {
     try {
-      // 删除组（不删除组内的窗口，只是解散组）
       removeGroup(groupId);
     } catch (error) {
       console.error('Failed to delete group:', error);
@@ -860,21 +903,42 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   const addGroup = useWindowStore((state) => state.addGroup);
   const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
+  const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
+  const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
 
   /** 处理 WindowCard 拖拽到另一个 WindowCard 上 */
   const handleWindowCardDrop = useCallback(
     (dragItem: WindowCardDragItem, dropResult: DropResult) => {
       const { windowId: dragWindowId } = dragItem;
-      const { targetWindowId } = dropResult;
+      const { targetGroupId, targetWindowId } = dropResult;
 
-      if (!targetWindowId || dragWindowId === targetWindowId) return;
+      if (targetWindowId && dragWindowId === targetWindowId) return;
 
-      // 检查两个窗口是否已经在同一个组中
       const dragGroup = findGroupByWindowId(dragWindowId);
-      const targetGroup = findGroupByWindowId(targetWindowId);
+      const targetGroup = targetGroupId
+        ? groups.find((group) => group.id === targetGroupId)
+        : (targetWindowId ? findGroupByWindowId(targetWindowId) : undefined);
       if (dragGroup && targetGroup && dragGroup.id === targetGroup.id) return;
 
-      // 两个独立窗口 → 创建新组
+      if (targetGroup) {
+        const targetWindowIds = getAllWindowIds(targetGroup.layout);
+        const targetAnchorWindowId = targetWindowId ?? targetWindowIds[0];
+        if (!targetAnchorWindowId) return;
+
+        if (dragGroup) {
+          removeWindowFromGroupLayout(dragGroup.id, dragWindowId);
+        }
+
+        const direction = (dropResult.position === 'left' || dropResult.position === 'right')
+          ? 'horizontal'
+          : 'vertical';
+
+        addWindowToGroupLayout(targetGroup.id, targetAnchorWindowId, dragWindowId, direction);
+        return;
+      }
+
+      if (!targetWindowId) return;
+
       if (!dragGroup && !targetGroup) {
         const dragWin = windowById.get(dragWindowId);
         const targetWin = windowById.get(targetWindowId);
@@ -892,14 +956,9 @@ export const CardGrid = React.memo<CardGridProps>(({
         const groupName = `${dragWin.name} + ${targetWin.name}`;
         const newGroup = createGroup(groupName, firstId, secondId, direction);
         addGroup(newGroup);
-        return;
       }
-
-      // TODO: 拖拽窗口到已有组中（等待 addWindowToGroupLayout 完善后实现）
-      // 如果 targetGroup 存在，将 dragWindow 添加到该组
-      // 如果 dragGroup 存在，将 dragWindow 从原组移出，添加到目标组或创建新组
     },
-    [windowById, findGroupByWindowId, addGroup]
+    [windowById, findGroupByWindowId, groups, removeWindowFromGroupLayout, addWindowToGroupLayout, addGroup]
   );
 
   // 是否为自定义分类标签
@@ -977,30 +1036,39 @@ export const CardGrid = React.memo<CardGridProps>(({
                     groupId={group.id}
                     groupName={group.name}
                   >
-                    <GroupCard
-                      group={group}
-                      windows={getGroupWindows(group)}
-                      onClick={handleGroupClick}
-                      onDelete={handleDeleteGroup}
-                      onStartAll={handleStartAllWindows}
-                      onDestroyAllSessions={handleDestroyAllWindowSessions}
-                      onArchive={handleArchiveGroup}
-                      onUnarchive={handleUnarchiveGroup}
-                      onEdit={handleEditGroup}
-                    />
+                    <DropZone
+                      targetGroupId={group.id}
+                      onDrop={handleWindowCardDrop}
+                    >
+                      <GroupCard
+                        group={group}
+                        windows={getGroupWindows(group)}
+                        onClick={handleGroupClick}
+                        onDelete={handleDeleteGroup}
+                        onStartAll={handleStartAllWindows}
+                        onDestroyAllSessions={handleDestroyAllWindowSessions}
+                        onArchive={handleArchiveGroup}
+                        onUnarchive={handleUnarchiveGroup}
+                        onEdit={handleEditGroup}
+                      />
+                    </DropZone>
                   </DraggableGroupCard>
                 );
               }
 
-              if (item.type === 'canvasWorkspace') {
-                return (
-                  <CanvasWorkspaceCard
-                    key={`canvas-workspace-${item.data.id}`}
-                    canvasWorkspace={item.data}
-                    onClick={onEnterCanvasWorkspace}
-                  />
-                );
-              }
+      if (item.type === 'canvasWorkspace') {
+        return (
+          <CanvasWorkspaceCard
+            key={`canvas-workspace-${item.data.id}`}
+            canvasWorkspace={item.data}
+            onClick={onEnterCanvasWorkspace}
+            onRename={handleEditCanvasWorkspace}
+            onArchive={handleArchiveCanvasWorkspace}
+            onUnarchive={handleUnarchiveCanvasWorkspace}
+            onDelete={handleDeleteCanvasWorkspace}
+          />
+        );
+      }
 
               const profile = item.data;
               const sshWindow = standaloneSSHWindowsByProfile[profile.id] ?? null;
@@ -1100,6 +1168,81 @@ export const CardGrid = React.memo<CardGridProps>(({
           onOpenChange={setShowCreateGroupDialog}
         />
       )}
+
+      <Dialog
+        open={Boolean(editingCanvasWorkspace)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingCanvasWorkspace(null);
+            setCanvasWorkspaceNameDraft('');
+          }
+        }}
+        title={t('canvas.renameWorkspace')}
+        description={t('canvas.renameWorkspaceDescription')}
+        contentClassName="!max-w-lg"
+        showCloseButton
+        closeLabel={t('common.close')}
+      >
+        <div className="space-y-4">
+          <input
+            value={canvasWorkspaceNameDraft}
+            onChange={(event) => setCanvasWorkspaceNameDraft(event.target.value)}
+            autoFocus
+            aria-label={t('canvas.workspaceName')}
+            className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-2.5 text-sm text-[rgb(var(--foreground))] outline-none"
+          />
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setEditingCanvasWorkspace(null);
+                setCanvasWorkspaceNameDraft('');
+              }}
+              className="inline-flex items-center rounded-xl border border-[rgb(var(--border))] px-4 py-2 text-sm text-[rgb(var(--foreground))]"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveCanvasWorkspaceEdit}
+              className="inline-flex items-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--accent))] px-4 py-2 text-sm text-[rgb(var(--foreground))]"
+            >
+              {t('common.save')}
+            </button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(canvasWorkspaceDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCanvasWorkspaceDeleteTarget(null);
+          }
+        }}
+        title={t('canvas.deleteWorkspace')}
+        description={t('canvas.deleteWorkspaceDescription')}
+        contentClassName="!max-w-lg"
+        showCloseButton
+        closeLabel={t('common.close')}
+      >
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setCanvasWorkspaceDeleteTarget(null)}
+            className="inline-flex items-center rounded-xl border border-[rgb(var(--border))] px-4 py-2 text-sm text-[rgb(var(--foreground))]"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={confirmDeleteCanvasWorkspace}
+            className="inline-flex items-center rounded-xl border border-red-500/30 bg-red-500/12 px-4 py-2 text-sm text-red-200"
+          >
+            {t('common.delete')}
+          </button>
+        </div>
+      </Dialog>
     </>
   );
 });

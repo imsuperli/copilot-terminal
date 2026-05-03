@@ -103,6 +103,21 @@ function resolveSSHProfileEntryCommand(profile: SSHProfile): string {
   return profile.remoteCommand || '';
 }
 
+function createCanvasWindowBlock(windowItem: Window, index: number, zIndex: number) {
+  return {
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? `window-${crypto.randomUUID()}` : `window-${Date.now()}`,
+    type: 'window' as const,
+    windowId: windowItem.id,
+    x: 80 + index * 28,
+    y: 80 + index * 24,
+    width: 360,
+    height: 220,
+    zIndex,
+    label: windowItem.name,
+    displayMode: 'summary' as const,
+  };
+}
+
 function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): string[] {
   return state.windows.map((window) => {
     const panes = getAllPanes(window.layout);
@@ -341,6 +356,8 @@ function AppContent() {
   const [appearance, setAppearance] = useState<AppearanceSettings>(() => getAppearanceFromSettings());
   const [isStartupMaskVisible, setIsStartupMaskVisible] = useState(true);
   const [isStartupMaskHiding, setIsStartupMaskHiding] = useState(false);
+  const [canvasTerminalReturnTargetId, setCanvasTerminalReturnTargetId] = useState<string | null>(null);
+  const [canvasCreateContextWorkspaceId, setCanvasCreateContextWorkspaceId] = useState<string | null>(null);
   const sshPasswordPromptResolverRef = useRef<((password: string | null) => void) | null>(null);
   const appErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startupMaskDismissedRef = useRef(false);
@@ -873,10 +890,6 @@ function AppContent() {
     };
   }, [updateClaudeModel]);
 
-  const handleCreateWindow = useCallback(() => {
-    setIsDialogOpen(true);
-  }, []);
-
   const handleEditSSHProfile = useCallback((profile: SSHProfile) => {
     setDuplicatingSSHProfile(null);
     setEditingSSHProfile(profile);
@@ -1046,25 +1059,164 @@ function AppContent() {
     }
   }, [addWindow, connectingSSHProfileId, groupedWindowIdSet, showAppNotice, switchToWindow, updatePane, updateWindow]);
 
+  const handleConnectSSHProfileIntoCanvas = useCallback(async (profile: SSHProfile) => {
+    if (!canvasCreateContextWorkspaceId || connectingSSHProfileId) {
+      return;
+    }
+
+    const workspace = useWindowStore.getState().getCanvasWorkspaceById(canvasCreateContextWorkspaceId);
+    if (!workspace) {
+      return;
+    }
+
+    const windows = useWindowStore.getState().windows;
+    const reusableWindow = profile.reuseSession
+      ? findReusableSSHWindow(windows, profile.id, groupedWindowIdSet)
+      : null;
+
+    if (reusableWindow) {
+      const alreadyLinked = workspace.blocks.some((block) => (
+        block.type === 'window' && block.windowId === reusableWindow.id
+      ));
+
+      if (!alreadyLinked) {
+        const offsetIndex = workspace.blocks.filter((block) => block.type === 'window').length;
+        useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
+          blocks: [
+            ...workspace.blocks,
+            createCanvasWindowBlock(reusableWindow, offsetIndex, workspace.nextZIndex),
+          ],
+          nextZIndex: workspace.nextZIndex + 1,
+        });
+      }
+      return;
+    }
+
+    try {
+      setConnectingSSHProfileId(profile.id);
+      const response = await runSSHActionWithPasswordRetry({
+        request: {
+          profileId: profile.id,
+          profileName: profile.name,
+          host: profile.host,
+          user: profile.user,
+          authType: profile.auth,
+        },
+        action: () => window.electronAPI.createSSHWindow({
+          profileId: profile.id,
+          name: profile.name,
+        }),
+      });
+
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error || `Failed to connect SSH profile ${profile.id}`);
+      }
+
+      if (authNeedsPassword(profile.auth)) {
+        setSSHCredentialStates((previousStates) => ({
+          ...previousStates,
+          [profile.id]: {
+            ...(previousStates[profile.id] ?? { hasPassword: false, hasPassphrase: false }),
+            hasPassword: true,
+          },
+        }));
+      }
+
+      addWindow(response.data);
+      const latestWorkspace = useWindowStore.getState().getCanvasWorkspaceById(canvasCreateContextWorkspaceId);
+      if (latestWorkspace) {
+        const offsetIndex = latestWorkspace.blocks.filter((block) => block.type === 'window').length;
+        useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
+          blocks: [
+            ...latestWorkspace.blocks,
+            createCanvasWindowBlock(response.data, offsetIndex, latestWorkspace.nextZIndex),
+          ],
+          nextZIndex: latestWorkspace.nextZIndex + 1,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to create SSH window for canvas:', error);
+      if (!isSSHPasswordPromptCancelled(error)) {
+        showAppNotice(error instanceof Error ? error.message : `Failed to connect SSH profile ${profile.id}`, 'error');
+      }
+      throw error;
+    } finally {
+      setConnectingSSHProfileId(null);
+    }
+  }, [addWindow, canvasCreateContextWorkspaceId, connectingSSHProfileId, groupedWindowIdSet, showAppNotice]);
+
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);
   }, []);
 
   const handleDialogChange = useCallback((open: boolean) => {
     setIsDialogOpen(open);
+    if (!open) {
+      setCanvasCreateContextWorkspaceId(null);
+    }
   }, []);
 
   const handleEnterTerminal = useCallback((win: Window) => {
+    setCanvasTerminalReturnTargetId(null);
     switchToWindow(win.id);
   }, [switchToWindow]);
 
   const handleEnterCanvasWorkspace = useCallback(async (canvasWorkspaceId: string) => {
+    setCanvasTerminalReturnTargetId(null);
     await switchToCanvasView(canvasWorkspaceId);
   }, [switchToCanvasView]);
 
   const handleWindowSwitch = useCallback((windowId: string) => {
+    setCanvasTerminalReturnTargetId(null);
     switchToWindow(windowId);
   }, [switchToWindow]);
+
+  const handleOpenWindowFromCanvas = useCallback((windowId: string) => {
+    setCanvasTerminalReturnTargetId(activeCanvasWorkspaceId ?? currentActiveCanvasWorkspaceId ?? null);
+    switchToWindow(windowId);
+  }, [activeCanvasWorkspaceId, currentActiveCanvasWorkspaceId, switchToWindow]);
+
+  const handleCreateWindow = useCallback(() => {
+    setCanvasCreateContextWorkspaceId(null);
+    setIsDialogOpen(true);
+  }, []);
+
+  const handleCreateTerminalFromCanvas = useCallback((canvasWorkspaceId: string) => {
+    setCanvasCreateContextWorkspaceId(canvasWorkspaceId);
+    setIsDialogOpen(true);
+  }, []);
+
+  const handleCanvasLocalWindowCreated = useCallback(async (windowItem: Window) => {
+    if (!canvasCreateContextWorkspaceId) {
+      return;
+    }
+
+    const workspace = useWindowStore.getState().getCanvasWorkspaceById(canvasCreateContextWorkspaceId);
+    if (!workspace) {
+      return;
+    }
+
+    const offsetIndex = workspace.blocks.filter((block) => block.type === 'window').length;
+    useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
+      blocks: [
+        ...workspace.blocks,
+        createCanvasWindowBlock(windowItem, offsetIndex, workspace.nextZIndex),
+      ],
+      nextZIndex: workspace.nextZIndex + 1,
+    });
+  }, [canvasCreateContextWorkspaceId]);
+
+  const handleReturnFromTerminal = useCallback(async () => {
+    if (canvasTerminalReturnTargetId) {
+      const targetCanvas = useWindowStore.getState().getCanvasWorkspaceById(canvasTerminalReturnTargetId);
+      if (targetCanvas && !targetCanvas.archived) {
+        await switchToCanvasView(canvasTerminalReturnTargetId);
+        return;
+      }
+    }
+
+    await switchToUnifiedView();
+  }, [canvasTerminalReturnTargetId, switchToCanvasView, switchToUnifiedView]);
 
   const handleTabChange = useCallback((tab: 'all' | 'active' | 'archived' | string) => {
     setCurrentTab(tab);
@@ -1128,6 +1280,19 @@ function AppContent() {
 
     return nextIds;
   }, [activeWindowId, mountedTerminalWindowIds]);
+  const liveCanvasWindowIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    for (const canvasWorkspace of canvasWorkspaces) {
+      for (const block of canvasWorkspace.blocks) {
+        if (block.type === 'window' && block.displayMode === 'live') {
+          ids.add(block.windowId);
+        }
+      }
+    }
+
+    return ids;
+  }, [canvasWorkspaces]);
   const mountedTerminalObservation = useMemo(() => (
     createMountedTerminalObservationSnapshot({
       currentView,
@@ -1219,6 +1384,11 @@ function AppContent() {
     if (currentView === 'unified' || currentView === 'canvas' || activeGroupId) return undefined;
     return activeWindowGitBranch;
   }, [currentView, activeGroupId, activeWindowGitBranch]);
+  const canvasInitialWorkingDirectory = useMemo(() => (
+    canvasCreateContextWorkspaceId
+      ? (canvasWorkspaces.find((canvasWorkspace) => canvasWorkspace.id === canvasCreateContextWorkspaceId)?.workingDirectory ?? '')
+      : ''
+  ), [canvasCreateContextWorkspaceId, canvasWorkspaces]);
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden">
@@ -1229,7 +1399,7 @@ function AppContent() {
         gitBranch={titleBarGitBranch}
         showAppName={currentView === 'unified'}
         appName={appVersion.name}
-        onReturn={currentView !== 'unified' ? (activeGroupId ? handleReturnFromGroup : switchToUnifiedView) : undefined}
+        onReturn={currentView !== 'unified' ? (activeGroupId ? handleReturnFromGroup : handleReturnFromTerminal) : undefined}
       />
 
       {/* 内容区域 */}
@@ -1286,12 +1456,14 @@ function AppContent() {
       </div>
 
       {/* 终端视图：窗口一旦打开过就保持挂载，仅切换显示状态，避免返回或窗口切换时销毁 xterm 实例 */}
-      {mountedTerminalWindowIds.map((windowId) => (
+      {mountedTerminalWindowIds
+        .filter((windowId) => !liveCanvasWindowIds.has(windowId))
+        .map((windowId) => (
         <MountedTerminalSurface
           key={windowId}
           windowId={windowId}
           isVisible={currentView === 'terminal' && activeWindowId === windowId}
-          onReturn={switchToUnifiedView}
+          onReturn={handleReturnFromTerminal}
           onWindowSwitch={handleWindowSwitch}
           onGroupSwitch={handleGroupSwitch}
           sshEnabled={sshEnabled}
@@ -1317,6 +1489,30 @@ function AppContent() {
               <CanvasWorkspaceView
                 key={canvasWorkspace.id}
                 canvasWorkspace={canvasWorkspace}
+                onOpenWindow={handleOpenWindowFromCanvas}
+                onCreateTerminal={handleCreateTerminalFromCanvas}
+                renderLiveWindow={(windowId, options) => {
+                  const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
+                  if (!embeddedWindow) {
+                    return null;
+                  }
+
+                  return (
+                    <TerminalView
+                      key={`canvas-embedded-${windowId}`}
+                      window={embeddedWindow}
+                      onReturn={handleReturnFromTerminal}
+                      onWindowSwitch={handleWindowSwitch}
+                      isActive={options.isActive}
+                      embedded
+                      canvasEmbedded
+                      sshEnabled={sshEnabled}
+                      sshProfiles={sshProfiles}
+                      onSSHProfileSaved={handleSSHProfileSaved}
+                    />
+                  );
+                }}
+                onExitWorkspace={switchToUnifiedView}
               />
             ))}
         </div>
@@ -1369,6 +1565,20 @@ function AppContent() {
           onSSHProfileSaved={handleSSHProfileSaved}
         />
       )}
+
+      <CreateWindowDialog
+        open={isDialogOpen}
+        onOpenChange={handleDialogChange}
+        availableTabs={canvasCreateContextWorkspaceId ? ['local', 'ssh'] : undefined}
+        initialTab={canvasCreateContextWorkspaceId ? 'local' : undefined}
+        initialWorkingDirectory={canvasInitialWorkingDirectory}
+        sshEnabled={sshEnabled}
+        sshProfiles={sshProfiles}
+        onLocalWindowCreated={handleCanvasLocalWindowCreated}
+        onSSHProfileSaved={handleSSHProfileSaved}
+        onSSHProfileConnect={handleConnectSSHProfileIntoCanvas}
+        sshSubmitMode={canvasCreateContextWorkspaceId ? 'saveAndConnect' : 'save'}
+      />
 
       <SSHHostKeyPromptDialog
         request={activeSSHHostKeyPrompt}

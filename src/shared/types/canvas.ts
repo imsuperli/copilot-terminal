@@ -20,6 +20,7 @@ interface CanvasBlockBase {
 export interface CanvasWindowBlock extends CanvasBlockBase {
   type: 'window';
   windowId: string;
+  displayMode?: 'summary' | 'live';
 }
 
 export interface CanvasNoteBlock extends CanvasBlockBase {

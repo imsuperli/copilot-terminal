@@ -70,6 +70,31 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+const canvasContextMock = {
+  setTransform: vi.fn(),
+  scale: vi.fn(),
+  clearRect: vi.fn(),
+  beginPath: vi.fn(),
+  roundRect: vi.fn(),
+  fill: vi.fn(),
+  stroke: vi.fn(),
+  strokeRect: vi.fn(),
+  fillRect: vi.fn(),
+  fillStyle: '',
+  strokeStyle: '',
+  lineWidth: 1,
+};
+
+if (!HTMLCanvasElement.prototype.getContext) {
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    value: vi.fn(() => canvasContextMock),
+    configurable: true,
+    writable: true,
+  });
+} else {
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => canvasContextMock as never);
+}
+
 // Mock window.electronAPI for all renderer tests
 Object.defineProperty(window, 'electronAPI', {
   value: {
@@ -276,6 +301,7 @@ Object.defineProperty(window, 'electronAPI', {
     splitPane: vi.fn().mockResolvedValue({ success: true }),
     closePane: vi.fn().mockResolvedValue({ success: true }),
     switchToTerminalView: vi.fn().mockResolvedValue(undefined),
+    switchToCanvasView: vi.fn().mockResolvedValue(undefined),
     switchToUnifiedView: vi.fn().mockResolvedValue(undefined),
     setActivePane: vi.fn().mockResolvedValue(undefined),
     onViewChanged: vi.fn(),
@@ -364,6 +390,7 @@ Object.defineProperty(window, 'electronAPI', {
         version: '1.0',
         windows: [],
         groups: [],
+        canvasWorkspaces: [],
         settings: {
           notificationsEnabled: true,
           theme: 'dark',
@@ -437,6 +464,7 @@ Object.defineProperty(window, 'electronAPI', {
         version: '1.0',
         windows: [],
         groups: [],
+        canvasWorkspaces: [],
         settings: {
           notificationsEnabled: true,
           theme: 'dark',

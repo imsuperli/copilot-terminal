@@ -1,23 +1,40 @@
 import React, { useCallback, useMemo } from 'react';
-import { Orbit, StickyNote } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Archive, ArchiveRestore, Edit2, MoreHorizontal, Orbit, StickyNote, Trash2 } from 'lucide-react';
 import { CanvasWorkspace } from '../../shared/types/canvas';
 import { formatRelativeTime, useI18n } from '../i18n';
+import {
+  ideMenuContentClassName,
+  ideMenuDangerItemClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+} from './ui/ide-menu';
 import {
   idePopupInteractiveListCardClassName,
   idePopupListCardFooterClassName,
   idePopupPillClassName,
+  idePopupTonalButtonClassName,
 } from './ui/ide-popup';
 
 interface CanvasWorkspaceCardProps {
   canvasWorkspace: CanvasWorkspace;
   onClick?: (canvasWorkspaceId: string) => void;
+  onRename?: (canvasWorkspace: CanvasWorkspace) => void;
+  onArchive?: (canvasWorkspace: CanvasWorkspace) => void;
+  onUnarchive?: (canvasWorkspace: CanvasWorkspace) => void;
+  onDelete?: (canvasWorkspace: CanvasWorkspace) => void;
 }
 
 export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
   canvasWorkspace,
   onClick,
+  onRename,
+  onArchive,
+  onUnarchive,
+  onDelete,
 }) => {
   const { language, t } = useI18n();
+  const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
 
   const blockSummary = useMemo(() => {
     const noteCount = canvasWorkspace.blocks.filter((block) => block.type === 'note').length;
@@ -39,6 +56,8 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
       onClick?.(canvasWorkspace.id);
     }
   }, [canvasWorkspace.id, onClick]);
+
+  const hasActions = Boolean(onRename || onArchive || onUnarchive || onDelete);
 
   return (
     <div
@@ -64,7 +83,69 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
               </p>
             </div>
           </div>
-          <span className={idePopupPillClassName}>{canvasWorkspace.blocks.length}</span>
+          <div className="flex items-center gap-2">
+            <span className={idePopupPillClassName}>{canvasWorkspace.blocks.length}</span>
+            {hasActions && (
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    aria-label={t('common.more')}
+                    onClick={(event) => event.stopPropagation()}
+                    className={`flex h-8 w-8 items-center justify-center ${cardButtonClassName}`}
+                  >
+                    <MoreHorizontal size={15} />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    className={ideMenuContentClassName}
+                    side="bottom"
+                    align="end"
+                    sideOffset={6}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {onRename && (
+                      <DropdownMenu.Item
+                        className={ideMenuItemClassName}
+                        onSelect={() => onRename(canvasWorkspace)}
+                        aria-label={t('canvas.renameWorkspace')}
+                      >
+                        <IdeMenuItemContent icon={<Edit2 size={14} />} label={t('canvas.renameWorkspace')} />
+                      </DropdownMenu.Item>
+                    )}
+                    {!canvasWorkspace.archived && onArchive && (
+                      <DropdownMenu.Item
+                        className={ideMenuItemClassName}
+                        onSelect={() => onArchive(canvasWorkspace)}
+                        aria-label={t('canvas.archiveWorkspace')}
+                      >
+                        <IdeMenuItemContent icon={<Archive size={14} />} label={t('canvas.archiveWorkspace')} />
+                      </DropdownMenu.Item>
+                    )}
+                    {canvasWorkspace.archived && onUnarchive && (
+                      <DropdownMenu.Item
+                        className={ideMenuItemClassName}
+                        onSelect={() => onUnarchive(canvasWorkspace)}
+                        aria-label={t('canvas.unarchiveWorkspace')}
+                      >
+                        <IdeMenuItemContent icon={<ArchiveRestore size={14} />} label={t('canvas.unarchiveWorkspace')} />
+                      </DropdownMenu.Item>
+                    )}
+                    {onDelete && (
+                      <DropdownMenu.Item
+                        className={ideMenuDangerItemClassName}
+                        onSelect={() => onDelete(canvasWorkspace)}
+                        aria-label={t('canvas.deleteWorkspace')}
+                      >
+                        <IdeMenuItemContent icon={<Trash2 size={14} />} label={t('canvas.deleteWorkspace')} />
+                      </DropdownMenu.Item>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 flex flex-1 flex-col justify-between rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] p-4">
@@ -85,7 +166,7 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
       </div>
 
       <div className={`${idePopupListCardFooterClassName} border-t border-[rgb(var(--border))]`}>
-        <span>{t('canvas.openWorkspace')}</span>
+        <span>{canvasWorkspace.archived ? t('status.archived') : t('canvas.openWorkspace')}</span>
       </div>
     </div>
   );

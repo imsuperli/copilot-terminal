@@ -51,6 +51,10 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
   const switchToTerminalView = useCallback(async (windowId: string) => {
     try {
       setError(null);
+      setCurrentView('terminal');
+      setActiveWindowId(windowId);
+      setActiveCanvasWorkspaceId(null);
+      setActiveCanvasWorkspace(null);
       await window.electronAPI.switchToTerminalView(windowId);
       setActiveWindow(windowId);
       syncActivePane(windowId);
@@ -66,6 +70,12 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
   const switchToUnifiedView = useCallback(async () => {
     try {
       setError(null);
+      setCurrentView('unified');
+      setActiveWindowId(null);
+      setActiveCanvasWorkspaceId(null);
+      setActiveWindow(null);
+      setActiveCanvasWorkspace(null);
+      useWindowStore.getState().setActiveGroup(null);
       await window.electronAPI.switchToUnifiedView();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toUnifiedFailed');
@@ -79,16 +89,21 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
   const switchToCanvasView = useCallback(async (canvasWorkspaceId: string) => {
     try {
       setError(null);
+      setCurrentView('canvas');
+      setActiveWindowId(null);
+      setActiveCanvasWorkspaceId(canvasWorkspaceId);
+      setActiveWindow(null);
+      useWindowStore.getState().setActiveGroup(null);
       setActiveCanvasWorkspace(canvasWorkspaceId);
       await window.electronAPI.switchToCanvasView(canvasWorkspaceId);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toTerminalFailed');
+      const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toCanvasFailed');
       setError(errorMessage);
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to switch to canvas view:', err);
       }
     }
-  }, [setActiveCanvasWorkspace, t]);
+  }, [setActiveCanvasWorkspace, setActiveWindow, t]);
 
   useEffect(() => {
     const handler = (

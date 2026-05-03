@@ -384,9 +384,13 @@ function removePaneNotesForWindow(window: Window | undefined): void {
     return;
   }
 
+  removePaneNotesForWindowSnapshot(window.id, getAllPanes(window.layout).map((pane) => pane.id));
+}
+
+function removePaneNotesForWindowSnapshot(windowId: string, paneIds: string[]): void {
   const removeNote = usePaneNoteStore.getState().removeNote;
-  for (const pane of getAllPanes(window.layout)) {
-    removeNote(window.id, pane.id);
+  for (const paneId of paneIds) {
+    removeNote(windowId, paneId);
   }
 }
 
@@ -713,7 +717,8 @@ export const useWindowStore = create<WindowStore>()(
     removeWindow: (id) => {
       let didChange = false;
       let shouldPersistChange = false;
-      let removedWindow: Window | undefined;
+      let removedWindowNoteWindowId: string | null = null;
+      let removedWindowNotePaneIds: string[] = [];
       set((state) => {
         const existingWindow = state.windows.find((window) => window.id === id);
         if (!existingWindow) {
@@ -722,7 +727,8 @@ export const useWindowStore = create<WindowStore>()(
 
         didChange = true;
         shouldPersistChange = !existingWindow.ephemeral;
-        removedWindow = existingWindow;
+        removedWindowNoteWindowId = existingWindow.id;
+        removedWindowNotePaneIds = getAllPanes(existingWindow.layout).map((pane) => pane.id);
         state.windows = state.windows.filter(w => w.id !== id);
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
@@ -761,7 +767,9 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
 
-      removePaneNotesForWindow(removedWindow);
+      if (removedWindowNoteWindowId !== null) {
+        removePaneNotesForWindowSnapshot(removedWindowNoteWindowId, removedWindowNotePaneIds);
+      }
 
       if (didChange && shouldPersistChange) {
         const { windows, groups, canvasWorkspaces, customCategories } = get();

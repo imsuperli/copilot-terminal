@@ -8,6 +8,7 @@ import { useWindowStore } from '../stores/windowStore'
 import { useI18n } from '../i18n'
 import { CanvasWorkspace } from '../../shared/types/canvas'
 import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh'
+import { Window } from '../types/window'
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo'
 import {
   idePopupActionButtonClassName,
@@ -26,11 +27,17 @@ interface CreateWindowDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   sshEnabled?: boolean
+  availableTabs?: CreateWindowTab[]
+  initialTab?: CreateWindowTab
+  initialWorkingDirectory?: string
   sshProfiles?: SSHProfile[]
   editingSSHProfile?: SSHProfile | null
   initialSSHProfile?: SSHProfile | null
   sshCredentialState?: SSHCredentialState | null
   onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void
+  onSSHProfileConnect?: (profile: SSHProfile) => void | Promise<void>
+  onLocalWindowCreated?: (window: Window) => void | Promise<void>
+  sshSubmitMode?: 'save' | 'saveAndConnect'
 }
 
 interface ShellProgramOption {
@@ -151,19 +158,52 @@ export function CreateWindowDialog({
   open,
   onOpenChange,
   sshEnabled = false,
+  availableTabs,
+  initialTab,
+  initialWorkingDirectory = '',
   sshProfiles = [],
   editingSSHProfile = null,
   initialSSHProfile = null,
   sshCredentialState = null,
   onSSHProfileSaved,
+  onSSHProfileConnect,
+  onLocalWindowCreated,
+  sshSubmitMode = 'save',
 }: CreateWindowDialogProps) {
   const { t } = useI18n()
-  const [activeTab, setActiveTab] = useState<CreateWindowTab>(
-    (editingSSHProfile || initialSSHProfile) && sshEnabled ? 'ssh' : 'local',
-  )
+  const isEditingSSHProfile = Boolean(editingSSHProfile)
+  const isDuplicatingSSHProfile = !isEditingSSHProfile && Boolean(initialSSHProfile)
+  const resolvedAvailableTabs = useMemo<CreateWindowTab[]>(() => {
+    if ((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled) {
+      return ['ssh']
+    }
+
+    if (availableTabs && availableTabs.length > 0) {
+      return Array.from(new Set(availableTabs))
+    }
+
+    const nextTabs: CreateWindowTab[] = ['local']
+    if (sshEnabled) {
+      nextTabs.push('ssh')
+    }
+    nextTabs.push('canvas')
+    return nextTabs
+  }, [availableTabs, isDuplicatingSSHProfile, isEditingSSHProfile, sshEnabled])
+  const resolveInitialTab = useMemo(() => {
+    if ((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled && resolvedAvailableTabs.includes('ssh')) {
+      return 'ssh' as const
+    }
+
+    if (initialTab && resolvedAvailableTabs.includes(initialTab)) {
+      return initialTab
+    }
+
+    return resolvedAvailableTabs[0] ?? 'local'
+  }, [initialTab, isDuplicatingSSHProfile, isEditingSSHProfile, resolvedAvailableTabs, sshEnabled])
+  const [activeTab, setActiveTab] = useState<CreateWindowTab>(resolveInitialTab)
 
   const [name, setName] = useState('')
-  const [workingDirectory, setWorkingDirectory] = useState('')
+  const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory)
   const [command, setCommand] = useState('')
   const [canvasName, setCanvasName] = useState('')
   const [canvasWorkingDirectory, setCanvasWorkingDirectory] = useState('')
@@ -191,10 +231,12 @@ export function CreateWindowDialog({
   const [isDetectingKeys, setIsDetectingKeys] = useState(false)
 
   const workingDirInputRef = useRef<HTMLInputElement>(null)
+  const canvasNameInputRef = useRef<HTMLInputElement>(null)
   const sshNameInputRef = useRef<HTMLInputElement>(null)
   const latestLocalCommandRef = useRef('')
   const addWindow = useWindowStore((state) => state.addWindow)
   const addCanvasWorkspace = useWindowStore((state) => state.addCanvasWorkspace)
+  const canvasWorkspaceCount = useWindowStore((state) => state.canvasWorkspaces.length)
   const windows = useWindowStore((state) => state.windows)
 
   const currentPrivateKeys = useMemo(
@@ -208,8 +250,6 @@ export function CreateWindowDialog({
     }),
     [showSSHRequiredErrors, sshForm.host, sshForm.user],
   )
-  const isEditingSSHProfile = Boolean(editingSSHProfile)
-  const isDuplicatingSSHProfile = !isEditingSSHProfile && Boolean(initialSSHProfile)
   const sshTemplateProfile = editingSSHProfile ?? initialSSHProfile
   const currentSSHCredentialState = isEditingSSHProfile
     ? (sshCredentialState ?? DEFAULT_SSH_CREDENTIAL_STATE)
@@ -266,7 +306,7 @@ export function CreateWindowDialog({
 
   const resetLocalForm = () => {
     setName('')
-    setWorkingDirectory('')
+    setWorkingDirectory(initialWorkingDirectory)
     updateLocalCommand('')
     setPathError('')
     setCreateError('')
@@ -291,7 +331,7 @@ export function CreateWindowDialog({
   }
 
   const resetDialog = () => {
-    setActiveTab((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled ? 'ssh' : 'local')
+    setActiveTab(resolveInitialTab)
     resetLocalForm()
     resetCanvasForm()
     resetSSHForm(editingSSHProfile ?? initialSSHProfile, isDuplicatingSSHProfile)
@@ -334,7 +374,7 @@ export function CreateWindowDialog({
     return () => {
       disposed = true
     }
-  }, [open])
+  }, [open, initialWorkingDirectory, resolveInitialTab])
 
   useEffect(() => {
     if (!open) {
@@ -348,8 +388,10 @@ export function CreateWindowDialog({
       return
     }
 
+    setActiveTab(resolveInitialTab)
+    resetLocalForm()
     resetSSHForm()
-  }, [editingSSHProfile, initialSSHProfile, isDuplicatingSSHProfile, isEditingSSHProfile, open, sshEnabled])
+  }, [editingSSHProfile, initialSSHProfile, isDuplicatingSSHProfile, isEditingSSHProfile, open, resolveInitialTab, sshEnabled])
 
   useEffect(() => {
     if (!open) {
@@ -359,6 +401,8 @@ export function CreateWindowDialog({
     const timer = setTimeout(() => {
       if (activeTab === 'ssh' && sshEnabled) {
         sshNameInputRef.current?.focus()
+      } else if (activeTab === 'canvas') {
+        canvasNameInputRef.current?.focus()
       } else {
         workingDirInputRef.current?.focus()
       }
@@ -478,6 +522,7 @@ export function CreateWindowDialog({
 
       if (response && response.success && response.data) {
         addWindow(response.data)
+        await onLocalWindowCreated?.(response.data)
         onOpenChange(false)
         resetDialog()
       } else {
@@ -502,7 +547,7 @@ export function CreateWindowDialog({
     const now = new Date().toISOString()
     const nextCanvasWorkspace: CanvasWorkspace = {
       id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `canvas-${Date.now()}`,
-      name: canvasName.trim() || t('canvas.defaultWorkspaceName', { count: windows.length + 1 }),
+      name: canvasName.trim() || t('canvas.defaultWorkspaceName', { count: canvasWorkspaceCount + 1 }),
       createdAt: now,
       updatedAt: now,
       workingDirectory: canvasWorkingDirectory.trim() || undefined,
@@ -701,6 +746,9 @@ export function CreateWindowDialog({
         : DEFAULT_SSH_CREDENTIAL_STATE
 
       onSSHProfileSaved?.(savedProfile, nextCredentialState)
+      if (!isEditingSSHProfile && sshSubmitMode === 'saveAndConnect') {
+        await onSSHProfileConnect?.(savedProfile)
+      }
       onOpenChange(false)
       resetDialog()
     } catch (error) {
@@ -850,26 +898,28 @@ export function CreateWindowDialog({
           onValueChange={(value) => setActiveTab(value as CreateWindowTab)}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <Tabs.List
-            className="inline-flex w-fit gap-1 border-b border-[rgb(var(--border))]"
-            aria-label={t('createWindow.modeTabsAriaLabel')}
-          >
-            {!isEditingSSHProfile && renderTabTrigger(
-              'local',
-              <TerminalTypeLogo variant="local" size="xs" />,
-              t('createWindow.mode.local'),
-            )}
-            {sshEnabled && renderTabTrigger(
-              'ssh',
-              <TerminalTypeLogo variant="ssh" size="xs" />,
-              t('createWindow.mode.ssh'),
-            )}
-            {!isEditingSSHProfile && renderTabTrigger(
-              'canvas',
-              <TerminalTypeLogo variant="group" size="xs" />,
-              t('createWindow.mode.canvas'),
-            )}
-          </Tabs.List>
+          {resolvedAvailableTabs.length > 1 && (
+            <Tabs.List
+              className="inline-flex w-fit gap-1 border-b border-[rgb(var(--border))]"
+              aria-label={t('createWindow.modeTabsAriaLabel')}
+            >
+              {resolvedAvailableTabs.includes('local') && renderTabTrigger(
+                'local',
+                <TerminalTypeLogo variant="local" size="xs" />,
+                t('createWindow.mode.local'),
+              )}
+              {resolvedAvailableTabs.includes('ssh') && renderTabTrigger(
+                'ssh',
+                <TerminalTypeLogo variant="ssh" size="xs" />,
+                t('createWindow.mode.ssh'),
+              )}
+              {resolvedAvailableTabs.includes('canvas') && renderTabTrigger(
+                'canvas',
+                <TerminalTypeLogo variant="group" size="xs" />,
+                t('createWindow.mode.canvas'),
+              )}
+            </Tabs.List>
+          )}
 
           <div className="mt-5 min-h-0 flex-1 overflow-y-auto">
             <Tabs.Content value="local" className="data-[state=inactive]:hidden">
@@ -1052,10 +1102,11 @@ export function CreateWindowDialog({
                         </label>
                         <input
                           id="canvas-name"
+                          ref={canvasNameInputRef}
                           type="text"
                           value={canvasName}
                           onChange={(event) => setCanvasName(event.target.value)}
-                          placeholder={t('canvas.defaultWorkspaceName', { count: windows.length + 1 })}
+                          placeholder={t('canvas.defaultWorkspaceName', { count: canvasWorkspaceCount + 1 })}
                           className={textFieldClassName}
                         />
                       </div>
@@ -1535,7 +1586,15 @@ export function CreateWindowDialog({
               : (
                 isSavingSSH
                   ? (isEditingSSHProfile ? t('common.saving') : t('createWindow.sshSaving'))
-                  : (isEditingSSHProfile ? t('common.save') : t('createWindow.sshSave'))
+                  : (
+                    isEditingSSHProfile
+                      ? t('common.save')
+                      : (
+                        sshSubmitMode === 'saveAndConnect'
+                          ? t('createWindow.sshSaveAndConnect')
+                          : t('createWindow.sshSave')
+                      )
+                  )
               )}
           </Button>
         </div>

@@ -6,6 +6,7 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { useWindowStore } from '../stores/windowStore';
 import { useI18n } from '../i18n';
+import { getPersistableWindows } from '../utils/sshWindowBindings';
 
 interface EditGroupPanelProps {
   group: WindowGroup;
@@ -31,6 +32,7 @@ export const EditGroupPanel: React.FC<EditGroupPanelProps> = ({ group, onClose, 
   const windows = useWindowStore((state) => state.windows);
   const removeGroup = useWindowStore((state) => state.removeGroup);
   const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
+  const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
 
   const [name, setName] = useState(group.name);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,10 +48,13 @@ export const EditGroupPanel: React.FC<EditGroupPanelProps> = ({ group, onClose, 
     }
   }, []);
 
-  // 从 group.layout 获取组内窗口列表
   const windowsInGroup = useMemo(() => {
     const windowIds = getAllWindowIds(group.layout);
     return windows.filter(w => windowIds.includes(w.id));
+  }, [group.layout, windows]);
+  const availableWindows = useMemo(() => {
+    const groupedIds = new Set(getAllWindowIds(group.layout));
+    return getPersistableWindows(windows).filter((window) => !window.archived && !groupedIds.has(window.id));
   }, [group.layout, windows]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,24 +93,24 @@ export const EditGroupPanel: React.FC<EditGroupPanelProps> = ({ group, onClose, 
   };
 
   const handleRemoveWindow = (windowId: string) => {
-    // 检查移除后是否只剩 1 个窗口
     const windowIds = getAllWindowIds(group.layout);
     if (windowIds.length <= 2) {
-      // 如果移除后只剩 1 个窗口，自动解散组
-      if (window.confirm('移除此窗口后组内只剩 1 个窗口，将自动解散组。确定继续吗？')) {
+      if (window.confirm(t('groupDialog.removeLastConfirm'))) {
         removeGroup(group.id);
         onClose();
       }
     } else {
-      // 从组中移除窗口
       removeWindowFromGroupLayout(group.id, windowId);
     }
   };
 
-  const handleAddWindow = () => {
-    // TODO: 实现添加窗口到组的逻辑
-    // 可以打开一个选择窗口的对话框
-    console.log('TODO: 实现添加窗口逻辑');
+  const handleAddWindow = (windowId: string) => {
+    const anchorWindowId = getAllWindowIds(useWindowStore.getState().getGroupById(group.id)?.layout ?? group.layout).at(-1);
+    if (!anchorWindowId) {
+      return;
+    }
+
+    addWindowToGroupLayout(group.id, anchorWindowId, windowId, 'horizontal');
   };
 
   return (
@@ -138,26 +143,17 @@ export const EditGroupPanel: React.FC<EditGroupPanelProps> = ({ group, onClose, 
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-text-primary">
-              组内窗口
+              {t('groupDialog.windowsInGroup')}
               <span className="text-xs text-text-secondary ml-2">
                 ({windowsInGroup.length} 个)
               </span>
             </label>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleAddWindow}
-              className="text-xs"
-            >
-              添加窗口
-            </Button>
           </div>
 
-          {/* 显示组内窗口列表 */}
           <div className="border border-border-subtle rounded p-3 bg-bg-app max-h-64 overflow-y-auto">
             {windowsInGroup.length === 0 ? (
               <p className="text-sm text-text-secondary text-center py-4">
-                组内暂无窗口
+                {t('groupDialog.emptyGroupWindows')}
               </p>
             ) : (
               <div className="space-y-2">
@@ -188,8 +184,41 @@ export const EditGroupPanel: React.FC<EditGroupPanelProps> = ({ group, onClose, 
             )}
           </div>
 
+          {availableWindows.length > 0 && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                {t('groupDialog.addWindowLabel')}
+              </label>
+              <div className="space-y-2">
+                {availableWindows.map((win) => (
+                  <div
+                    key={win.id}
+                    className="flex items-center justify-between p-2 rounded bg-bg-hover"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-text-primary truncate">
+                        {win.name}
+                      </div>
+                      <div className="text-xs text-text-secondary truncate font-mono">
+                        {win.layout.type === 'pane' ? win.layout.pane.cwd : '多窗格'}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => handleAddWindow(win.id)}
+                      className="text-xs"
+                    >
+                      {t('codePane.gitAdd')}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-text-secondary mt-2">
-            提示：组内至少需要 2 个窗口，移除后只剩 1 个窗口时将自动解散组
+            {t('groupDialog.minimumHint')}
           </p>
         </div>
 
