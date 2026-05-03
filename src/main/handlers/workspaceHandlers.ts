@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
+import { CanvasWorkspace } from '../../shared/types/canvas';
 import { Window } from '../../shared/types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
@@ -58,7 +59,7 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
   } = ctx;
 
   // 监听自动保存触发事件
-  ipcMain.on('trigger-auto-save', async (_event, windows: Window[], groups?: WindowGroup[]) => {
+  ipcMain.on('trigger-auto-save', async (_event, windows: Window[], groups?: WindowGroup[], canvasWorkspaces?: CanvasWorkspace[]) => {
     try {
       if (!autoSaveManager) {
         console.warn('[WorkspaceHandlers] AutoSaveManager not initialized');
@@ -90,6 +91,7 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       // 更新窗口列表和组列表
       currentWorkspace.windows = windows;
       currentWorkspace.groups = groups || [];
+      currentWorkspace.canvasWorkspaces = canvasWorkspaces || [];
 
       // 更新全局 currentWorkspace
       setCurrentWorkspace(currentWorkspace);
@@ -105,11 +107,24 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
     }
   });
 
-  ipcMain.handle('save-workspace', async (_event, windows: Window[]) => {
+  ipcMain.handle('save-workspace', async (
+    _event,
+    payload: {
+      windows: Window[];
+      groups?: WindowGroup[];
+      canvasWorkspaces?: CanvasWorkspace[];
+    },
+  ) => {
     try {
       if (!workspaceManager) throw new Error('WorkspaceManager not initialized');
       const workspace = await workspaceManager.loadWorkspace();
-      workspace.windows = windows;
+      workspace.windows = payload.windows;
+      if (payload.groups) {
+        workspace.groups = payload.groups;
+      }
+      if (payload.canvasWorkspaces) {
+        workspace.canvasWorkspaces = payload.canvasWorkspaces;
+      }
       await workspaceManager.saveWorkspace(workspace);
       setCurrentWorkspace(workspace);
       return successResponse();

@@ -73,4 +73,31 @@ describe('registerViewHandlers', () => {
     expect(statusPoller.clearActivePane).toHaveBeenCalledTimes(1);
     expect(response).toEqual({ success: true, data: undefined });
   });
+
+  it('forwards switch-to-canvas-view and clears active pane', async () => {
+    const viewSwitcher = {
+      switchToTerminalView: vi.fn(),
+      switchToCanvasView: vi.fn(),
+      switchToUnifiedView: vi.fn(),
+    };
+    const statusPoller = {
+      setActivePane: vi.fn(),
+      clearActivePane: vi.fn(),
+    };
+    const ctx = {
+      viewSwitcher,
+      statusPoller,
+    } as unknown as HandlerContext;
+
+    registerViewHandlers(ctx);
+    const switchToCanvasViewHandler = getRegisteredHandler('switch-to-canvas-view');
+
+    const response = await switchToCanvasViewHandler({}, {
+      canvasWorkspaceId: 'canvas-1',
+    }) as { success: boolean };
+
+    expect(viewSwitcher.switchToCanvasView).toHaveBeenCalledWith('canvas-1');
+    expect(statusPoller.clearActivePane).toHaveBeenCalledTimes(1);
+    expect(response).toEqual({ success: true, data: undefined });
+  });
 });

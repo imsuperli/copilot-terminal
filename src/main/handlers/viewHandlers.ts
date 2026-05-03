@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
-import { SetActivePanePayload, SwitchToTerminalViewPayload } from '../../shared/types/ipc';
+import { SetActivePanePayload, SwitchToCanvasViewPayload, SwitchToTerminalViewPayload } from '../../shared/types/ipc';
 
 export function registerViewHandlers(ctx: HandlerContext) {
   const { viewSwitcher, statusPoller } = ctx;
@@ -10,6 +10,17 @@ export function registerViewHandlers(ctx: HandlerContext) {
     try {
       if (!viewSwitcher) throw new Error('ViewSwitcher not initialized');
       viewSwitcher.switchToTerminalView(windowId);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('switch-to-canvas-view', (_event, { canvasWorkspaceId }: SwitchToCanvasViewPayload) => {
+    try {
+      if (!viewSwitcher) throw new Error('ViewSwitcher not initialized');
+      viewSwitcher.switchToCanvasView(canvasWorkspaceId);
+      statusPoller?.clearActivePane();
       return successResponse();
     } catch (error) {
       return errorResponse(error);

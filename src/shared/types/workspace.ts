@@ -3,6 +3,7 @@ import { QuickNavConfig } from './quick-nav';
 import { Window } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
+import { CanvasWorkspace } from './canvas';
 import type { ChatSettings } from './chat';
 import type { WorkspacePluginSettings } from './plugin';
 import type { AppearanceSettings } from './appearance';
@@ -98,6 +99,7 @@ export interface Workspace {
   version: string;
   windows: Window[];
   groups: WindowGroup[];
+  canvasWorkspaces: CanvasWorkspace[];
   settings: Settings;
   lastSavedAt: string;
 }

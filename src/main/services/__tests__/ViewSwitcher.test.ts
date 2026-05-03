@@ -53,6 +53,25 @@ describe('ViewSwitcher', () => {
     });
   });
 
+  describe('switchToCanvasView', () => {
+    it('应该切换到画布视图', () => {
+      viewSwitcher.switchToCanvasView('canvas-123');
+
+      expect(viewSwitcher.getCurrentView()).toBe('canvas');
+      expect(viewSwitcher.getActiveWindowId()).toBeNull();
+      expect(viewSwitcher.getActiveCanvasWorkspaceId()).toBe('canvas-123');
+    });
+
+    it('应该发送画布 view-changed 事件到渲染进程', () => {
+      viewSwitcher.switchToCanvasView('canvas-123');
+
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('view-changed', {
+        view: 'canvas',
+        canvasWorkspaceId: 'canvas-123',
+      });
+    });
+  });
+
   describe('switchToUnifiedView', () => {
     it('应该切换到统一视图', () => {
       viewSwitcher.switchToTerminalView('window-123');

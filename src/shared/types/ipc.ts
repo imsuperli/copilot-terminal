@@ -7,6 +7,11 @@ export interface SwitchToTerminalViewPayload {
   windowId: string;
 }
 
+/** switch-to-canvas-view 命令参数 */
+export interface SwitchToCanvasViewPayload {
+  canvasWorkspaceId: string;
+}
+
 /** set-active-pane 命令参数 */
 export interface SetActivePanePayload {
   windowId: string;
@@ -15,6 +20,7 @@ export interface SetActivePanePayload {
 
 /** view-changed 事件数据 */
 export interface ViewChangedPayload {
-  view: 'unified' | 'terminal';
+  view: 'unified' | 'terminal' | 'canvas';
   windowId?: string;
+  canvasWorkspaceId?: string;
 }

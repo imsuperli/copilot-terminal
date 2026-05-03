@@ -41,6 +41,7 @@ import {
   SSHSftpDirectoryListing,
   SSHSessionMetrics,
 } from './ssh';
+import { CanvasWorkspace } from './canvas';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
@@ -1853,16 +1854,25 @@ export interface ElectronAPI {
   closePane: (windowId: string, paneId: string) => Promise<IpcResponse<void>>;
 
   switchToTerminalView: (windowId: string) => Promise<IpcResponse<void>>;
+  switchToCanvasView: (canvasWorkspaceId: string) => Promise<IpcResponse<void>>;
   switchToUnifiedView: () => Promise<IpcResponse<void>>;
   setActivePane: (windowId: string, paneId: string | null) => Promise<IpcResponse<void>>;
   onViewChanged: (callback: ElectronEventHandler<ViewChangedPayload>) => void;
   offViewChanged: (callback: ElectronEventHandler<ViewChangedPayload>) => void;
 
-  saveWorkspace: (windows: Window[]) => Promise<IpcResponse<void>>;
+  saveWorkspace: (payload: {
+    windows: Window[];
+    groups?: WindowGroup[];
+    canvasWorkspaces?: CanvasWorkspace[];
+  }) => Promise<IpcResponse<void>>;
   loadWorkspace: () => Promise<IpcResponse<Workspace>>;
   onWorkspaceLoaded: (callback: ElectronEventHandler<Workspace>) => void;
   offWorkspaceLoaded: (callback: ElectronEventHandler<Workspace>) => void;
-  triggerAutoSave: (windows?: Window[], groups?: WindowGroup[]) => void;
+  triggerAutoSave: (
+    windows?: Window[],
+    groups?: WindowGroup[],
+    canvasWorkspaces?: CanvasWorkspace[],
+  ) => void;
 
   writeClipboardText: (text: string) => Promise<IpcResponse<void>>;
   readClipboardText: () => Promise<IpcResponse<string>>;

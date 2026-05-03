@@ -447,6 +447,8 @@ const electronAPI: ElectronAPI = {
   // View switching
   switchToTerminalView: (windowId: string) =>
     ipcRenderer.invoke('switch-to-terminal-view', { windowId }),
+  switchToCanvasView: (canvasWorkspaceId: string) =>
+    ipcRenderer.invoke('switch-to-canvas-view', { canvasWorkspaceId }),
   switchToUnifiedView: () =>
     ipcRenderer.invoke('switch-to-unified-view'),
   setActivePane: (windowId: string, paneId: string | null) =>
@@ -459,8 +461,8 @@ const electronAPI: ElectronAPI = {
   },
 
   // Workspace management
-  saveWorkspace: (windows: unknown[]) =>
-    ipcRenderer.invoke('save-workspace', windows),
+  saveWorkspace: (payload: unknown) =>
+    ipcRenderer.invoke('save-workspace', payload),
   loadWorkspace: () =>
     ipcRenderer.invoke('load-workspace'),
   onWorkspaceLoaded: (callback) => {
@@ -471,8 +473,8 @@ const electronAPI: ElectronAPI = {
   },
 
   // Auto-save
-  triggerAutoSave: (windows?: unknown[], groups?: unknown[]) =>
-    ipcRenderer.send('trigger-auto-save', windows, groups),
+  triggerAutoSave: (windows?: unknown[], groups?: unknown[], canvasWorkspaces?: unknown[]) =>
+    ipcRenderer.send('trigger-auto-save', windows, groups, canvasWorkspaces),
 
   // Clipboard
   writeClipboardText: (text: string) =>

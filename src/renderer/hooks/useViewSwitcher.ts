@@ -4,9 +4,11 @@ import { useI18n } from '../i18n';
 import { getAllPanes } from '../utils/layoutHelpers';
 
 export interface UseViewSwitcherReturn {
-  currentView: 'unified' | 'terminal';
+  currentView: 'unified' | 'terminal' | 'canvas';
   activeWindowId: string | null;
+  activeCanvasWorkspaceId: string | null;
   switchToTerminalView: (windowId: string) => Promise<void>;
+  switchToCanvasView: (canvasWorkspaceId: string) => Promise<void>;
   switchToUnifiedView: () => Promise<void>;
   error: string | null;
 }
@@ -16,10 +18,12 @@ export interface UseViewSwitcherReturn {
  * 管理应用内视图切换（统一视图 ↔ 终端视图）
  */
 export const useViewSwitcher = (): UseViewSwitcherReturn => {
-  const [currentView, setCurrentView] = useState<'unified' | 'terminal'>('unified');
+  const [currentView, setCurrentView] = useState<'unified' | 'terminal' | 'canvas'>('unified');
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
+  const [activeCanvasWorkspaceId, setActiveCanvasWorkspaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
+  const setActiveCanvasWorkspace = useWindowStore((state) => state.setActiveCanvasWorkspace);
   const { t } = useI18n();
 
   const syncActivePane = useCallback((windowId: string) => {
@@ -72,10 +76,28 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
     }
   }, [t]);
 
+  const switchToCanvasView = useCallback(async (canvasWorkspaceId: string) => {
+    try {
+      setError(null);
+      setActiveCanvasWorkspace(canvasWorkspaceId);
+      await window.electronAPI.switchToCanvasView(canvasWorkspaceId);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toTerminalFailed');
+      setError(errorMessage);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to switch to canvas view:', err);
+      }
+    }
+  }, [setActiveCanvasWorkspace, t]);
+
   useEffect(() => {
-    const handler = (_event: unknown, payload: { view: 'unified' | 'terminal'; windowId?: string }) => {
+    const handler = (
+      _event: unknown,
+      payload: { view: 'unified' | 'terminal' | 'canvas'; windowId?: string; canvasWorkspaceId?: string },
+    ) => {
       setCurrentView(payload.view);
       setActiveWindowId(payload.windowId || null);
+      setActiveCanvasWorkspaceId(payload.canvasWorkspaceId || null);
 
       // 更新 store 中的 activeWindowId 和 activeGroupId
       if (payload.view === 'terminal' && payload.windowId) {
@@ -83,11 +105,17 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
         if (!activeGroupId) {
           setActiveWindow(payload.windowId);
         }
+      } else if (payload.view === 'canvas' && payload.canvasWorkspaceId) {
+        setActiveWindow(null);
+        const { setActiveGroup } = useWindowStore.getState();
+        setActiveGroup(null);
+        setActiveCanvasWorkspace(payload.canvasWorkspaceId);
       } else if (payload.view === 'unified') {
         // 切换到统一视图时，清除 activeWindowId 和 activeGroupId
         const { setActiveGroup } = useWindowStore.getState();
         setActiveWindow(null);
         setActiveGroup(null);
+        setActiveCanvasWorkspace(null);
       }
     };
 
@@ -96,7 +124,7 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
     return () => {
       window.electronAPI.offViewChanged(handler);
     };
-  }, [setActiveWindow]);
+  }, [setActiveCanvasWorkspace, setActiveWindow]);
 
   // 错误自动清除（3秒后）
   useEffect(() => {
@@ -111,7 +139,9 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
   return {
     currentView,
     activeWindowId,
+    activeCanvasWorkspaceId,
     switchToTerminalView,
+    switchToCanvasView,
     switchToUnifiedView,
     error,
   };

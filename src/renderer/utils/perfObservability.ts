@@ -4,7 +4,7 @@ const pendingTerminalSwitchStarts = new Map<string, number>();
 let lastLoggedMountedObservationKey: string | null = null;
 
 export interface MountedTerminalObservationSnapshot {
-  currentView: 'unified' | 'terminal';
+  currentView: 'unified' | 'terminal' | 'canvas';
   activeWindowId: string | null;
   activeGroupId: string | null;
   mountedWindowIds: string[];
@@ -57,7 +57,7 @@ function shouldLogMountedObservation(): boolean {
 }
 
 export function createMountedTerminalObservationSnapshot(input: {
-  currentView: 'unified' | 'terminal';
+  currentView: 'unified' | 'terminal' | 'canvas';
   activeWindowId: string | null;
   activeGroupId: string | null;
   mountedWindowIds: string[];

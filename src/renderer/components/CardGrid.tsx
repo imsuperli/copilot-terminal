@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import * as ScrollArea from '@radix-ui/react-scroll-area';
 import { Search, Folder, Archive } from 'lucide-react';
+import { CanvasWorkspace } from '../../shared/types/canvas';
 import { useWindowStore } from '../stores/windowStore';
 import { sortWindows } from '../utils/sortWindows';
 import { getAllPanes } from '../utils/layoutHelpers';
@@ -14,6 +15,7 @@ import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
 import { DeleteWindowDialog } from './DeleteWindowDialog';
 import { SSHProfileCard } from './SSHProfileCard';
 import { DeleteSSHCardDialog } from './DeleteSSHCardDialog';
+import { CanvasWorkspaceCard } from './CanvasWorkspaceCard';
 import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
@@ -41,12 +43,17 @@ import { destroySSHWindowFamilyResources, destroyWindowResourcesAndRemoveRecord,
 type CardItem =
   | { type: 'window'; data: Window }
   | { type: 'group'; data: WindowGroup }
-  | { type: 'sshProfile'; data: SSHProfile };
+  | { type: 'sshProfile'; data: SSHProfile }
+  | { type: 'canvasWorkspace'; data: CanvasWorkspace };
 
 const BUILTIN_TABS = new Set(['all', 'active', 'archived', 'local', 'ssh']);
 
 function sortGroupsByCreatedAt(groups: WindowGroup[]): WindowGroup[] {
   return [...groups].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function sortCanvasWorkspacesByUpdatedAt(canvasWorkspaces: CanvasWorkspace[]): CanvasWorkspace[] {
+  return [...canvasWorkspaces].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 function getWindowKindFromPanes(window: Window, panes: Pane[]): NonNullable<Window['kind']> {
@@ -86,6 +93,7 @@ function isBuiltinTab(tab: string | undefined): boolean {
 
 interface CardGridProps {
   onEnterTerminal?: (window: Window) => void;
+  onEnterCanvasWorkspace?: (canvasWorkspaceId: string) => void;
   onEnterGroup?: (group: WindowGroup) => void; // TODO: 等待任务 #5 完成后实现组视图
   onCreateWindow?: () => void;
   sshEnabled?: boolean;
@@ -112,6 +120,7 @@ interface CardGridProps {
  */
 export const CardGrid = React.memo<CardGridProps>(({
   onEnterTerminal,
+  onEnterCanvasWorkspace,
   onEnterGroup,
   onCreateWindow,
   sshEnabled = false,
@@ -135,6 +144,7 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   // 组相关的 store 方法
   const groups = useWindowStore((state) => state.groups);
+  const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
   const removeGroup = useWindowStore((state) => state.removeGroup);
   const updateGroup = useWindowStore((state) => state.updateGroup);
   const archiveGroup = useWindowStore((state) => state.archiveGroup);
@@ -281,6 +291,16 @@ export const CardGrid = React.memo<CardGridProps>(({
 
     return !sshEnabled || !sshProfileIds.has(profileId);
   }, [sshEnabled, sshProfileIds]);
+  const activeCanvasWorkspaceItems = useMemo<CardItem[]>(
+    () => sortCanvasWorkspacesByUpdatedAt(canvasWorkspaces.filter((canvasWorkspace) => !canvasWorkspace.archived))
+      .map((canvasWorkspace) => ({ type: 'canvasWorkspace', data: canvasWorkspace })),
+    [canvasWorkspaces],
+  );
+  const archivedCanvasWorkspaceItems = useMemo<CardItem[]>(
+    () => sortCanvasWorkspacesByUpdatedAt(canvasWorkspaces.filter((canvasWorkspace) => canvasWorkspace.archived))
+      .map((canvasWorkspace) => ({ type: 'canvasWorkspace', data: canvasWorkspace })),
+    [canvasWorkspaces],
+  );
 
   // 根据 currentTab 过滤和排序卡片项
   const cardItems = useMemo<CardItem[]>(() => {
@@ -388,9 +408,11 @@ export const CardGrid = React.memo<CardGridProps>(({
       const archivedWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => w.archived));
 
       return [
+        ...activeCanvasWorkspaceItems,
         ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
         ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
         ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
+        ...archivedCanvasWorkspaceItems,
         ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
         ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
       ];
@@ -402,6 +424,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       const archivedWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => w.archived));
 
       return [
+        ...archivedCanvasWorkspaceItems,
         ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
         ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
       ];
@@ -412,11 +435,12 @@ export const CardGrid = React.memo<CardGridProps>(({
     const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
 
     return [
+      ...activeCanvasWorkspaceItems,
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [activeCustomCategory, currentTab, groupHasKind, groupHasStatus, groupedWindowIds, groups, isCustomCategoryTab, persistableWindows, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, statusSetByWindowId, windowKindById]);
+  }, [activeCanvasWorkspaceItems, activeCustomCategory, archivedCanvasWorkspaceItems, currentTab, groupHasKind, groupHasStatus, groupedWindowIds, groups, isCustomCategoryTab, persistableWindows, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, statusSetByWindowId, windowKindById]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
@@ -427,13 +451,15 @@ export const CardGrid = React.memo<CardGridProps>(({
     const archivedWindows = persistableWindows.filter(w => w.archived && !groupedWindowIds.has(w.id) && shouldRenderWindowCard(w));
 
     return [
+      ...activeCanvasWorkspaceItems,
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
+      ...archivedCanvasWorkspaceItems,
       ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
     ];
-  }, [groupedWindowIds, groups, persistableWindows, shouldRenderWindowCard, sshEnabled, sortedSSHProfiles]);
+  }, [activeCanvasWorkspaceItems, archivedCanvasWorkspaceItems, groupedWindowIds, groups, persistableWindows, shouldRenderWindowCard, sshEnabled, sortedSSHProfiles]);
 
   // 根据搜索关键词过滤卡片项（窗口和组）
   const filteredCardItems = useMemo(() => {
@@ -461,6 +487,13 @@ export const CardGrid = React.memo<CardGridProps>(({
         return windowsInGroup.some(win => {
           return windowSearchTextById.get(win.id)?.includes(query) ?? false;
         });
+      }
+
+      if (item.type === 'canvasWorkspace') {
+        return (
+          item.data.name.toLowerCase().includes(query)
+          || item.data.blocks.some((block) => (block.label ?? '').toLowerCase().includes(query))
+        );
       }
 
       const profile = item.data;
@@ -934,72 +967,82 @@ export const CardGrid = React.memo<CardGridProps>(({
                     </DropZone>
                   </DraggableWindowCard>
                 );
-              } else {
-                if (item.type === 'group') {
-                  const group = item.data;
-                  return (
-                    <DraggableGroupCard
-                      key={`group-${group.id}`}
-                      groupId={group.id}
-                      groupName={group.name}
-                    >
-                      <GroupCard
-                        group={group}
-                        windows={getGroupWindows(group)}
-                        onClick={handleGroupClick}
-                        onDelete={handleDeleteGroup}
-                        onStartAll={handleStartAllWindows}
-                        onDestroyAllSessions={handleDestroyAllWindowSessions}
-                        onArchive={handleArchiveGroup}
-                        onUnarchive={handleUnarchiveGroup}
-                        onEdit={handleEditGroup}
-                      />
-                    </DraggableGroupCard>
-                  );
-                }
+              }
 
-                const profile = item.data;
-                const sshWindow = standaloneSSHWindowsByProfile[profile.id] ?? null;
-                const sshCard = (
-                  <SSHProfileCard
-                    key={`ssh-profile-${profile.id}`}
-                    profile={profile}
-                    window={sshWindow}
-                    credentialState={sshCredentialStates[profile.id]}
-                    isConnecting={connectingSSHProfileId === profile.id}
-                    onConnect={handleConnectSSHProfile}
-                    onOpenWindow={() => handleConnectSSHProfile(profile)}
-                    onDestroyWindowSession={handleDestroyWindowSession}
-                    onStartWindow={() => handleConnectSSHProfile(profile)}
-                    onArchiveWindow={handleArchiveWindow}
-                    onUnarchiveWindow={handleUnarchiveWindow}
-                    onEdit={handleEditSSHProfile}
-                    onDuplicate={handleDuplicateSSHProfile}
-                    onDelete={handleDeleteSSHProfile}
+              if (item.type === 'group') {
+                const group = item.data;
+                return (
+                  <DraggableGroupCard
+                    key={`group-${group.id}`}
+                    groupId={group.id}
+                    groupName={group.name}
+                  >
+                    <GroupCard
+                      group={group}
+                      windows={getGroupWindows(group)}
+                      onClick={handleGroupClick}
+                      onDelete={handleDeleteGroup}
+                      onStartAll={handleStartAllWindows}
+                      onDestroyAllSessions={handleDestroyAllWindowSessions}
+                      onArchive={handleArchiveGroup}
+                      onUnarchive={handleUnarchiveGroup}
+                      onEdit={handleEditGroup}
+                    />
+                  </DraggableGroupCard>
+                );
+              }
+
+              if (item.type === 'canvasWorkspace') {
+                return (
+                  <CanvasWorkspaceCard
+                    key={`canvas-workspace-${item.data.id}`}
+                    canvasWorkspace={item.data}
+                    onClick={onEnterCanvasWorkspace}
                   />
                 );
-
-                // 有关联窗口时支持拖拽组合
-                if (sshWindow) {
-                  return (
-                    <DraggableWindowCard
-                      key={`ssh-profile-${profile.id}`}
-                      windowId={sshWindow.id}
-                      windowName={sshWindow.name}
-                      source="cardGrid"
-                    >
-                      <DropZone
-                        targetWindowId={sshWindow.id}
-                        onDrop={handleWindowCardDrop}
-                      >
-                        {sshCard}
-                      </DropZone>
-                    </DraggableWindowCard>
-                  );
-                }
-
-                return sshCard;
               }
+
+              const profile = item.data;
+              const sshWindow = standaloneSSHWindowsByProfile[profile.id] ?? null;
+              const sshCard = (
+                <SSHProfileCard
+                  key={`ssh-profile-${profile.id}`}
+                  profile={profile}
+                  window={sshWindow}
+                  credentialState={sshCredentialStates[profile.id]}
+                  isConnecting={connectingSSHProfileId === profile.id}
+                  onConnect={handleConnectSSHProfile}
+                  onOpenWindow={() => handleConnectSSHProfile(profile)}
+                  onDestroyWindowSession={handleDestroyWindowSession}
+                  onStartWindow={() => handleConnectSSHProfile(profile)}
+                  onArchiveWindow={handleArchiveWindow}
+                  onUnarchiveWindow={handleUnarchiveWindow}
+                  onEdit={handleEditSSHProfile}
+                  onDuplicate={handleDuplicateSSHProfile}
+                  onDelete={handleDeleteSSHProfile}
+                />
+              );
+
+              // 有关联窗口时支持拖拽组合
+              if (sshWindow) {
+                return (
+                  <DraggableWindowCard
+                    key={`ssh-profile-${profile.id}`}
+                    windowId={sshWindow.id}
+                    windowName={sshWindow.name}
+                    source="cardGrid"
+                  >
+                    <DropZone
+                      targetWindowId={sshWindow.id}
+                      onDrop={handleWindowCardDrop}
+                    >
+                      {sshCard}
+                    </DropZone>
+                  </DraggableWindowCard>
+                );
+              }
+
+              return sshCard;
             })}
             {!searchQuery && <NewWindowCard onClick={onCreateWindow || (() => {})} />}
           </div>

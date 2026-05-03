@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { CanvasWorkspace } from '../../shared/types/canvas';
 import { Window, WindowStatus, Pane, LayoutNode, CodePaneState } from '../types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { CustomCategory } from '../../shared/types/custom-category';
@@ -47,6 +48,7 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
 
 type PendingAutoSavePayload = {
   groups: WindowGroup[];
+  canvasWorkspaces: CanvasWorkspace[];
   persistableWindows: Window[];
   signature: string;
 };
@@ -216,8 +218,16 @@ function getAutoSaveGroupSignature(group: WindowGroup): string {
   return signature;
 }
 
-function getAutoSaveSignature(persistableWindows: Window[], groups: WindowGroup[]): string {
-  return `windows:[${persistableWindows.map((window) => getAutoSaveWindowSignature(window)).join(',')}];groups:[${groups.map((group) => getAutoSaveGroupSignature(group)).join(',')}]`;
+function getCanvasWorkspaceSignature(canvasWorkspace: CanvasWorkspace): string {
+  return JSON.stringify(canvasWorkspace);
+}
+
+function getAutoSaveSignature(
+  persistableWindows: Window[],
+  groups: WindowGroup[],
+  canvasWorkspaces: CanvasWorkspace[],
+): string {
+  return `windows:[${persistableWindows.map((window) => getAutoSaveWindowSignature(window)).join(',')}];groups:[${groups.map((group) => getAutoSaveGroupSignature(group)).join(',')}];canvas:[${canvasWorkspaces.map((canvasWorkspace) => getCanvasWorkspaceSignature(canvasWorkspace)).join(',')}]`;
 }
 
 function didPersistedWindowChange(previousWindow: Window | undefined, nextWindow: Window): boolean {
@@ -258,7 +268,7 @@ function flushPendingAutoSave(): void {
     return;
   }
 
-  window.electronAPI.triggerAutoSave(payload.persistableWindows, payload.groups);
+  window.electronAPI.triggerAutoSave(payload.persistableWindows, payload.groups, payload.canvasWorkspaces);
   state.lastSentSignature = payload.signature;
 }
 
@@ -283,7 +293,11 @@ function ensureAutoSaveLifecycleHooks(): void {
  * @param windows 当前窗口列表
  * @param groups 当前窗口组列表
  */
-function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
+function triggerAutoSave(
+  windows: Window[],
+  groups?: WindowGroup[],
+  canvasWorkspaces?: CanvasWorkspace[],
+): void {
   if (!autoSaveEnabled || !window.electronAPI) {
     return;
   }
@@ -291,11 +305,13 @@ function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
   ensureAutoSaveLifecycleHooks();
   const state = getWindowStoreAutoSaveState();
   const resolvedGroups = groups ?? [];
+  const resolvedCanvasWorkspaces = canvasWorkspaces ?? [];
   const persistableWindows = getPersistableWindows(windows);
   state.pendingPayload = {
     groups: resolvedGroups,
+    canvasWorkspaces: resolvedCanvasWorkspaces,
     persistableWindows,
-    signature: getAutoSaveSignature(persistableWindows, resolvedGroups),
+    signature: getAutoSaveSignature(persistableWindows, resolvedGroups, resolvedCanvasWorkspaces),
   };
 
   if (state.timer) {
@@ -492,6 +508,8 @@ interface WindowStore {
   // 状态
   windows: Window[];
   activeWindowId: string | null;
+  canvasWorkspaces: CanvasWorkspace[];
+  activeCanvasWorkspaceId: string | null;
   mruList: string[]; // 最近使用列表（窗口 ID）
   sidebarExpanded: boolean; // 侧边栏是否展开
   sidebarWidth: number; // 侧边栏宽度
@@ -522,6 +540,11 @@ interface WindowStore {
   unarchiveWindow: (id: string) => void;
   setActiveWindow: (id: string | null) => void;
   clearWindows: () => void; // 清空所有窗口（用于工作区恢复）
+  addCanvasWorkspace: (canvasWorkspace: CanvasWorkspace, options?: { persist?: boolean }) => void;
+  updateCanvasWorkspace: (id: string, updates: Partial<CanvasWorkspace>) => void;
+  removeCanvasWorkspace: (id: string) => void;
+  setActiveCanvasWorkspace: (id: string | null) => void;
+  getCanvasWorkspaceById: (id: string) => CanvasWorkspace | undefined;
 
   // Pane 相关
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
@@ -625,6 +648,8 @@ export const useWindowStore = create<WindowStore>()(
     // 初始状态
     windows: [],
     activeWindowId: null,
+    canvasWorkspaces: [],
+    activeCanvasWorkspaceId: null,
     mruList: [],
     sidebarExpanded: false, // 默认折叠
     sidebarWidth: 200, // 默认宽度
@@ -656,8 +681,8 @@ export const useWindowStore = create<WindowStore>()(
         state.mruList = [window.id, ...state.mruList.filter(id => id !== window.id)];
       });
       if (shouldPersistChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -679,8 +704,8 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       if (shouldPersistChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -739,8 +764,8 @@ export const useWindowStore = create<WindowStore>()(
       removePaneNotesForWindow(removedWindow);
 
       if (didChange && shouldPersistChange) {
-        const { windows, groups, customCategories } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces, customCategories } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
         updateSettingsCategories(customCategories).catch(error => {
           console.error('[WindowStore] Failed to save categories after window removal:', error);
         });
@@ -778,8 +803,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -828,8 +853,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -871,8 +896,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange && !shouldSkipPersistence) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -958,8 +983,8 @@ export const useWindowStore = create<WindowStore>()(
 
       if (didChange) {
         if (shouldPersistChange) {
-          const { windows, groups } = get();
-          triggerAutoSave(windows, groups);
+          const { windows, groups, canvasWorkspaces } = get();
+          triggerAutoSave(windows, groups, canvasWorkspaces);
         }
       }
     },
@@ -981,8 +1006,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1001,8 +1026,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1029,8 +1054,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1062,8 +1087,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1087,8 +1112,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1158,8 +1183,8 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       if (didArchive) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1180,8 +1205,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 
@@ -1192,6 +1217,7 @@ export const useWindowStore = create<WindowStore>()(
         // 激活单窗口时清空 activeGroupId
         if (id) {
           state.activeGroupId = null;
+          state.activeCanvasWorkspaceId = null;
           const window = state.windows.find(w => w.id === id);
           if (window) {
             window.lastActiveAt = new Date().toISOString();
@@ -1208,6 +1234,8 @@ export const useWindowStore = create<WindowStore>()(
       set((state) => {
         state.windows = [];
         state.activeWindowId = null;
+        state.canvasWorkspaces = [];
+        state.activeCanvasWorkspaceId = null;
         state.mruList = [];
         state.groups = [];
         state.activeGroupId = null;
@@ -1216,6 +1244,79 @@ export const useWindowStore = create<WindowStore>()(
       existingWindows.forEach((window) => removePaneNotesForWindow(window));
       // 不触发自动保存，因为这是恢复过程的一部分
     },
+
+    addCanvasWorkspace: (canvasWorkspace, options) => {
+      const shouldPersist = options?.persist ?? true;
+      set((state) => {
+        const existingIndex = state.canvasWorkspaces.findIndex((item) => item.id === canvasWorkspace.id);
+        if (existingIndex >= 0) {
+          state.canvasWorkspaces[existingIndex] = canvasWorkspace;
+        } else {
+          state.canvasWorkspaces.push(canvasWorkspace);
+        }
+      });
+
+      if (shouldPersist) {
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
+      }
+    },
+
+    updateCanvasWorkspace: (id, updates) => {
+      let didChange = false;
+      set((state) => {
+        const canvasWorkspace = state.canvasWorkspaces.find((item) => item.id === id);
+        if (!canvasWorkspace) {
+          return;
+        }
+
+        const nextWorkspace = {
+          ...canvasWorkspace,
+          ...updates,
+          updatedAt: updates.updatedAt ?? new Date().toISOString(),
+        };
+        if (JSON.stringify(canvasWorkspace) === JSON.stringify(nextWorkspace)) {
+          return;
+        }
+
+        didChange = true;
+        Object.assign(canvasWorkspace, nextWorkspace);
+      });
+
+      if (didChange) {
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
+      }
+    },
+
+    removeCanvasWorkspace: (id) => {
+      let didChange = false;
+      set((state) => {
+        const previousLength = state.canvasWorkspaces.length;
+        state.canvasWorkspaces = state.canvasWorkspaces.filter((item) => item.id !== id);
+        didChange = previousLength !== state.canvasWorkspaces.length;
+        if (state.activeCanvasWorkspaceId === id) {
+          state.activeCanvasWorkspaceId = null;
+        }
+      });
+
+      if (didChange) {
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
+      }
+    },
+
+    setActiveCanvasWorkspace: (id) => {
+      set((state) => {
+        state.activeCanvasWorkspaceId = id;
+        if (id) {
+          state.activeWindowId = null;
+          state.activeGroupId = null;
+        }
+      });
+    },
+
+    getCanvasWorkspaceById: (id) => get().canvasWorkspaces.find((item) => item.id === id),
 
     // 更新 MRU 列表
     updateMRU: (windowId) => {
@@ -1317,7 +1418,7 @@ export const useWindowStore = create<WindowStore>()(
         state.groups.push(group);
         state.groupMruList = [group.id, ...state.groupMruList.filter(id => id !== group.id)];
       });
-      triggerAutoSave(get().windows, get().groups);
+      triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
     },
 
     // 删除组（不删除组内窗口）
@@ -1346,8 +1447,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups, customCategories } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces, customCategories } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
         updateSettingsCategories(customCategories).catch(error => {
           console.error('[WindowStore] Failed to save categories after group removal:', error);
         });
@@ -1377,7 +1478,7 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows, get().groups);
+        triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
       }
     },
 
@@ -1411,7 +1512,7 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows, get().groups);
+        triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
       }
     },
 
@@ -1442,7 +1543,7 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows, get().groups);
+        triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
       }
     },
 
@@ -1510,7 +1611,7 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows, get().groups);
+        triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
       }
     },
 
@@ -1545,7 +1646,7 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows, get().groups);
+        triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
       }
     },
 
@@ -1574,7 +1675,7 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows, get().groups);
+        triggerAutoSave(get().windows, get().groups, get().canvasWorkspaces);
       }
     },
 
@@ -1595,8 +1696,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 

@@ -6,6 +6,7 @@ import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { useWindowStore } from '../stores/windowStore'
 import { useI18n } from '../i18n'
+import { CanvasWorkspace } from '../../shared/types/canvas'
 import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh'
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo'
 import {
@@ -38,7 +39,7 @@ interface ShellProgramOption {
   isDefault: boolean
 }
 
-type CreateWindowTab = 'local' | 'ssh'
+type CreateWindowTab = 'local' | 'ssh' | 'canvas'
 type SSHRoutingMode = 'direct' | 'jumpHost' | 'proxyCommand' | 'socks' | 'http'
 type SSHSettingsTab = 'basic' | 'auth' | 'routing' | 'session'
 
@@ -164,6 +165,8 @@ export function CreateWindowDialog({
   const [name, setName] = useState('')
   const [workingDirectory, setWorkingDirectory] = useState('')
   const [command, setCommand] = useState('')
+  const [canvasName, setCanvasName] = useState('')
+  const [canvasWorkingDirectory, setCanvasWorkingDirectory] = useState('')
   const [globalDefaultShell, setGlobalDefaultShell] = useState('')
   const [availableShells, setAvailableShells] = useState<ShellProgramOption[]>([])
   const [pathError, setPathError] = useState('')
@@ -191,6 +194,7 @@ export function CreateWindowDialog({
   const sshNameInputRef = useRef<HTMLInputElement>(null)
   const latestLocalCommandRef = useRef('')
   const addWindow = useWindowStore((state) => state.addWindow)
+  const addCanvasWorkspace = useWindowStore((state) => state.addCanvasWorkspace)
   const windows = useWindowStore((state) => state.windows)
 
   const currentPrivateKeys = useMemo(
@@ -269,6 +273,11 @@ export function CreateWindowDialog({
     setIsValidating(false)
   }
 
+  const resetCanvasForm = () => {
+    setCanvasName('')
+    setCanvasWorkingDirectory('')
+  }
+
   const resetSSHForm = (profile?: SSHProfile | null, duplicate = false) => {
     setSSHForm(createInitialSSHForm(profile, duplicate))
     setSSHPassword('')
@@ -284,6 +293,7 @@ export function CreateWindowDialog({
   const resetDialog = () => {
     setActiveTab((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled ? 'ssh' : 'local')
     resetLocalForm()
+    resetCanvasForm()
     resetSSHForm(editingSSHProfile ?? initialSSHProfile, isDuplicatingSSHProfile)
   }
 
@@ -488,6 +498,28 @@ export function CreateWindowDialog({
     }
   }
 
+  const handleCanvasSubmit = async () => {
+    const now = new Date().toISOString()
+    const nextCanvasWorkspace: CanvasWorkspace = {
+      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `canvas-${Date.now()}`,
+      name: canvasName.trim() || t('canvas.defaultWorkspaceName', { count: windows.length + 1 }),
+      createdAt: now,
+      updatedAt: now,
+      workingDirectory: canvasWorkingDirectory.trim() || undefined,
+      blocks: [],
+      viewport: {
+        tx: 0,
+        ty: 0,
+        zoom: 1,
+      },
+      nextZIndex: 1,
+    }
+
+    addCanvasWorkspace(nextCanvasWorkspace)
+    onOpenChange(false)
+    resetDialog()
+  }
+
   const handleSSHSubmit = async () => {
     const host = sshForm.host.trim()
     const user = sshForm.user.trim()
@@ -686,6 +718,11 @@ export function CreateWindowDialog({
       return
     }
 
+    if (activeTab === 'canvas') {
+      await handleCanvasSubmit()
+      return
+    }
+
     await handleLocalSubmit()
   }
 
@@ -826,6 +863,11 @@ export function CreateWindowDialog({
               'ssh',
               <TerminalTypeLogo variant="ssh" size="xs" />,
               t('createWindow.mode.ssh'),
+            )}
+            {!isEditingSSHProfile && renderTabTrigger(
+              'canvas',
+              <TerminalTypeLogo variant="group" size="xs" />,
+              t('createWindow.mode.canvas'),
             )}
           </Tabs.List>
 
@@ -983,6 +1025,56 @@ export function CreateWindowDialog({
                         <p className="text-sm text-status-error">{createError}</p>
                       </div>
                     )}
+                </div>
+              </div>
+            </Tabs.Content>
+
+            <Tabs.Content value="canvas" className="data-[state=inactive]:hidden">
+              <div className="mx-auto max-w-[700px]">
+                <div className="space-y-5">
+                  <section className={sectionShellClassName}>
+                    <div className="mb-5 flex items-center gap-3">
+                      <TerminalTypeLogo variant="group" size="lg" />
+                      <div>
+                        <h3 className="text-[15px] font-semibold text-[rgb(var(--foreground))]">
+                          {t('createWindow.canvasSectionTitle')}
+                        </h3>
+                        <p className="mt-1 text-sm text-[rgb(var(--muted-foreground))]">
+                          {t('createWindow.canvasSectionDescription')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="canvas-name" className={fieldLabelClassName}>
+                          {t('canvas.workspaceName')}
+                        </label>
+                        <input
+                          id="canvas-name"
+                          type="text"
+                          value={canvasName}
+                          onChange={(event) => setCanvasName(event.target.value)}
+                          placeholder={t('canvas.defaultWorkspaceName', { count: windows.length + 1 })}
+                          className={textFieldClassName}
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="canvas-working-directory" className={fieldLabelClassName}>
+                          {t('canvas.workspaceDirectory')}
+                        </label>
+                        <input
+                          id="canvas-working-directory"
+                          type="text"
+                          value={canvasWorkingDirectory}
+                          onChange={(event) => setCanvasWorkingDirectory(event.target.value)}
+                          placeholder={t('createWindow.workingDirectoryPlaceholder')}
+                          className={textFieldClassName}
+                        />
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
             </Tabs.Content>
@@ -1426,14 +1518,20 @@ export function CreateWindowDialog({
           <Button
             type="submit"
             variant="primary"
-            disabled={activeTab === 'local'
-              ? (!workingDirectory || !!pathError || isValidating || isCreating)
-              : isSavingSSH}
-            aria-busy={activeTab === 'local' ? isCreating : isSavingSSH}
+            disabled={
+              activeTab === 'local'
+                ? (!workingDirectory || !!pathError || isValidating || isCreating)
+                : activeTab === 'canvas'
+                  ? false
+                  : isSavingSSH
+            }
+            aria-busy={activeTab === 'local' ? isCreating : activeTab === 'canvas' ? false : isSavingSSH}
             className={compactPrimaryButtonToneClassName}
           >
             {activeTab === 'local'
               ? (isCreating ? t('common.creating') : t('common.create'))
+              : activeTab === 'canvas'
+                ? t('common.create')
               : (
                 isSavingSSH
                   ? (isEditingSSHProfile ? t('common.saving') : t('createWindow.sshSaving'))

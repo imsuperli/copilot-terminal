@@ -5,6 +5,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { EmptyState } from './components/EmptyState';
 import { CardGrid } from './components/CardGrid';
+import { CanvasWorkspaceView } from './components/CanvasWorkspaceView';
 import { CreateGroupDialog } from './components/CreateGroupDialog';
 import { CreateWindowDialog } from './components/CreateWindowDialog';
 import { TerminalView } from './components/TerminalView';
@@ -277,8 +278,10 @@ function AppContent() {
   const updateWindowRuntime = useWindowStore((state) => state.updateWindowRuntime);
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
+  const activeCanvasWorkspaceId = useWindowStore((state) => state.activeCanvasWorkspaceId);
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
   const groups = useWindowStore((state) => state.groups);
+  const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const mountedWindowLifecycleRecordKeys = useWindowStore(useShallow(selectMountedWindowLifecycleRecordKeys));
   const mountedWindowRecordKeys = useMemo(
@@ -312,7 +315,9 @@ function AppContent() {
       : ''
   ));
   const hasPersistedEntries = useWindowStore((state) => (
-    state.windows.some((window) => !window.archived) || state.groups.some((group) => !group.archived)
+    state.windows.some((window) => !window.archived)
+      || state.groups.some((group) => !group.archived)
+      || state.canvasWorkspaces.some((canvasWorkspace) => !canvasWorkspace.archived)
   ));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
@@ -665,7 +670,9 @@ function AppContent() {
   const {
     currentView,
     switchToTerminalView,
+    switchToCanvasView,
     switchToUnifiedView,
+    activeCanvasWorkspaceId: currentActiveCanvasWorkspaceId,
     error
   } = useViewSwitcher();
 
@@ -1051,6 +1058,10 @@ function AppContent() {
     switchToWindow(win.id);
   }, [switchToWindow]);
 
+  const handleEnterCanvasWorkspace = useCallback(async (canvasWorkspaceId: string) => {
+    await switchToCanvasView(canvasWorkspaceId);
+  }, [switchToCanvasView]);
+
   const handleWindowSwitch = useCallback((windowId: string) => {
     switchToWindow(windowId);
   }, [switchToWindow]);
@@ -1195,14 +1206,17 @@ function AppContent() {
     if (activeGroupId) {
       return activeGroupName;
     }
+    if (currentView === 'canvas') {
+      return canvasWorkspaces.find((canvasWorkspace) => canvasWorkspace.id === currentActiveCanvasWorkspaceId)?.name ?? '';
+    }
     if (activeWindowId) {
       return activeWindowTitle;
     }
     return '';
-  }, [currentView, activeGroupId, activeGroupName, activeWindowId, activeWindowTitle]);
+  }, [activeGroupId, activeGroupName, activeWindowId, activeWindowTitle, canvasWorkspaces, currentActiveCanvasWorkspaceId, currentView]);
 
   const titleBarGitBranch = useMemo(() => {
-    if (currentView === 'unified' || activeGroupId) return undefined;
+    if (currentView === 'unified' || currentView === 'canvas' || activeGroupId) return undefined;
     return activeWindowGitBranch;
   }, [currentView, activeGroupId, activeWindowGitBranch]);
 
@@ -1253,6 +1267,7 @@ function AppContent() {
           ) : (
             <CardGrid
               onEnterTerminal={handleEnterTerminal}
+              onEnterCanvasWorkspace={handleEnterCanvasWorkspace}
               onEnterGroup={handleEnterGroup}
               onCreateWindow={handleCreateWindow}
               sshEnabled={sshEnabled}
@@ -1284,6 +1299,28 @@ function AppContent() {
           onSSHProfileSaved={handleSSHProfileSaved}
         />
       ))}
+
+      {currentView === 'canvas' && currentActiveCanvasWorkspaceId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: window.electronAPI?.platform === 'darwin' ? 36 : 32,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+          }}
+        >
+          {canvasWorkspaces
+            .filter((canvasWorkspace) => canvasWorkspace.id === currentActiveCanvasWorkspaceId)
+            .map((canvasWorkspace) => (
+              <CanvasWorkspaceView
+                key={canvasWorkspace.id}
+                canvasWorkspace={canvasWorkspace}
+              />
+            ))}
+        </div>
+      )}
 
       {error && <AppNotice message={error} />}
       {!error && appNotice && <AppNotice message={appNotice.message} tone={appNotice.tone} />}

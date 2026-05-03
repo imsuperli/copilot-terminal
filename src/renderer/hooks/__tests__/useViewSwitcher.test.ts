@@ -9,7 +9,12 @@ describe('useViewSwitcher', () => {
     vi.clearAllMocks();
 
     // Reset store
-    useWindowStore.setState({ windows: [], activeWindowId: null });
+    useWindowStore.setState({
+      windows: [],
+      activeWindowId: null,
+      canvasWorkspaces: [],
+      activeCanvasWorkspaceId: null,
+    });
   });
 
   describe('初始状态', () => {
@@ -18,6 +23,7 @@ describe('useViewSwitcher', () => {
 
       expect(result.current.currentView).toBe('unified');
       expect(result.current.activeWindowId).toBeNull();
+      expect(result.current.activeCanvasWorkspaceId).toBeNull();
       expect(result.current.error).toBeNull();
     });
 
@@ -131,6 +137,19 @@ describe('useViewSwitcher', () => {
     });
   });
 
+  describe('switchToCanvasView', () => {
+    it('应该调用 IPC 命令', async () => {
+      vi.mocked(window.electronAPI.switchToCanvasView).mockResolvedValue(undefined);
+      const { result } = renderHook(() => useViewSwitcher());
+
+      await act(async () => {
+        await result.current.switchToCanvasView('canvas-123');
+      });
+
+      expect(window.electronAPI.switchToCanvasView).toHaveBeenCalledWith('canvas-123');
+    });
+  });
+
   describe('view-changed 事件处理', () => {
     it('应该更新 currentView 和 activeWindowId', () => {
       let viewChangedHandler: ((event: unknown, payload: any) => void) | null = null;
@@ -184,6 +203,23 @@ describe('useViewSwitcher', () => {
 
       expect(result.current.currentView).toBe('unified');
       expect(result.current.activeWindowId).toBeNull();
+    });
+
+    it('切换到画布视图时应该更新 activeCanvasWorkspaceId', () => {
+      let viewChangedHandler: ((event: unknown, payload: any) => void) | null = null;
+      vi.mocked(window.electronAPI.onViewChanged).mockImplementation((handler) => {
+        viewChangedHandler = handler;
+      });
+
+      const { result } = renderHook(() => useViewSwitcher());
+
+      act(() => {
+        viewChangedHandler?.(null, { view: 'canvas', canvasWorkspaceId: 'canvas-123' });
+      });
+
+      expect(result.current.currentView).toBe('canvas');
+      expect(result.current.activeCanvasWorkspaceId).toBe('canvas-123');
+      expect(useWindowStore.getState().activeCanvasWorkspaceId).toBe('canvas-123');
     });
   });
 

@@ -36,7 +36,7 @@ export const NewWindowCard = React.memo<NewWindowCardProps>(({ onClick }) => {
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] group-hover:border-[rgb(var(--primary))]/55 group-hover:bg-[rgb(var(--primary))] transition-colors">
         <span className="text-3xl text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--primary-foreground))] leading-none transition-colors">+</span>
       </div>
-      <span className="text-sm text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--foreground))] transition-colors">{t('common.newTerminal')}</span>
+      <span className="text-sm text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--foreground))] transition-colors">{t('common.create')}</span>
     </div>
   );
 });

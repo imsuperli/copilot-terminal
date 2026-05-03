@@ -3,6 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 import { randomUUID } from 'crypto';
 import { Workspace, Settings } from '../types/workspace';
+import { CanvasBlock, CanvasWorkspace } from '../../shared/types/canvas';
 import { LayoutNode, PaneNode, SplitNode, Window, WindowStatus } from '../../shared/types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
@@ -259,6 +260,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       version: '3.0',
       windows: deduplicatedWindows.map((window) => this.sanitizeWindowForPersistence(window)),
       groups: workspace.groups || [], // 确保 groups 被保存
+      canvasWorkspaces: workspace.canvasWorkspaces || [],
     };
   }
 
@@ -415,6 +417,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       version: '2.0',
       windows: migratedWindows,
       groups: [],
+      canvasWorkspaces: [],
       settings: this.normalizeSettings(oldWorkspace.settings),
       lastSavedAt: oldWorkspace.lastSavedAt || new Date().toISOString(),
     };
@@ -429,6 +432,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       ...workspace,
       version: '3.0',
       groups: workspace.groups || [],
+      canvasWorkspaces: workspace.canvasWorkspaces || [],
     };
   }
 
@@ -733,9 +737,89 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           return false;
         }
       }
+
+      if (ws.canvasWorkspaces !== undefined) {
+        if (!Array.isArray(ws.canvasWorkspaces)) {
+          console.warn('Workspace canvasWorkspaces must be an array when present');
+          return false;
+        }
+
+        for (const canvasWorkspace of ws.canvasWorkspaces) {
+          if (!this.validateCanvasWorkspace(canvasWorkspace)) {
+            return false;
+          }
+        }
+      }
     }
 
     return true;
+  }
+
+  private validateCanvasWorkspace(value: unknown): value is CanvasWorkspace {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const canvasWorkspace = value as Record<string, unknown>;
+    if (
+      typeof canvasWorkspace.id !== 'string'
+      || typeof canvasWorkspace.name !== 'string'
+      || typeof canvasWorkspace.createdAt !== 'string'
+      || typeof canvasWorkspace.updatedAt !== 'string'
+      || !Array.isArray(canvasWorkspace.blocks)
+      || !canvasWorkspace.viewport
+      || typeof canvasWorkspace.nextZIndex !== 'number'
+    ) {
+      return false;
+    }
+
+    if (!this.validateCanvasViewport(canvasWorkspace.viewport)) {
+      return false;
+    }
+
+    return canvasWorkspace.blocks.every((block) => this.validateCanvasBlock(block));
+  }
+
+  private validateCanvasViewport(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const viewport = value as Record<string, unknown>;
+    return (
+      typeof viewport.tx === 'number'
+      && typeof viewport.ty === 'number'
+      && typeof viewport.zoom === 'number'
+    );
+  }
+
+  private validateCanvasBlock(value: unknown): value is CanvasBlock {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const block = value as Record<string, unknown>;
+    if (
+      typeof block.id !== 'string'
+      || typeof block.type !== 'string'
+      || typeof block.x !== 'number'
+      || typeof block.y !== 'number'
+      || typeof block.width !== 'number'
+      || typeof block.height !== 'number'
+      || typeof block.zIndex !== 'number'
+    ) {
+      return false;
+    }
+
+    if (block.type === 'window') {
+      return typeof block.windowId === 'string';
+    }
+
+    if (block.type === 'note') {
+      return typeof block.content === 'string';
+    }
+
+    return false;
   }
 
   /**
@@ -823,6 +907,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       version: '3.0',
       windows: [],
       groups: [],
+      canvasWorkspaces: [],
       settings: this.getDefaultSettings(),
       lastSavedAt: '',
     };
@@ -835,8 +920,29 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         ...window,
         layout: this.hydrateLayout(window.layout),
       })),
+      canvasWorkspaces: this.hydrateCanvasWorkspaces(workspace.canvasWorkspaces),
       settings: this.normalizeSettings(workspace.settings),
     };
+  }
+
+  private hydrateCanvasWorkspaces(canvasWorkspaces: CanvasWorkspace[] | undefined): CanvasWorkspace[] {
+    if (!Array.isArray(canvasWorkspaces)) {
+      return [];
+    }
+
+    return canvasWorkspaces.map((canvasWorkspace) => ({
+      ...canvasWorkspace,
+      workingDirectory: canvasWorkspace.workingDirectory
+        ? PathValidator.expandHomePath(canvasWorkspace.workingDirectory)
+        : canvasWorkspace.workingDirectory,
+      viewport: {
+        tx: canvasWorkspace.viewport?.tx ?? 0,
+        ty: canvasWorkspace.viewport?.ty ?? 0,
+        zoom: canvasWorkspace.viewport?.zoom ?? 1,
+      },
+      blocks: Array.isArray(canvasWorkspace.blocks) ? canvasWorkspace.blocks : [],
+      nextZIndex: Number.isFinite(canvasWorkspace.nextZIndex) ? canvasWorkspace.nextZIndex : 1,
+    }));
   }
 
   private hydrateLayout(layout: LayoutNode): LayoutNode {
