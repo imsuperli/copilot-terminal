@@ -16,16 +16,7 @@ interface EditGroupPanelProps {
 
 /**
  * EditGroupPanel 组件
- * 编辑窗口组面板
- *
- * TODO: 等待任务 #1、#2、#3 完成后实现以下功能：
- * - 修改组名称
- * - 显示组内窗口列表
- * - 支持从组中移除窗口
- * - 支持添加窗口到组
- * - 如果组内只剩 1 个窗口，自动解散组
- * - 调用 IPC 接口更新组
- * - 更新 windowStore 状态
+ * 编辑组名称，并管理组内窗口成员。
  */
 export const EditGroupPanel: React.FC<EditGroupPanelProps> = ({ group, onClose, onSave }) => {
   const { t } = useI18n();

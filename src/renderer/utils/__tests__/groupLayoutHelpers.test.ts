@@ -1,173 +1,121 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { GroupLayoutNode } from '../../../shared/types/window-group';
 import {
+  addWindowToGroup,
+  containsWindow,
+  createGroup,
   findWindowNode,
-  getAllWindows,
-  addWindowToLayout,
-  removeWindowFromLayout,
-  validateLayoutIntegrity,
+  getAllWindowIds,
+  getGroupLayoutDepth,
+  getWindowCount,
+  removeWindowFromGroup,
+  replaceWindowId,
+  updateGroupSplitSizes,
 } from '../groupLayoutHelpers';
-import type { GroupLayoutNode, WindowNode, GroupSplitNode } from '@/shared/types/window-group';
 
-/**
- * 组布局工具函数单元测试
- *
- * 测试范围：
- * - 布局树遍历
- * - 窗口节点查找
- * - 布局操作（添加、移除窗口）
- * - 布局完整性验证
- */
+const nestedLayout: GroupLayoutNode = {
+  type: 'split',
+  direction: 'horizontal',
+  sizes: [0.5, 0.5],
+  children: [
+    { type: 'window', id: 'window-1' },
+    {
+      type: 'split',
+      direction: 'vertical',
+      sizes: [0.3, 0.7],
+      children: [
+        { type: 'window', id: 'window-2' },
+        { type: 'window', id: 'window-3' },
+      ],
+    },
+  ],
+};
+
 describe('groupLayoutHelpers', () => {
-  describe('findWindowNode', () => {
-    it('should find window node in simple layout', () => {
-      // TODO: 实现测试
-      // 场景：单个窗口节点
-    });
+  it('finds nested window nodes and reports containment', () => {
+    expect(findWindowNode(nestedLayout, 'window-3')).toEqual({ type: 'window', id: 'window-3' });
+    expect(findWindowNode(nestedLayout, 'missing')).toBeNull();
+    expect(containsWindow(nestedLayout, 'window-2')).toBe(true);
+    expect(containsWindow(nestedLayout, 'missing')).toBe(false);
+  });
 
-    it('should find window node in split layout', () => {
-      // TODO: 实现测试
-      // 场景：水平或垂直分割布局
-    });
+  it('collects all window ids in layout order and reports depth/count', () => {
+    expect(getAllWindowIds(nestedLayout)).toEqual(['window-1', 'window-2', 'window-3']);
+    expect(getWindowCount(nestedLayout)).toBe(3);
+    expect(getGroupLayoutDepth(nestedLayout)).toBe(3);
+  });
 
-    it('should find window node in nested split layout', () => {
-      // TODO: 实现测试
-      // 场景：多层嵌套分割布局
+  it('creates a two-window group with balanced root split', () => {
+    const group = createGroup('Backend', 'window-a', 'window-b', 'vertical');
+    expect(group.name).toBe('Backend');
+    expect(group.layout).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      sizes: [0.5, 0.5],
+      children: [
+        { type: 'window', id: 'window-a' },
+        { type: 'window', id: 'window-b' },
+      ],
     });
+    expect(group.activeWindowId).toBe('window-a');
+  });
 
-    it('should return null for non-existent window', () => {
-      // TODO: 实现测试
+  it('adds a window around the target node and preserves explicit insertion order', () => {
+    const nextLayout = addWindowToGroup(nestedLayout, 'window-2', 'window-4', 'horizontal', true);
+    expect(nextLayout).not.toBeNull();
+    expect(getAllWindowIds(nextLayout!)).toEqual(['window-1', 'window-4', 'window-2', 'window-3']);
+
+    const nestedSplit = (nextLayout as Extract<GroupLayoutNode, { type: 'split' }>).children[1];
+    expect(nestedSplit.type).toBe('split');
+    if (nestedSplit.type !== 'split') {
+      throw new Error('expected split child');
+    }
+
+    expect(nestedSplit.children[0]).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        { type: 'window', id: 'window-4' },
+        { type: 'window', id: 'window-2' },
+      ],
     });
   });
 
-  describe('getAllWindows', () => {
-    it('should return all window IDs in simple layout', () => {
-      // TODO: 实现测试
-    });
+  it('removes windows and flattens single-child splits', () => {
+    const nextLayout = removeWindowFromGroup(nestedLayout, 'window-2');
+    expect(nextLayout).not.toBeNull();
+    expect(getAllWindowIds(nextLayout!)).toEqual(['window-1', 'window-3']);
 
-    it('should return all window IDs in split layout', () => {
-      // TODO: 实现测试
-    });
-
-    it('should return all window IDs in nested split layout', () => {
-      // TODO: 实现测试
-    });
-
-    it('should return empty array for empty layout', () => {
-      // TODO: 实现测试
-    });
-
-    it('should maintain correct order', () => {
-      // TODO: 实现测试
-      // 验证返回的窗口 ID 顺序与布局树顺序一致
-    });
+    const rightChild = (nextLayout as Extract<GroupLayoutNode, { type: 'split' }>).children[1];
+    expect(rightChild).toEqual({ type: 'window', id: 'window-3' });
   });
 
-  describe('addWindowToLayout', () => {
-    it('should add window to simple layout (horizontal split)', () => {
-      // TODO: 实现测试
-      // 场景：单个窗口 -> 水平分割两个窗口
-    });
-
-    it('should add window to simple layout (vertical split)', () => {
-      // TODO: 实现测试
-      // 场景：单个窗口 -> 垂直分割两个窗口
-    });
-
-    it('should add window to existing split layout', () => {
-      // TODO: 实现测试
-      // 场景：已有分割布局，添加新窗口
-    });
-
-    it('should add window at specific position', () => {
-      // TODO: 实现测试
-      // 场景：指定位置添加窗口（左、右、上、下）
-    });
-
-    it('should update split sizes correctly', () => {
-      // TODO: 实现测试
-      // 验证添加窗口后，分割比例正确更新
-    });
+  it('returns null when removing the last remaining window', () => {
+    const singleWindow: GroupLayoutNode = { type: 'window', id: 'window-only' };
+    expect(removeWindowFromGroup(singleWindow, 'window-only')).toBeNull();
   });
 
-  describe('removeWindowFromLayout', () => {
-    it('should remove window from split layout', () => {
-      // TODO: 实现测试
-    });
+  it('normalizes split sizes when updating a nested split node', () => {
+    const updated = updateGroupSplitSizes(nestedLayout, [1], [3, 1]);
+    expect(updated.type).toBe('split');
+    if (updated.type !== 'split') {
+      throw new Error('expected root split');
+    }
 
-    it('should simplify layout when removing window', () => {
-      // TODO: 实现测试
-      // 场景：移除窗口后，如果分割节点只剩一个子节点，应该简化布局
-    });
+    const nestedSplit = updated.children[1];
+    expect(nestedSplit.type).toBe('split');
+    if (nestedSplit.type !== 'split') {
+      throw new Error('expected nested split');
+    }
 
-    it('should return null when removing last window', () => {
-      // TODO: 实现测试
-      // 场景：移除最后一个窗口，返回 null
-    });
-
-    it('should update split sizes after removal', () => {
-      // TODO: 实现测试
-      // 验证移除窗口后，分割比例正确更新
-    });
-
-    it('should handle nested split layout removal', () => {
-      // TODO: 实现测试
-    });
+    expect(nestedSplit.sizes[0]).toBeCloseTo(0.75);
+    expect(nestedSplit.sizes[1]).toBeCloseTo(0.25);
   });
 
-  describe('validateLayoutIntegrity', () => {
-    it('should validate correct layout', () => {
-      // TODO: 实现测试
-    });
-
-    it('should detect invalid window node (missing id)', () => {
-      // TODO: 实现测试
-    });
-
-    it('should detect invalid split node (missing direction)', () => {
-      // TODO: 实现测试
-    });
-
-    it('should detect invalid split sizes (not sum to 1)', () => {
-      // TODO: 实现测试
-    });
-
-    it('should detect invalid split sizes (length mismatch)', () => {
-      // TODO: 实现测试
-      // 场景：sizes 数组长度与 children 数组长度不匹配
-    });
-
-    it('should detect empty split node children', () => {
-      // TODO: 实现测试
-    });
-
-    it('should validate nested split layout', () => {
-      // TODO: 实现测试
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle deeply nested layout (10+ levels)', () => {
-      // TODO: 实现测试
-    });
-
-    it('should handle layout with many windows (20+)', () => {
-      // TODO: 实现测试
-    });
-
-    it('should handle layout with unbalanced tree', () => {
-      // TODO: 实现测试
-      // 场景：一边深度很深，另一边很浅
-    });
-  });
-
-  describe('Performance', () => {
-    it('should efficiently traverse large layout tree', () => {
-      // TODO: 实现测试
-      // 验证大型布局树的遍历性能
-    });
-
-    it('should efficiently find window in large layout', () => {
-      // TODO: 实现测试
-    });
+  it('replaces referenced window ids recursively', () => {
+    const replaced = replaceWindowId(nestedLayout, 'window-3', 'window-9');
+    expect(getAllWindowIds(replaced)).toEqual(['window-1', 'window-2', 'window-9']);
+    expect(findWindowNode(replaced, 'window-3')).toBeNull();
   });
 });

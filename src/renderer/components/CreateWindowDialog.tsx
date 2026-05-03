@@ -37,6 +37,7 @@ interface CreateWindowDialogProps {
   onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void
   onSSHProfileConnect?: (profile: SSHProfile) => void | Promise<void>
   onLocalWindowCreated?: (window: Window) => void | Promise<void>
+  onCanvasWorkspaceCreated?: (canvasWorkspace: CanvasWorkspace) => void | Promise<void>
   sshSubmitMode?: 'save' | 'saveAndConnect'
 }
 
@@ -168,6 +169,7 @@ export function CreateWindowDialog({
   onSSHProfileSaved,
   onSSHProfileConnect,
   onLocalWindowCreated,
+  onCanvasWorkspaceCreated,
   sshSubmitMode = 'save',
 }: CreateWindowDialogProps) {
   const { t } = useI18n()
@@ -561,6 +563,7 @@ export function CreateWindowDialog({
     }
 
     addCanvasWorkspace(nextCanvasWorkspace)
+    await onCanvasWorkspaceCreated?.(nextCanvasWorkspace)
     onOpenChange(false)
     resetDialog()
   }

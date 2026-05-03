@@ -39,6 +39,7 @@ import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import { destroySSHWindowFamilyResources, destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { createCanvasWindowBlock } from '../utils/canvasWorkspace';
 
 // 统一的卡片项类型
 type CardItem =
@@ -95,7 +96,7 @@ function isBuiltinTab(tab: string | undefined): boolean {
 interface CardGridProps {
   onEnterTerminal?: (window: Window) => void;
   onEnterCanvasWorkspace?: (canvasWorkspaceId: string) => void;
-  onEnterGroup?: (group: WindowGroup) => void; // TODO: 等待任务 #5 完成后实现组视图
+  onEnterGroup?: (group: WindowGroup) => void;
   onCreateWindow?: () => void;
   sshEnabled?: boolean;
   sshProfiles?: SSHProfile[];
@@ -111,13 +112,7 @@ interface CardGridProps {
 
 /**
  * CardGrid 组件
- * 以响应式 CSS Grid 网格布局显示所有窗口卡片和组卡片
- *
- * TODO: 等待任务 #1、#2、#3 完成后实现以下功能：
- * - 同时显示窗口和组
- * - 支持搜索组名称和组内窗口
- * - 支持组的各种操作（创建、编辑、删除、归档）
- * - 支持批量启动/销毁组内所有窗口
+ * 以响应式 CSS Grid 网格布局显示窗口、组、SSH 配置和画布工作区卡片。
  */
 export const CardGrid = React.memo<CardGridProps>(({
   onEnterTerminal,
@@ -910,9 +905,30 @@ export const CardGrid = React.memo<CardGridProps>(({
   const handleWindowCardDrop = useCallback(
     (dragItem: WindowCardDragItem, dropResult: DropResult) => {
       const { windowId: dragWindowId } = dragItem;
-      const { targetGroupId, targetWindowId } = dropResult;
+      const { targetCanvasWorkspaceId, targetGroupId, targetWindowId } = dropResult;
 
       if (targetWindowId && dragWindowId === targetWindowId) return;
+
+      if (targetCanvasWorkspaceId) {
+        const targetCanvasWorkspace = useWindowStore.getState().getCanvasWorkspaceById(targetCanvasWorkspaceId);
+        const draggedWindow = windowById.get(dragWindowId);
+        if (!targetCanvasWorkspace || !draggedWindow) return;
+
+        const alreadyLinked = targetCanvasWorkspace.blocks.some((block) => (
+          block.type === 'window' && block.windowId === dragWindowId
+        ));
+        if (alreadyLinked) return;
+
+        const offsetIndex = targetCanvasWorkspace.blocks.filter((block) => block.type === 'window').length;
+        updateCanvasWorkspace(targetCanvasWorkspace.id, {
+          blocks: [
+            ...targetCanvasWorkspace.blocks,
+            createCanvasWindowBlock(draggedWindow, offsetIndex, targetCanvasWorkspace.nextZIndex),
+          ],
+          nextZIndex: targetCanvasWorkspace.nextZIndex + 1,
+        });
+        return;
+      }
 
       const dragGroup = findGroupByWindowId(dragWindowId);
       const targetGroup = targetGroupId
@@ -958,7 +974,7 @@ export const CardGrid = React.memo<CardGridProps>(({
         addGroup(newGroup);
       }
     },
-    [windowById, findGroupByWindowId, groups, removeWindowFromGroupLayout, addWindowToGroupLayout, addGroup]
+    [windowById, updateCanvasWorkspace, findGroupByWindowId, groups, removeWindowFromGroupLayout, addWindowToGroupLayout, addGroup]
   );
 
   // 是否为自定义分类标签
@@ -1056,19 +1072,24 @@ export const CardGrid = React.memo<CardGridProps>(({
                 );
               }
 
-      if (item.type === 'canvasWorkspace') {
-        return (
-          <CanvasWorkspaceCard
-            key={`canvas-workspace-${item.data.id}`}
-            canvasWorkspace={item.data}
-            onClick={onEnterCanvasWorkspace}
-            onRename={handleEditCanvasWorkspace}
-            onArchive={handleArchiveCanvasWorkspace}
-            onUnarchive={handleUnarchiveCanvasWorkspace}
-            onDelete={handleDeleteCanvasWorkspace}
-          />
-        );
-      }
+              if (item.type === 'canvasWorkspace') {
+                return (
+                  <DropZone
+                    key={`canvas-workspace-${item.data.id}`}
+                    targetCanvasWorkspaceId={item.data.id}
+                    onDrop={handleWindowCardDrop}
+                  >
+                    <CanvasWorkspaceCard
+                      canvasWorkspace={item.data}
+                      onClick={onEnterCanvasWorkspace}
+                      onRename={handleEditCanvasWorkspace}
+                      onArchive={handleArchiveCanvasWorkspace}
+                      onUnarchive={handleUnarchiveCanvasWorkspace}
+                      onDelete={handleDeleteCanvasWorkspace}
+                    />
+                  </DropZone>
+                );
+              }
 
               const profile = item.data;
               const sshWindow = standaloneSSHWindowsByProfile[profile.id] ?? null;

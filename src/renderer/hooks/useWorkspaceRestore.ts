@@ -6,8 +6,10 @@ function buildWorkspaceRestoreKey(workspace: Workspace): string {
   const windowIds = workspace.windows.map((window) => window.id).join(',');
   const groupIds = (workspace.groups ?? []).map((group) => group.id).join(',');
   const canvasWorkspaceIds = (workspace.canvasWorkspaces ?? []).map((canvasWorkspace) => canvasWorkspace.id).join(',');
+  const templateIds = (workspace.canvasWorkspaceTemplates ?? []).map((template) => template.id).join(',');
+  const activityIds = (workspace.canvasActivity ?? []).map((activity) => activity.id).join(',');
 
-  return `${workspace.lastSavedAt}|${workspace.windows.length}|${workspace.groups?.length ?? 0}|${workspace.canvasWorkspaces?.length ?? 0}|${windowIds}|${groupIds}|${canvasWorkspaceIds}`;
+  return `${workspace.lastSavedAt}|${workspace.windows.length}|${workspace.groups?.length ?? 0}|${workspace.canvasWorkspaces?.length ?? 0}|${workspace.canvasWorkspaceTemplates?.length ?? 0}|${workspace.canvasActivity?.length ?? 0}|${windowIds}|${groupIds}|${canvasWorkspaceIds}|${templateIds}|${activityIds}`;
 }
 
 function isWorkspacePayload(value: unknown): value is Workspace {
@@ -31,6 +33,9 @@ export const useWorkspaceRestore = () => {
   const addWindow = useWindowStore((state) => state.addWindow);
   const addGroup = useWindowStore((state) => state.addGroup);
   const addCanvasWorkspace = useWindowStore((state) => state.addCanvasWorkspace);
+  const setCanvasWorkspaceTemplates = useWindowStore((state) => state.setCanvasWorkspaceTemplates);
+  const clearCanvasActivity = useWindowStore((state) => state.clearCanvasActivity);
+  const appendCanvasActivity = useWindowStore((state) => state.appendCanvasActivity);
   const clearWindows = useWindowStore((state) => state.clearWindows);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoredWorkspaceKeyRef = useRef<string | null>(null);
@@ -56,7 +61,7 @@ export const useWorkspaceRestore = () => {
     restoredWorkspaceKeyRef.current = restoreKey;
 
     console.log(
-      `[useWorkspaceRestore] Restoring workspace with ${workspace.windows.length} windows, ${workspace.groups?.length || 0} groups, ${workspace.canvasWorkspaces?.length || 0} canvas workspaces`,
+      `[useWorkspaceRestore] Restoring workspace with ${workspace.windows.length} windows, ${workspace.groups?.length || 0} groups, ${workspace.canvasWorkspaces?.length || 0} canvas workspaces, ${workspace.canvasWorkspaceTemplates?.length || 0} templates, ${workspace.canvasActivity?.length || 0} activity events`,
     );
 
     setAutoSaveEnabled(false);
@@ -80,9 +85,24 @@ export const useWorkspaceRestore = () => {
       console.log(`[useWorkspaceRestore] Restored ${workspace.canvasWorkspaces.length} canvas workspaces`);
     }
 
+    setCanvasWorkspaceTemplates(workspace.canvasWorkspaceTemplates ?? []);
+    clearCanvasActivity();
+    for (const event of workspace.canvasActivity ?? []) {
+      appendCanvasActivity(event);
+    }
+
     console.log(`[useWorkspaceRestore] Restored ${workspace.windows.length} windows`);
     scheduleAutoSaveEnable();
-  }, [addCanvasWorkspace, addGroup, addWindow, clearWindows, scheduleAutoSaveEnable]);
+  }, [
+    addCanvasWorkspace,
+    addGroup,
+    addWindow,
+    appendCanvasActivity,
+    clearCanvasActivity,
+    clearWindows,
+    scheduleAutoSaveEnable,
+    setCanvasWorkspaceTemplates,
+  ]);
 
   useEffect(() => {
     if (!window.electronAPI) {

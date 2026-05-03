@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
-import { CanvasWorkspace } from '../../shared/types/canvas';
+import { CanvasActivityEvent, CanvasWorkspace, CanvasWorkspaceTemplate } from '../../shared/types/canvas';
 import { Window } from '../../shared/types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
@@ -59,7 +59,16 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
   } = ctx;
 
   // 监听自动保存触发事件
-  ipcMain.on('trigger-auto-save', async (_event, windows: Window[], groups?: WindowGroup[], canvasWorkspaces?: CanvasWorkspace[]) => {
+  ipcMain.on(
+    'trigger-auto-save',
+    async (
+      _event,
+      windows: Window[],
+      groups?: WindowGroup[],
+      canvasWorkspaces?: CanvasWorkspace[],
+      canvasWorkspaceTemplates?: CanvasWorkspaceTemplate[],
+      canvasActivity?: CanvasActivityEvent[],
+    ) => {
     try {
       if (!autoSaveManager) {
         console.warn('[WorkspaceHandlers] AutoSaveManager not initialized');
@@ -92,6 +101,8 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       currentWorkspace.windows = windows;
       currentWorkspace.groups = groups || [];
       currentWorkspace.canvasWorkspaces = canvasWorkspaces || [];
+      currentWorkspace.canvasWorkspaceTemplates = canvasWorkspaceTemplates || [];
+      currentWorkspace.canvasActivity = canvasActivity || [];
 
       // 更新全局 currentWorkspace
       setCurrentWorkspace(currentWorkspace);
@@ -105,7 +116,8 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
     } catch (error) {
       console.error('[WorkspaceHandlers] Failed to trigger auto-save:', error);
     }
-  });
+    },
+  );
 
   ipcMain.handle('save-workspace', async (
     _event,
@@ -113,6 +125,8 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       windows: Window[];
       groups?: WindowGroup[];
       canvasWorkspaces?: CanvasWorkspace[];
+      canvasWorkspaceTemplates?: CanvasWorkspaceTemplate[];
+      canvasActivity?: CanvasActivityEvent[];
     },
   ) => {
     try {
@@ -124,6 +138,12 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       }
       if (payload.canvasWorkspaces) {
         workspace.canvasWorkspaces = payload.canvasWorkspaces;
+      }
+      if (payload.canvasWorkspaceTemplates) {
+        workspace.canvasWorkspaceTemplates = payload.canvasWorkspaceTemplates;
+      }
+      if (payload.canvasActivity) {
+        workspace.canvasActivity = payload.canvasActivity;
       }
       await workspaceManager.saveWorkspace(workspace);
       setCurrentWorkspace(workspace);

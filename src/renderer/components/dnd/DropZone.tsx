@@ -15,6 +15,8 @@ interface DropZoneProps {
   targetWindowId?: string;
   /** 目标组 ID */
   targetGroupId?: string;
+  /** 目标画布工作区 ID */
+  targetCanvasWorkspaceId?: string;
   /** 放置回调 */
   onDrop: (item: WindowCardDragItem, result: DropResult) => void;
   /** 是否禁用（例如拖拽自身时） */
@@ -47,6 +49,7 @@ function calcDropPosition(
 export const DropZone: React.FC<DropZoneProps> = ({
   targetWindowId,
   targetGroupId,
+  targetCanvasWorkspaceId,
   onDrop,
   disabled = false,
   children,
@@ -96,6 +99,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
         position,
         targetWindowId,
         targetGroupId,
+        targetCanvasWorkspaceId,
       };
 
       onDrop(item, result);

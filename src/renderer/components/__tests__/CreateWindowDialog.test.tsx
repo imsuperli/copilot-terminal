@@ -373,6 +373,36 @@ describe('CreateWindowDialog', () => {
     })
   })
 
+  it('creates a canvas workspace and reports it back to the caller', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const onCanvasWorkspaceCreated = vi.fn()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        onCanvasWorkspaceCreated={onCanvasWorkspaceCreated}
+      />,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /画布工作区/ }))
+    await user.type(screen.getByLabelText(/工作区名称/), 'Ops Board')
+    await user.type(screen.getByLabelText(/默认目录/), '/workspace/ops')
+    await user.click(screen.getByRole('button', { name: /^创建$/ }))
+
+    await waitFor(() => {
+      expect(onCanvasWorkspaceCreated).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Ops Board',
+        workingDirectory: '/workspace/ops',
+        blocks: [],
+      }))
+    })
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(useWindowStore.getState().canvasWorkspaces.some((workspace) => workspace.name === 'Ops Board')).toBe(true)
+  })
+
   it('falls back to the host value when saving an ssh profile without a name', async () => {
     const user = userEvent.setup()
 

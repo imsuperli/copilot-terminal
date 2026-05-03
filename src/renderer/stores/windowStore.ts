@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { CanvasWorkspace } from '../../shared/types/canvas';
+import type {
+  CanvasActivityEvent,
+  CanvasWorkspace,
+  CanvasWorkspaceTemplate,
+} from '../../shared/types/canvas';
 import { Window, WindowStatus, Pane, LayoutNode, CodePaneState } from '../types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { CustomCategory } from '../../shared/types/custom-category';
@@ -49,6 +53,8 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
 type PendingAutoSavePayload = {
   groups: WindowGroup[];
   canvasWorkspaces: CanvasWorkspace[];
+  canvasWorkspaceTemplates: CanvasWorkspaceTemplate[];
+  canvasActivity: CanvasActivityEvent[];
   persistableWindows: Window[];
   signature: string;
 };
@@ -226,8 +232,10 @@ function getAutoSaveSignature(
   persistableWindows: Window[],
   groups: WindowGroup[],
   canvasWorkspaces: CanvasWorkspace[],
+  canvasWorkspaceTemplates: CanvasWorkspaceTemplate[],
+  canvasActivity: CanvasActivityEvent[],
 ): string {
-  return `windows:[${persistableWindows.map((window) => getAutoSaveWindowSignature(window)).join(',')}];groups:[${groups.map((group) => getAutoSaveGroupSignature(group)).join(',')}];canvas:[${canvasWorkspaces.map((canvasWorkspace) => getCanvasWorkspaceSignature(canvasWorkspace)).join(',')}]`;
+  return `windows:[${persistableWindows.map((window) => getAutoSaveWindowSignature(window)).join(',')}];groups:[${groups.map((group) => getAutoSaveGroupSignature(group)).join(',')}];canvas:[${canvasWorkspaces.map((canvasWorkspace) => getCanvasWorkspaceSignature(canvasWorkspace)).join(',')}];templates:${JSON.stringify(canvasWorkspaceTemplates)};activity:${JSON.stringify(canvasActivity)}`;
 }
 
 function didPersistedWindowChange(previousWindow: Window | undefined, nextWindow: Window): boolean {
@@ -268,7 +276,23 @@ function flushPendingAutoSave(): void {
     return;
   }
 
-  window.electronAPI.triggerAutoSave(payload.persistableWindows, payload.groups, payload.canvasWorkspaces);
+  if (payload.canvasWorkspaceTemplates.length > 0 || payload.canvasActivity.length > 0) {
+    window.electronAPI.triggerAutoSave(
+      payload.persistableWindows,
+      payload.groups,
+      payload.canvasWorkspaces,
+      payload.canvasWorkspaceTemplates,
+      payload.canvasActivity,
+    );
+    state.lastSentSignature = payload.signature;
+    return;
+  }
+
+  window.electronAPI.triggerAutoSave(
+    payload.persistableWindows,
+    payload.groups,
+    payload.canvasWorkspaces,
+  );
   state.lastSentSignature = payload.signature;
 }
 
@@ -297,6 +321,8 @@ function triggerAutoSave(
   windows: Window[],
   groups?: WindowGroup[],
   canvasWorkspaces?: CanvasWorkspace[],
+  canvasWorkspaceTemplates?: CanvasWorkspaceTemplate[],
+  canvasActivity?: CanvasActivityEvent[],
 ): void {
   if (!autoSaveEnabled || !window.electronAPI) {
     return;
@@ -304,14 +330,31 @@ function triggerAutoSave(
 
   ensureAutoSaveLifecycleHooks();
   const state = getWindowStoreAutoSaveState();
+  const storeSnapshot = (() => {
+    try {
+      return useWindowStore.getState();
+    } catch {
+      return undefined;
+    }
+  })();
   const resolvedGroups = groups ?? [];
   const resolvedCanvasWorkspaces = canvasWorkspaces ?? [];
+  const resolvedCanvasWorkspaceTemplates = canvasWorkspaceTemplates ?? storeSnapshot?.canvasWorkspaceTemplates ?? [];
+  const resolvedCanvasActivity = canvasActivity ?? storeSnapshot?.canvasActivity ?? [];
   const persistableWindows = getPersistableWindows(windows);
   state.pendingPayload = {
     groups: resolvedGroups,
     canvasWorkspaces: resolvedCanvasWorkspaces,
+    canvasWorkspaceTemplates: resolvedCanvasWorkspaceTemplates,
+    canvasActivity: resolvedCanvasActivity,
     persistableWindows,
-    signature: getAutoSaveSignature(persistableWindows, resolvedGroups, resolvedCanvasWorkspaces),
+    signature: getAutoSaveSignature(
+      persistableWindows,
+      resolvedGroups,
+      resolvedCanvasWorkspaces,
+      resolvedCanvasWorkspaceTemplates,
+      resolvedCanvasActivity,
+    ),
   };
 
   if (state.timer) {
@@ -513,6 +556,8 @@ interface WindowStore {
   windows: Window[];
   activeWindowId: string | null;
   canvasWorkspaces: CanvasWorkspace[];
+  canvasWorkspaceTemplates: CanvasWorkspaceTemplate[];
+  canvasActivity: CanvasActivityEvent[];
   activeCanvasWorkspaceId: string | null;
   mruList: string[]; // 最近使用列表（窗口 ID）
   sidebarExpanded: boolean; // 侧边栏是否展开
@@ -549,6 +594,11 @@ interface WindowStore {
   removeCanvasWorkspace: (id: string) => void;
   setActiveCanvasWorkspace: (id: string | null) => void;
   getCanvasWorkspaceById: (id: string) => CanvasWorkspace | undefined;
+  setCanvasWorkspaceTemplates: (templates: CanvasWorkspaceTemplate[]) => void;
+  upsertCanvasWorkspaceTemplate: (template: CanvasWorkspaceTemplate) => void;
+  removeCanvasWorkspaceTemplate: (id: string) => void;
+  appendCanvasActivity: (event: CanvasActivityEvent) => void;
+  clearCanvasActivity: (workspaceId?: string) => void;
 
   // Pane 相关
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
@@ -653,6 +703,8 @@ export const useWindowStore = create<WindowStore>()(
     windows: [],
     activeWindowId: null,
     canvasWorkspaces: [],
+    canvasWorkspaceTemplates: [],
+    canvasActivity: [],
     activeCanvasWorkspaceId: null,
     mruList: [],
     sidebarExpanded: false, // 默认折叠
@@ -1243,6 +1295,8 @@ export const useWindowStore = create<WindowStore>()(
         state.windows = [];
         state.activeWindowId = null;
         state.canvasWorkspaces = [];
+        state.canvasWorkspaceTemplates = [];
+        state.canvasActivity = [];
         state.activeCanvasWorkspaceId = null;
         state.mruList = [];
         state.groups = [];
@@ -1302,6 +1356,7 @@ export const useWindowStore = create<WindowStore>()(
       set((state) => {
         const previousLength = state.canvasWorkspaces.length;
         state.canvasWorkspaces = state.canvasWorkspaces.filter((item) => item.id !== id);
+        state.canvasActivity = state.canvasActivity.filter((item) => item.workspaceId !== id);
         didChange = previousLength !== state.canvasWorkspaces.length;
         if (state.activeCanvasWorkspaceId === id) {
           state.activeCanvasWorkspaceId = null;
@@ -1325,6 +1380,55 @@ export const useWindowStore = create<WindowStore>()(
     },
 
     getCanvasWorkspaceById: (id) => get().canvasWorkspaces.find((item) => item.id === id),
+
+    setCanvasWorkspaceTemplates: (templates) => {
+      set((state) => {
+        state.canvasWorkspaceTemplates = templates;
+      });
+      const { windows, groups, canvasWorkspaces } = get();
+      triggerAutoSave(windows, groups, canvasWorkspaces);
+    },
+
+    upsertCanvasWorkspaceTemplate: (template) => {
+      set((state) => {
+        const existingIndex = state.canvasWorkspaceTemplates.findIndex((item) => item.id === template.id);
+        if (existingIndex >= 0) {
+          state.canvasWorkspaceTemplates[existingIndex] = template;
+        } else {
+          state.canvasWorkspaceTemplates.push(template);
+        }
+      });
+      const { windows, groups, canvasWorkspaces } = get();
+      triggerAutoSave(windows, groups, canvasWorkspaces);
+    },
+
+    removeCanvasWorkspaceTemplate: (id) => {
+      set((state) => {
+        state.canvasWorkspaceTemplates = state.canvasWorkspaceTemplates.filter((item) => item.id !== id);
+      });
+      const { windows, groups, canvasWorkspaces } = get();
+      triggerAutoSave(windows, groups, canvasWorkspaces);
+    },
+
+    appendCanvasActivity: (event) => {
+      set((state) => {
+        state.canvasActivity = [...state.canvasActivity.filter((item) => item.id !== event.id), event]
+          .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
+          .slice(-200);
+      });
+      const { windows, groups, canvasWorkspaces } = get();
+      triggerAutoSave(windows, groups, canvasWorkspaces);
+    },
+
+    clearCanvasActivity: (workspaceId) => {
+      set((state) => {
+        state.canvasActivity = workspaceId
+          ? state.canvasActivity.filter((item) => item.workspaceId !== workspaceId)
+          : [];
+      });
+      const { windows, groups, canvasWorkspaces } = get();
+      triggerAutoSave(windows, groups, canvasWorkspaces);
+    },
 
     // 更新 MRU 列表
     updateMRU: (windowId) => {

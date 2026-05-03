@@ -8,6 +8,7 @@ import { CardGrid } from '../CardGrid';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 import { createGroup } from '../../utils/groupLayoutHelpers';
+import { CanvasWorkspace } from '../../../shared/types/canvas';
 
 vi.mock('../../hooks/useIDESettings', () => ({
   useIDESettings: () => ({
@@ -15,14 +16,31 @@ vi.mock('../../hooks/useIDESettings', () => ({
   }),
 }));
 
-const dropZoneProps: Array<{ onDrop: (item: WindowCardDragItem, result: DropResult) => void }> = [];
+const dropZoneProps: Array<{
+  onDrop: (item: WindowCardDragItem, result: DropResult) => void;
+  targetWindowId?: string;
+  targetGroupId?: string;
+  targetCanvasWorkspaceId?: string;
+}> = [];
 
 vi.mock('../dnd', async () => {
   const actual = await vi.importActual<typeof import('../dnd')>('../dnd');
   return {
     ...actual,
-    DropZone: ({ onDrop, children }: { onDrop: (item: WindowCardDragItem, result: DropResult) => void; children: React.ReactNode }) => {
-      dropZoneProps.push({ onDrop });
+    DropZone: ({
+      onDrop,
+      children,
+      targetWindowId,
+      targetGroupId,
+      targetCanvasWorkspaceId,
+    }: {
+      onDrop: (item: WindowCardDragItem, result: DropResult) => void;
+      children: React.ReactNode;
+      targetWindowId?: string;
+      targetGroupId?: string;
+      targetCanvasWorkspaceId?: string;
+    }) => {
+      dropZoneProps.push({ onDrop, targetWindowId, targetGroupId, targetCanvasWorkspaceId });
       return <div>{children}</div>;
     },
   };
@@ -69,6 +87,18 @@ const makeWindow = (overrides: MakeWindowOptions): Window => {
   };
 };
 
+const makeCanvasWorkspace = (overrides: Partial<CanvasWorkspace> = {}): CanvasWorkspace => ({
+  id: 'canvas-1',
+  name: 'Ops Board',
+  createdAt: '2026-05-03T00:00:00.000Z',
+  updatedAt: '2026-05-03T00:00:00.000Z',
+  workingDirectory: '/workspace/ops',
+  blocks: [],
+  viewport: { tx: 0, ty: 0, zoom: 1 },
+  nextZIndex: 1,
+  ...overrides,
+});
+
 function renderCardGrid(props: React.ComponentProps<typeof CardGrid> = {}) {
   return render(
     <DndProvider backend={HTML5Backend}>
@@ -84,6 +114,7 @@ describe('CardGrid', () => {
     useWindowStore.setState({
       windows: [],
       groups: [],
+      canvasWorkspaces: [],
       customCategories: [],
       activeWindowId: null,
       activeGroupId: null,
@@ -274,5 +305,40 @@ describe('CardGrid', () => {
     expect(updatedGroup && screen.getByText('Existing Group')).toBeInTheDocument();
     expect(updatedGroup && updatedGroup.layout.type).toBe('split');
     expect(updatedGroup && JSON.stringify(updatedGroup.layout)).toContain(sourceWindow.id);
+  });
+
+  it('adds a dragged window into an existing canvas workspace from the card grid', () => {
+    const sourceWindow = makeWindow({ id: 'source', name: 'Source Window' });
+    useWindowStore.setState({
+      windows: [sourceWindow],
+      canvasWorkspaces: [makeCanvasWorkspace()],
+    });
+
+    renderCardGrid();
+
+    const targetDropZone = dropZoneProps.find((props) => props.targetCanvasWorkspaceId === 'canvas-1');
+
+    expect(targetDropZone).toBeDefined();
+    targetDropZone?.onDrop(
+      {
+        type: 'WINDOW_CARD',
+        windowId: sourceWindow.id,
+        windowName: sourceWindow.name,
+        source: 'cardGrid',
+      },
+      {
+        position: 'center',
+        targetCanvasWorkspaceId: 'canvas-1',
+      },
+    );
+
+    const updatedCanvasWorkspace = useWindowStore.getState().canvasWorkspaces[0];
+    expect(updatedCanvasWorkspace?.blocks).toHaveLength(1);
+    expect(updatedCanvasWorkspace?.blocks[0]).toMatchObject({
+      type: 'window',
+      windowId: sourceWindow.id,
+      label: sourceWindow.name,
+      displayMode: 'summary',
+    });
   });
 });

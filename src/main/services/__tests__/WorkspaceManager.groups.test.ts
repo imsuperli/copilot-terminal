@@ -1,118 +1,172 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'fs-extra';
+import path from 'path';
+import { app } from 'electron';
+import { WorkspaceManagerImpl } from '../WorkspaceManager';
 
-/**
- * WorkspaceManager 版本迁移测试
- *
- * 测试范围：
- * - workspace.json 版本 2.0 -> 3.0 迁移
- * - 组数据的保存和加载
- * - 组完整性验证
- */
-describe('WorkspaceManager - Version 3.0 Migration', () => {
-  beforeEach(() => {
-    // TODO: 初始化 WorkspaceManager 实例
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/mock/user/data'),
+    getLocale: vi.fn(() => 'en-US'),
+  },
+}));
+
+vi.mock('../../utils/ideScanner', () => ({
+  getSupportedIDEIds: vi.fn(() => new Set<string>()),
+}));
+
+describe('WorkspaceManager group and canvas normalization', () => {
+  let testDir: string;
+  let workspacePath: string;
+  let workspaceManager: WorkspaceManagerImpl;
+
+  beforeEach(async () => {
+    testDir = path.join(__dirname, '.test-workspace-groups');
+    await fs.ensureDir(testDir);
+    vi.mocked(app.getPath).mockReturnValue(testDir);
+    vi.mocked(app.getLocale).mockReturnValue('en-US');
+    workspaceManager = new WorkspaceManagerImpl();
+    workspacePath = path.join(testDir, 'workspace.json');
   });
 
-  describe('Version Migration', () => {
-    it('should migrate from version 2.0 to 3.0', () => {
-      // TODO: 实现测试
-      // 场景：加载 2.0 版本的 workspace.json，自动添加空的 groups 数组
-    });
-
-    it('should preserve existing windows during migration', () => {
-      // TODO: 实现测试
-    });
-
-    it('should update version number to 3.0', () => {
-      // TODO: 实现测试
-    });
-
-    it('should handle migration from version 1.0 to 3.0', () => {
-      // TODO: 实现测试
-      // 场景：1.0 -> 2.0 -> 3.0 的连续迁移
-    });
+  afterEach(async () => {
+    await fs.remove(testDir);
   });
 
-  describe('Save Groups', () => {
-    it('should save groups to workspace.json', () => {
-      // TODO: 实现测试
-    });
+  it('migrates a 2.0 workspace by adding groups and canvasWorkspaces arrays', async () => {
+    await fs.writeJson(workspacePath, {
+      version: '2.0',
+      windows: [],
+      settings: {
+        notificationsEnabled: true,
+        theme: 'dark',
+        autoSave: true,
+        autoSaveInterval: 5,
+      },
+      lastSavedAt: '2026-05-03T00:00:00.000Z',
+    }, { spaces: 2 });
 
-    it('should save group layout correctly', () => {
-      // TODO: 实现测试
-    });
+    const loaded = await workspaceManager.loadWorkspace();
+    expect(loaded.version).toBe('3.0');
+    expect(loaded.groups).toEqual([]);
+    expect(loaded.canvasWorkspaces).toEqual([]);
 
-    it('should save group metadata (createdAt, lastActiveAt)', () => {
-      // TODO: 实现测试
-    });
-
-    it('should validate groups before saving', () => {
-      // TODO: 实现测试
-    });
+    const persisted = await fs.readJson(workspacePath);
+    expect(persisted.version).toBe('3.0');
+    expect(persisted.groups).toEqual([]);
+    expect(persisted.canvasWorkspaces).toEqual([]);
   });
 
-  describe('Load Groups', () => {
-    it('should load groups from workspace.json', () => {
-      // TODO: 实现测试
-    });
+  it('keeps workspaces without a groups field backward compatible', async () => {
+    await fs.writeJson(workspacePath, {
+      version: '3.0',
+      windows: [],
+      canvasWorkspaces: [],
+      settings: {
+        notificationsEnabled: true,
+        theme: 'dark',
+        autoSave: true,
+        autoSaveInterval: 5,
+      },
+      lastSavedAt: '2026-05-03T00:00:00.000Z',
+    }, { spaces: 2 });
 
-    it('should restore group layout correctly', () => {
-      // TODO: 实现测试
-    });
-
-    it('should validate group integrity after loading', () => {
-      // TODO: 实现测试
-    });
-
-    it('should remove invalid groups after loading', () => {
-      // TODO: 实现测试
-      // 场景：组引用了不存在的窗口
-    });
+    const loaded = await workspaceManager.loadWorkspace();
+    expect(loaded.groups).toEqual([]);
+    expect(loaded.canvasWorkspaces).toEqual([]);
   });
 
-  describe('Group Integrity Validation', () => {
-    it('should remove nodes referencing non-existent windows', () => {
-      // TODO: 实现测试
-    });
+  it('removes invalid group nodes and dissolves groups that end up with fewer than two valid windows', async () => {
+    await fs.writeJson(workspacePath, {
+      version: '3.0',
+      windows: [
+        {
+          id: 'window-1',
+          name: 'Window 1',
+          activePaneId: 'pane-1',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          lastActiveAt: '2026-05-03T00:00:00.000Z',
+          layout: {
+            type: 'pane',
+            id: 'pane-node-1',
+            pane: {
+              id: 'pane-1',
+              cwd: '/workspace/project-a',
+              command: 'bash',
+              backend: 'local',
+            },
+          },
+        },
+        {
+          id: 'window-2',
+          name: 'Window 2',
+          activePaneId: 'pane-2',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          lastActiveAt: '2026-05-03T00:00:00.000Z',
+          layout: {
+            type: 'pane',
+            id: 'pane-node-2',
+            pane: {
+              id: 'pane-2',
+              cwd: '/workspace/project-b',
+              command: 'bash',
+              backend: 'local',
+            },
+          },
+        },
+      ],
+      groups: [
+        {
+          id: 'group-1',
+          name: 'Valid after cleanup',
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [0.2, 0.4, 0.4],
+            children: [
+              { type: 'window', id: 'missing-window' },
+              { type: 'window', id: 'window-1' },
+              { type: 'window', id: 'window-2' },
+            ],
+          },
+          activeWindowId: 'missing-window',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          lastActiveAt: '2026-05-03T00:00:00.000Z',
+        },
+        {
+          id: 'group-2',
+          name: 'Should dissolve',
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [0.5, 0.5],
+            children: [
+              { type: 'window', id: 'window-1' },
+              { type: 'window', id: 'missing-window-2' },
+            ],
+          },
+          activeWindowId: 'window-1',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          lastActiveAt: '2026-05-03T00:00:00.000Z',
+        },
+      ],
+      canvasWorkspaces: [],
+      settings: {
+        notificationsEnabled: true,
+        theme: 'dark',
+        autoSave: true,
+        autoSaveInterval: 5,
+      },
+      lastSavedAt: '2026-05-03T00:00:00.000Z',
+    }, { spaces: 2 });
 
-    it('should dissolve group if only one window remains', () => {
-      // TODO: 实现测试
-    });
-
-    it('should handle corrupted group layout', () => {
-      // TODO: 实现测试
-    });
-
-    it('should log validation errors', () => {
-      // TODO: 实现测试
-    });
-  });
-
-  describe('Backward Compatibility', () => {
-    it('should handle workspace.json without groups field', () => {
-      // TODO: 实现测试
-    });
-
-    it('should not break existing functionality', () => {
-      // TODO: 实现测试
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle file read errors', () => {
-      // TODO: 实现测试
-    });
-
-    it('should handle JSON parse errors', () => {
-      // TODO: 实现测试
-    });
-
-    it('should handle file write errors', () => {
-      // TODO: 实现测试
-    });
-
-    it('should create backup before migration', () => {
-      // TODO: 实现测试
+    const loaded = await workspaceManager.loadWorkspace();
+    expect(loaded.groups).toHaveLength(1);
+    expect(loaded.groups[0]?.id).toBe('group-1');
+    expect(loaded.groups[0]?.activeWindowId).toBe('window-1');
+    expect(loaded.groups[0]?.layout).toMatchObject({
+      type: 'split',
+      sizes: [0.5, 0.5],
     });
   });
 });

@@ -41,7 +41,7 @@ import {
   SSHSftpDirectoryListing,
   SSHSessionMetrics,
 } from './ssh';
-import { CanvasWorkspace } from './canvas';
+import { CanvasActivityEvent, CanvasWorkspace, CanvasWorkspaceTemplate } from './canvas';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
@@ -1864,6 +1864,8 @@ export interface ElectronAPI {
     windows: Window[];
     groups?: WindowGroup[];
     canvasWorkspaces?: CanvasWorkspace[];
+    canvasWorkspaceTemplates?: CanvasWorkspaceTemplate[];
+    canvasActivity?: CanvasActivityEvent[];
   }) => Promise<IpcResponse<void>>;
   loadWorkspace: () => Promise<IpcResponse<Workspace>>;
   onWorkspaceLoaded: (callback: ElectronEventHandler<Workspace>) => void;
@@ -1872,6 +1874,8 @@ export interface ElectronAPI {
     windows?: Window[],
     groups?: WindowGroup[],
     canvasWorkspaces?: CanvasWorkspace[],
+    canvasWorkspaceTemplates?: CanvasWorkspaceTemplate[],
+    canvasActivity?: CanvasActivityEvent[],
   ) => void;
 
   writeClipboardText: (text: string) => Promise<IpcResponse<void>>;

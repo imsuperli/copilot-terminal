@@ -153,20 +153,23 @@ describe('CanvasWorkspaceView', () => {
     expect(onExitWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it('exposes creating a terminal from the canvas toolbar', async () => {
+  it('creates a new local terminal block from the canvas toolbar', async () => {
     const user = userEvent.setup();
-    const onCreateTerminal = vi.fn();
 
     render(
       <CanvasWorkspaceView
         canvasWorkspace={createCanvasWorkspace()}
-        onCreateTerminal={onCreateTerminal}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '新建终端' }));
+    await user.click(screen.getByRole('button', { name: '新建块' }));
+    await user.click(screen.getByRole('button', { name: /本地终端/i }));
+    await user.click(screen.getByRole('button', { name: '创建' }));
 
-    expect(onCreateTerminal).toHaveBeenCalledWith('canvas-1');
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      expect(updated?.blocks.filter((block) => block.type === 'window')).toHaveLength(3);
+    });
   });
 
   it('toggles a window block into live embedded mode', async () => {

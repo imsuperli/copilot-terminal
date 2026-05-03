@@ -83,13 +83,7 @@ function getGroupStatusFromWindowStatuses(statuses: WindowStatus[]): WindowStatu
 
 /**
  * GroupCard 组件
- * 显示窗口组的关键信息和状态
- *
- * TODO: 等待任务 #1、#2、#3 完成后实现以下功能：
- * - 显示组内窗口数量（文件夹图标 + 数字徽章）
- * - 显示组的聚合状态（基于组内所有窗口的状态）
- * - 支持批量操作（启动/销毁所有窗口）
- * - 显示组的创建时间和最后活跃时间
+ * 展示窗口组概览、聚合状态和批量操作。
  */
 export const GroupCard = React.memo<GroupCardProps>(({
   group,

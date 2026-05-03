@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatSshContext, ToolCall } from './chat';
+import type { ChatContextFragment } from './chat';
 import type {
   AgentInteractionType,
   AgentOffloadRef,
@@ -68,6 +69,7 @@ export interface AgentSendRequest {
   enableTools?: boolean;
   linkedPaneId?: string;
   sshContext?: ChatSshContext;
+  contextFragments?: ChatContextFragment[];
   environmentDetails?: string;
   seedMessages?: ChatMessage[];
 }

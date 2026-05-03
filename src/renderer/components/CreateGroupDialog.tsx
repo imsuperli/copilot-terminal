@@ -13,15 +13,7 @@ interface CreateGroupDialogProps {
 
 /**
  * CreateGroupDialog 组件
- * 创建窗口组对话框
- *
- * TODO: 等待任务 #1、#2、#3 完成后实现以下功能：
- * - 输入组名称
- * - 选择已有窗口（多选）
- * - 或者输入工作目录路径创建新窗口并加入组
- * - 支持至少选择 2 个窗口才能创建组
- * - 调用 IPC 接口创建组
- * - 更新 windowStore 状态
+ * 创建窗口组并从现有窗口中选择成员。
  */
 export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps) {
   const { t } = useI18n();

@@ -41,6 +41,8 @@ function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings
     providers: settings?.providers ?? [],
     activeProviderId: settings?.activeProviderId,
     defaultSystemPrompt: settings?.defaultSystemPrompt ?? '',
+    workspaceInstructions: settings?.workspaceInstructions ?? '',
+    contextFilePaths: settings?.contextFilePaths ?? [],
     enableCommandSecurity: settings?.enableCommandSecurity ?? true,
   };
 }
@@ -484,6 +486,35 @@ export const ChatSettingsTab: React.FC = () => {
     }
   }, [chatSettings, persistChatSettings]);
 
+  const handleWorkspaceInstructionsBlur = useCallback(async (event: React.FocusEvent<HTMLTextAreaElement>) => {
+    try {
+      await persistChatSettings({
+        ...chatSettings,
+        workspaceInstructions: event.target.value,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to update workspace instructions:', error);
+      setSettingsError(message);
+    }
+  }, [chatSettings, persistChatSettings]);
+
+  const handleContextFilesBlur = useCallback(async (event: React.FocusEvent<HTMLTextAreaElement>) => {
+    try {
+      await persistChatSettings({
+        ...chatSettings,
+        contextFilePaths: event.target.value
+          .split('\n')
+          .map((value) => value.trim())
+          .filter(Boolean),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to update chat context files:', error);
+      setSettingsError(message);
+    }
+  }, [chatSettings, persistChatSettings]);
+
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       {settingsError && (
@@ -491,6 +522,71 @@ export const ChatSettingsTab: React.FC = () => {
           {settingsError}
         </div>
       )}
+
+      <CompactSettingsSection
+        title={t('settings.chat.defaultsTitle')}
+        help={t('settings.chat.defaultsDescription')}
+        icon={<SlidersHorizontal size={15} />}
+        contentClassName="overflow-hidden"
+      >
+        <CompactSettingRow
+          label={t('settings.chat.systemPromptLabel')}
+          help={t('settings.chat.systemPromptPlaceholder')}
+        >
+          <textarea
+            defaultValue={chatSettings.defaultSystemPrompt ?? ''}
+            onBlur={handleSystemPromptBlur}
+            className={`${inputClassName} min-h-[120px] max-w-[720px] resize-y`}
+            placeholder={t('settings.chat.systemPromptPlaceholder')}
+          />
+        </CompactSettingRow>
+
+        <CompactSettingRow
+          label={t('settings.chat.workspaceInstructionsLabel')}
+          help={t('settings.chat.workspaceInstructionsDescription')}
+        >
+          <textarea
+            defaultValue={chatSettings.workspaceInstructions ?? ''}
+            onBlur={handleWorkspaceInstructionsBlur}
+            className={`${inputClassName} min-h-[120px] max-w-[720px] resize-y`}
+            placeholder={t('settings.chat.workspaceInstructionsPlaceholder')}
+          />
+        </CompactSettingRow>
+
+        <CompactSettingRow
+          label={t('settings.chat.contextFilesLabel')}
+          help={t('settings.chat.contextFilesDescription')}
+        >
+          <textarea
+            defaultValue={(chatSettings.contextFilePaths ?? []).join('\n')}
+            onBlur={handleContextFilesBlur}
+            className={`${inputClassName} min-h-[120px] max-w-[720px] resize-y font-mono text-xs`}
+            placeholder={t('settings.chat.contextFilesPlaceholder')}
+          />
+        </CompactSettingRow>
+
+        <CompactSettingRow
+          label={t('settings.chat.commandSecurityTitle')}
+          help={t('settings.chat.commandSecurityDescription')}
+        >
+          <Switch.Root
+            checked={chatSettings.enableCommandSecurity ?? true}
+            onCheckedChange={(checked) => {
+              void persistChatSettings({
+                ...chatSettings,
+                enableCommandSecurity: checked,
+              }).catch((error) => {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error('Failed to update command security setting:', error);
+                setSettingsError(message);
+              });
+            }}
+            className={compactSwitchRootClassName}
+          >
+            <Switch.Thumb className={compactSwitchThumbClassName} />
+          </Switch.Root>
+        </CompactSettingRow>
+      </CompactSettingsSection>
 
       <CompactSettingsSection
         title={t('settings.chat.providersTitle')}

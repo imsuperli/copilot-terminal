@@ -15,11 +15,20 @@ export function buildAgentSystemPrompt({
 }: BuildAgentSystemPromptOptions): string {
   const sshContext = request.sshContext;
   const environmentDetails = request.environmentDetails?.trim() || '无';
+  const contextFragments = request.contextFragments ?? [];
   const skillInstructions = skillsManager.getSystemPromptAddendum({
     sshBound: Boolean(sshContext),
     userMessage: request.text,
   });
   const mcpSummary = mcpHub.describeAvailableTools();
+  const contextSummary = contextFragments.length > 0
+    ? [
+        '附加文件上下文：',
+        ...contextFragments.map((fragment) => (
+          `文件 ${fragment.label} (${fragment.path})：\n${fragment.content}`
+        )),
+      ].join('\n\n')
+    : '';
 
   return [
     '你是一个面向远端服务器排障的任务型 Agent，而不是普通聊天助手。',
@@ -35,6 +44,7 @@ export function buildAgentSystemPrompt({
       ? `当前绑定 SSH：host=${sshContext.host}, user=${sshContext.user}${sshContext.cwd ? `, cwd=${sshContext.cwd}` : ''}`
       : '当前没有绑定可执行 SSH 会话。',
     `环境探测：\n${environmentDetails}`,
+    contextSummary,
     skillInstructions,
     mcpSummary,
     request.systemPrompt?.trim()

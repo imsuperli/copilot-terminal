@@ -30,6 +30,10 @@ export interface ChatSettings {
   activeProviderId?: string;
   /** 全局默认 system prompt */
   defaultSystemPrompt?: string;
+  /** 工作区级附加指令，会在默认 system prompt 之后拼接 */
+  workspaceInstructions?: string;
+  /** 固定纳入对话上下文的工作区文件 */
+  contextFilePaths?: string[];
   /** 是否启用命令安全检查，默认 true */
   enableCommandSecurity?: boolean;
 }
@@ -118,6 +122,18 @@ export interface ChatPaneState {
   isStreaming?: boolean;
   /** 关联的终端 pane id，用于获取 SSH 上下文 */
   linkedPaneId?: string;
+  /** 最近解析的上下文片段 */
+  contextFragments?: ChatContextFragment[];
+  /** 手动保存的恢复点 */
+  checkpoints?: Array<{
+    id: string;
+    title: string;
+    createdAt: string;
+    messages: ChatMessage[];
+    agent?: AgentTaskSnapshot;
+    composerValue?: string;
+    linkedPaneId?: string;
+  }>;
   /** 新 agent 子系统快照 */
   agent?: AgentTaskSnapshot;
 }
@@ -152,8 +168,17 @@ export interface ChatSendRequest {
   enableTools?: boolean;
   /** SSH 上下文（有关联终端时提供）*/
   sshContext?: ChatSshContext;
+  /** 额外上下文片段（如 @file 扩展结果） */
+  contextFragments?: ChatContextFragment[];
   /** 主进程预采集的真实环境信息，供系统提示词使用 */
   environmentDetails?: string;
+}
+
+export interface ChatContextFragment {
+  type: 'file';
+  label: string;
+  path: string;
+  content: string;
 }
 
 /** Main → Renderer：流式文本块 */

@@ -209,6 +209,48 @@ describe('App terminal mounting', () => {
     expect(screen.getByTestId(`terminal-${windowTwo.id}`)).toHaveAttribute('data-active', 'true');
   });
 
+  it('does not suppress the active terminal surface just because another canvas persisted the same window in live mode', () => {
+    const windowOne = withSinglePaneStatus(
+      createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe'),
+      WindowStatus.Running,
+    );
+
+    useWindowStore.setState({
+      windows: [windowOne],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Ops Board',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z',
+          blocks: [
+            {
+              id: 'window-block-1',
+              type: 'window',
+              windowId: windowOne.id,
+              x: 0,
+              y: 0,
+              width: 360,
+              height: 220,
+              zIndex: 1,
+              displayMode: 'live',
+            },
+          ],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 2,
+        },
+      ],
+      activeWindowId: windowOne.id,
+      mruList: [windowOne.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    expect(screen.getByTestId(`terminal-${windowOne.id}`)).toHaveAttribute('data-active', 'true');
+  });
+
   it('clears pane runtime when the main process reports an exited pane', () => {
     const terminalWindow = createSinglePaneWindow('SSH Window', '/srv/app', '');
     const paneId = terminalWindow.activePaneId;

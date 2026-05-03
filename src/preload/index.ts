@@ -473,8 +473,21 @@ const electronAPI: ElectronAPI = {
   },
 
   // Auto-save
-  triggerAutoSave: (windows?: unknown[], groups?: unknown[], canvasWorkspaces?: unknown[]) =>
-    ipcRenderer.send('trigger-auto-save', windows, groups, canvasWorkspaces),
+  triggerAutoSave: (
+    windows?: unknown[],
+    groups?: unknown[],
+    canvasWorkspaces?: unknown[],
+    canvasWorkspaceTemplates?: unknown[],
+    canvasActivity?: unknown[],
+  ) =>
+    ipcRenderer.send(
+      'trigger-auto-save',
+      windows,
+      groups,
+      canvasWorkspaces,
+      canvasWorkspaceTemplates,
+      canvasActivity,
+    ),
 
   // Clipboard
   writeClipboardText: (text: string) =>

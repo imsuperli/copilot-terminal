@@ -3042,4 +3042,435 @@ describe('ChatPane', () => {
       window.cancelAnimationFrame = originalCancelAnimationFrame;
     }
   });
+
+  it('includes workspace instructions and file context fragments in agent requests', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          defaultSystemPrompt: '你是默认系统提示词',
+          workspaceInstructions: '回复使用中文，并优先给出最小修改方案。',
+          contextFilePaths: ['/workspace/project/README.md'],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-ctx',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: '# Project README',
+          mtimeMs: Date.now(),
+          size: 16,
+          language: 'markdown',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: 'export const answer = 42;\n',
+          mtimeMs: Date.now(),
+          size: 26,
+          language: 'typescript',
+          isBinary: false,
+        },
+      });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(
+      await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'),
+      '请参考 @/workspace/project/src/index.ts 并总结实现方式',
+    );
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
+        systemPrompt: '你是默认系统提示词\n\n回复使用中文，并优先给出最小修改方案。',
+        contextFragments: [
+          {
+            type: 'file',
+            path: '/workspace/project/README.md',
+            label: 'README.md',
+            content: '# Project README',
+          },
+          {
+            type: 'file',
+            path: '/workspace/project/src/index.ts',
+            label: 'index.ts',
+            content: 'export const answer = 42;\n',
+          },
+        ],
+      }));
+    });
+
+    expect(window.electronAPI.codePaneReadFile).toHaveBeenNthCalledWith(1, {
+      rootPath: '/workspace/project/README.md',
+      filePath: '/workspace/project/README.md',
+    });
+    expect(window.electronAPI.codePaneReadFile).toHaveBeenNthCalledWith(2, {
+      rootPath: '/workspace/project/src/index.ts',
+      filePath: '/workspace/project/src/index.ts',
+    });
+  });
+
+  it('shows checkpoints in the history menu and restores from there', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.agentResetTask).mockResolvedValue({
+      success: true,
+      data: undefined,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                    checkpoints: [
+                      {
+                        id: 'checkpoint-1',
+                        title: '排障草稿',
+                        createdAt: '2026-04-14T10:10:00.000Z',
+                        messages: [
+                          {
+                            id: 'checkpoint-user-1',
+                            role: 'user',
+                            content: '恢复这个检查点',
+                            timestamp: '2026-04-14T10:10:00.000Z',
+                          },
+                        ],
+                        composerValue: '继续追问磁盘占用',
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await screen.findByText('排障草稿');
+    await user.click(screen.getByRole('button', { name: '对话历史' }));
+
+    expect(screen.getByText('检查点')).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: /排障草稿/ })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('恢复这个检查点')).toBeInTheDocument();
+    });
+    expect(screen.getByDisplayValue('继续追问磁盘占用')).toBeInTheDocument();
+  });
+
+  it('records canvas activity for chat sends, checkpoints, and agent errors', async () => {
+    const user = userEvent.setup();
+    const listeners = createListenerMap();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-canvas',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation((callback) => {
+      listeners.state.add(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation((callback) => {
+      listeners.state.delete(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation((callback) => {
+      listeners.error.add(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation((callback) => {
+      listeners.error.delete(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Canvas Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [
+                      {
+                        id: 'seed-message-1',
+                        role: 'assistant',
+                        content: '已有上下文',
+                        timestamp: new Date().toISOString(),
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Canvas One',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          blocks: [
+            {
+              id: 'canvas-block-1',
+              type: 'window',
+              windowId: 'win-1',
+              x: 0,
+              y: 0,
+              width: 360,
+              height: 220,
+              zIndex: 1,
+            },
+          ],
+          viewport: {
+            tx: 0,
+            ty: 0,
+            zoom: 1,
+          },
+          nextZIndex: 2,
+        },
+      ],
+      canvasActivity: [],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '检查一下日志');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentSend).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      listeners.state.forEach((listener) => listener({}, {
+        paneId: 'chat-pane-1',
+        task: createAgentSnapshot({
+          taskId: 'task-canvas',
+          status: 'completed',
+          messages: [
+            {
+              id: 'canvas-user-1',
+              role: 'user',
+              content: '检查一下日志',
+              timestamp: new Date().toISOString(),
+            },
+            {
+              id: 'canvas-assistant-1',
+              role: 'assistant',
+              content: '日志已经检查完毕。',
+              timestamp: new Date().toISOString(),
+              model: 'claude-sonnet-4-5',
+            },
+          ],
+        }),
+      }));
+    });
+
+    await user.click(screen.getByRole('button', { name: '保存检查点' }));
+
+    await act(async () => {
+      listeners.error.forEach((listener) => listener({}, {
+        paneId: 'chat-pane-1',
+        error: 'Agent task crashed',
+      }));
+    });
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().canvasActivity).toHaveLength(3);
+    });
+
+    const activity = useWindowStore.getState().canvasActivity;
+    expect(activity.map((item) => item.type)).toEqual([
+      'chat-sent',
+      'checkpoint-saved',
+      'agent-error',
+    ]);
+    expect(activity.every((item) => item.workspaceId === 'canvas-1')).toBe(true);
+    expect(activity.every((item) => item.blockId === 'canvas-block-1')).toBe(true);
+    expect(activity[0]?.message).toBe('检查一下日志');
+    expect(activity[1]?.title).toBe('保存了一个聊天检查点');
+    expect(activity[2]?.message).toBe('Agent task crashed');
+  });
 });

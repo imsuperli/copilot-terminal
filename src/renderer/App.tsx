@@ -55,6 +55,7 @@ import {
   logMountedTerminalObservation,
   markTerminalSwitchVisible,
 } from './utils/perfObservability';
+import { createCanvasWindowBlock } from './utils/canvasWorkspace';
 import {
   applyAppearanceToDocument,
   getAppearanceFromSettings,
@@ -101,21 +102,6 @@ function resolveSSHProfileEntryCwd(profile: SSHProfile): string {
 
 function resolveSSHProfileEntryCommand(profile: SSHProfile): string {
   return profile.remoteCommand || '';
-}
-
-function createCanvasWindowBlock(windowItem: Window, index: number, zIndex: number) {
-  return {
-    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? `window-${crypto.randomUUID()}` : `window-${Date.now()}`,
-    type: 'window' as const,
-    windowId: windowItem.id,
-    x: 80 + index * 28,
-    y: 80 + index * 24,
-    width: 360,
-    height: 220,
-    zIndex,
-    label: windowItem.name,
-    displayMode: 'summary' as const,
-  };
 }
 
 function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): string[] {
@@ -1186,6 +1172,11 @@ function AppContent() {
     setIsDialogOpen(true);
   }, []);
 
+  const handleCanvasWorkspaceCreated = useCallback(async (canvasWorkspace: { id: string }) => {
+    setCanvasCreateContextWorkspaceId(null);
+    await switchToCanvasView(canvasWorkspace.id);
+  }, [switchToCanvasView]);
+
   const handleCanvasLocalWindowCreated = useCallback(async (windowItem: Window) => {
     if (!canvasCreateContextWorkspaceId) {
       return;
@@ -1282,17 +1273,23 @@ function AppContent() {
   }, [activeWindowId, mountedTerminalWindowIds]);
   const liveCanvasWindowIds = useMemo(() => {
     const ids = new Set<string>();
+    if (currentView !== 'canvas' || !currentActiveCanvasWorkspaceId) {
+      return ids;
+    }
 
-    for (const canvasWorkspace of canvasWorkspaces) {
-      for (const block of canvasWorkspace.blocks) {
-        if (block.type === 'window' && block.displayMode === 'live') {
-          ids.add(block.windowId);
-        }
+    const activeCanvasWorkspace = canvasWorkspaces.find((canvasWorkspace) => canvasWorkspace.id === currentActiveCanvasWorkspaceId);
+    if (!activeCanvasWorkspace) {
+      return ids;
+    }
+
+    for (const block of activeCanvasWorkspace.blocks) {
+      if (block.type === 'window' && block.displayMode === 'live') {
+        ids.add(block.windowId);
       }
     }
 
     return ids;
-  }, [canvasWorkspaces]);
+  }, [canvasWorkspaces, currentActiveCanvasWorkspaceId, currentView]);
   const mountedTerminalObservation = useMemo(() => (
     createMountedTerminalObservationSnapshot({
       currentView,
@@ -1489,8 +1486,8 @@ function AppContent() {
               <CanvasWorkspaceView
                 key={canvasWorkspace.id}
                 canvasWorkspace={canvasWorkspace}
+                sshProfiles={sshProfiles}
                 onOpenWindow={handleOpenWindowFromCanvas}
-                onCreateTerminal={handleCreateTerminalFromCanvas}
                 renderLiveWindow={(windowId, options) => {
                   const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
                   if (!embeddedWindow) {
@@ -1575,6 +1572,7 @@ function AppContent() {
         sshEnabled={sshEnabled}
         sshProfiles={sshProfiles}
         onLocalWindowCreated={handleCanvasLocalWindowCreated}
+        onCanvasWorkspaceCreated={handleCanvasWorkspaceCreated}
         onSSHProfileSaved={handleSSHProfileSaved}
         onSSHProfileConnect={handleConnectSSHProfileIntoCanvas}
         sshSubmitMode={canvasCreateContextWorkspaceId ? 'saveAndConnect' : 'save'}

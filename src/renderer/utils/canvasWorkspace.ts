@@ -1,8 +1,10 @@
 import type {
   CanvasBlock,
+  CanvasWindowBlock,
   CanvasBlockType,
   CanvasViewport,
 } from '../../shared/types/canvas';
+import type { Window } from '../types/window';
 
 export type CanvasArrangeMode = 'grid' | 'row' | 'column';
 export type CanvasResizeDirection = 'e' | 's' | 'se' | 'w' | 'n' | 'nw' | 'ne' | 'sw';
@@ -28,6 +30,21 @@ const MIN_BLOCK_SIZE: Record<CanvasBlockType, { width: number; height: number }>
 
 export function clampZoom(zoom: number): number {
   return Math.max(CANVAS_MIN_ZOOM, Math.min(CANVAS_MAX_ZOOM, zoom));
+}
+
+export function createCanvasWindowBlock(windowItem: Window, index: number, zIndex: number): CanvasWindowBlock {
+  return {
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? `window-${crypto.randomUUID()}` : `window-${Date.now()}`,
+    type: 'window',
+    windowId: windowItem.id,
+    x: 80 + index * 28,
+    y: 80 + index * 24,
+    width: DEFAULT_WINDOW_BLOCK_SIZE.width,
+    height: DEFAULT_WINDOW_BLOCK_SIZE.height,
+    zIndex,
+    label: windowItem.name,
+    displayMode: 'summary',
+  };
 }
 
 export function arrangeCanvasBlocks(

@@ -4,6 +4,7 @@ import { Window } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
 import { CanvasWorkspace } from './canvas';
+import type { CanvasActivityEvent, CanvasWorkspaceTemplate } from './canvas';
 import type { ChatSettings } from './chat';
 import type { WorkspacePluginSettings } from './plugin';
 import type { AppearanceSettings } from './appearance';
@@ -100,6 +101,8 @@ export interface Workspace {
   windows: Window[];
   groups: WindowGroup[];
   canvasWorkspaces: CanvasWorkspace[];
+  canvasWorkspaceTemplates?: CanvasWorkspaceTemplate[];
+  canvasActivity?: CanvasActivityEvent[];
   settings: Settings;
   lastSavedAt: string;
 }

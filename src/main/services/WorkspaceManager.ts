@@ -3,7 +3,12 @@ import path from 'path';
 import { app } from 'electron';
 import { randomUUID } from 'crypto';
 import { Workspace, Settings } from '../types/workspace';
-import { CanvasBlock, CanvasWorkspace } from '../../shared/types/canvas';
+import type {
+  CanvasActivityEvent,
+  CanvasBlock,
+  CanvasWorkspace,
+  CanvasWorkspaceTemplate,
+} from '../../shared/types/canvas';
 import { LayoutNode, PaneNode, SplitNode, Window, WindowStatus } from '../../shared/types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
@@ -750,6 +755,32 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           }
         }
       }
+
+      if (ws.canvasWorkspaceTemplates !== undefined) {
+        if (!Array.isArray(ws.canvasWorkspaceTemplates)) {
+          console.warn('Workspace canvasWorkspaceTemplates must be an array when present');
+          return false;
+        }
+
+        for (const template of ws.canvasWorkspaceTemplates) {
+          if (!this.validateCanvasWorkspaceTemplate(template)) {
+            return false;
+          }
+        }
+      }
+
+      if (ws.canvasActivity !== undefined) {
+        if (!Array.isArray(ws.canvasActivity)) {
+          console.warn('Workspace canvasActivity must be an array when present');
+          return false;
+        }
+
+        for (const event of ws.canvasActivity) {
+          if (!this.validateCanvasActivityEvent(event)) {
+            return false;
+          }
+        }
+      }
     }
 
     return true;
@@ -790,6 +821,36 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       typeof viewport.tx === 'number'
       && typeof viewport.ty === 'number'
       && typeof viewport.zoom === 'number'
+    );
+  }
+
+  private validateCanvasWorkspaceTemplate(value: unknown): value is CanvasWorkspaceTemplate {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const template = value as Record<string, unknown>;
+    return (
+      typeof template.id === 'string'
+      && typeof template.name === 'string'
+      && typeof template.createdAt === 'string'
+      && typeof template.updatedAt === 'string'
+      && Array.isArray(template.blocks)
+    );
+  }
+
+  private validateCanvasActivityEvent(value: unknown): value is CanvasActivityEvent {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const event = value as Record<string, unknown>;
+    return (
+      typeof event.id === 'string'
+      && typeof event.workspaceId === 'string'
+      && typeof event.timestamp === 'string'
+      && typeof event.type === 'string'
+      && typeof event.title === 'string'
     );
   }
 
@@ -908,6 +969,8 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       windows: [],
       groups: [],
       canvasWorkspaces: [],
+      canvasWorkspaceTemplates: [],
+      canvasActivity: [],
       settings: this.getDefaultSettings(),
       lastSavedAt: '',
     };
@@ -921,6 +984,12 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         layout: this.hydrateLayout(window.layout),
       })),
       canvasWorkspaces: this.hydrateCanvasWorkspaces(workspace.canvasWorkspaces),
+      canvasWorkspaceTemplates: Array.isArray(workspace.canvasWorkspaceTemplates)
+        ? workspace.canvasWorkspaceTemplates
+        : [],
+      canvasActivity: Array.isArray(workspace.canvasActivity)
+        ? workspace.canvasActivity
+        : [],
       settings: this.normalizeSettings(workspace.settings),
     };
   }
@@ -1059,6 +1128,14 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           ?? true,
         maxUploadBytes: settings?.sshClipboardImage?.maxUploadBytes ?? defaults.sshClipboardImage?.maxUploadBytes ?? 20 * 1024 * 1024,
       },
+      chat: {
+        providers: settings?.chat?.providers ?? defaults.chat?.providers ?? [],
+        activeProviderId: settings?.chat?.activeProviderId ?? defaults.chat?.activeProviderId,
+        defaultSystemPrompt: settings?.chat?.defaultSystemPrompt ?? defaults.chat?.defaultSystemPrompt ?? '',
+        workspaceInstructions: settings?.chat?.workspaceInstructions ?? defaults.chat?.workspaceInstructions ?? '',
+        contextFilePaths: settings?.chat?.contextFilePaths ?? defaults.chat?.contextFilePaths ?? [],
+        enableCommandSecurity: settings?.chat?.enableCommandSecurity ?? defaults.chat?.enableCommandSecurity ?? true,
+      },
       plugins: normalizeWorkspacePluginSettings(settings?.plugins),
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
@@ -1102,6 +1179,14 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         customUploadDirectory: '',
         copyRemotePathAfterUpload: true,
         maxUploadBytes: 20 * 1024 * 1024,
+      },
+      chat: {
+        providers: [],
+        activeProviderId: undefined,
+        defaultSystemPrompt: '',
+        workspaceInstructions: '',
+        contextFilePaths: [],
+        enableCommandSecurity: true,
       },
       customCategories: [],
       defaultSidebarTab: 'active',

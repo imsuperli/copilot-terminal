@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link2, MonitorSmartphone, StickyNote } from 'lucide-react';
+import { Activity, Link2, MonitorSmartphone, Save, StickyNote } from 'lucide-react';
 import { AppLanguage } from '../../shared/i18n';
 import {
+  CanvasActivityEvent,
   CanvasBlock,
   CanvasNoteBlock,
   CanvasWindowBlock,
   CanvasWorkspace,
 } from '../../shared/types/canvas';
+import type { SSHProfile } from '../../shared/types/ssh';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
@@ -27,22 +29,26 @@ import {
   normalizeCanvasRect,
   resizeCanvasBlock,
 } from '../utils/canvasWorkspace';
+import { createTemplateFromWorkspace, createDefaultCanvasTemplates, instantiateCanvasWorkspaceFromTemplate } from '../utils/canvasTemplates';
+import { createCanvasWindowDraft } from '../utils/canvasWindowFactory';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { CanvasArrangeToolbar } from './CanvasArrangeToolbar';
 import { CanvasBlockChrome } from './CanvasBlockChrome';
+import { CanvasCreateBlockDialog } from './CanvasCreateBlockDialog';
 import { CanvasMinimap } from './CanvasMinimap';
 import { CanvasWindowPickerDialog } from './CanvasWindowPickerDialog';
 import { Dialog } from './ui/Dialog';
 import {
   idePopupActionButtonClassName,
+  idePopupCardClassName,
   idePopupInputClassName,
   idePopupSecondaryButtonClassName,
 } from './ui/ide-popup';
 
 interface CanvasWorkspaceViewProps {
   canvasWorkspace: CanvasWorkspace;
+  sshProfiles?: SSHProfile[];
   onOpenWindow?: (windowId: string) => void;
-  onCreateTerminal?: (canvasWorkspaceId: string) => void;
   renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => React.ReactNode;
   onExitWorkspace?: () => void | Promise<void>;
 }
@@ -94,8 +100,8 @@ function countLinkedWindowBlocks(blocks: CanvasBlock[], windowId: string): numbe
 
 export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   canvasWorkspace,
+  sshProfiles = [],
   onOpenWindow,
-  onCreateTerminal,
   renderLiveWindow,
   onExitWorkspace,
 }) => {
@@ -103,11 +109,22 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const windows = useWindowStore((state) => state.windows);
   const updateCanvasWorkspace = useWindowStore((state) => state.updateCanvasWorkspace);
   const removeCanvasWorkspace = useWindowStore((state) => state.removeCanvasWorkspace);
+  const addWindow = useWindowStore((state) => state.addWindow);
+  const canvasWorkspaceTemplates = useWindowStore((state) => state.canvasWorkspaceTemplates);
+  const setCanvasWorkspaceTemplates = useWindowStore((state) => state.setCanvasWorkspaceTemplates);
+  const upsertCanvasWorkspaceTemplate = useWindowStore((state) => state.upsertCanvasWorkspaceTemplate);
+  const removeCanvasWorkspaceTemplate = useWindowStore((state) => state.removeCanvasWorkspaceTemplate);
+  const canvasActivity = useWindowStore((state) => state.canvasActivity);
+  const appendCanvasActivity = useWindowStore((state) => state.appendCanvasActivity);
+  const clearCanvasActivity = useWindowStore((state) => state.clearCanvasActivity);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [lastArrangeMode, setLastArrangeMode] = useState<CanvasArrangeMode | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [relinkingBlockId, setRelinkingBlockId] = useState<string | null>(null);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [draftBlockTitle, setDraftBlockTitle] = useState('');
@@ -122,6 +139,17 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const windowsById = useMemo(
     () => new Map(windows.map((windowItem) => [windowItem.id, windowItem] as const)),
     [windows],
+  );
+  const workspaceActivity = useMemo(
+    () => canvasActivity
+      .filter((item) => item.workspaceId === canvasWorkspace.id)
+      .slice()
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp)),
+    [canvasActivity, canvasWorkspace.id],
+  );
+  const resolvedTemplates = useMemo(
+    () => canvasWorkspaceTemplates.length > 0 ? canvasWorkspaceTemplates : createDefaultCanvasTemplates(),
+    [canvasWorkspaceTemplates],
   );
 
   const availableWindows = useMemo(() => {
@@ -153,6 +181,12 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     const existingIds = new Set(canvasWorkspace.blocks.map((block) => block.id));
     setSelectedBlockIds((previous) => previous.filter((blockId) => existingIds.has(blockId)));
   }, [canvasWorkspace.blocks]);
+
+  useEffect(() => {
+    if (canvasWorkspaceTemplates.length === 0) {
+      setCanvasWorkspaceTemplates(createDefaultCanvasTemplates());
+    }
+  }, [canvasWorkspaceTemplates.length, setCanvasWorkspaceTemplates]);
 
   useEffect(() => {
     setWorkspaceNameDraft(canvasWorkspace.name);
@@ -202,6 +236,25 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     updateCanvasWorkspace(canvasWorkspace.id, updates);
     return { ...current, ...updates };
   }, [canvasWorkspace.id, updateCanvasWorkspace]);
+
+  const createCanvasEvent = useCallback((
+    type: CanvasActivityEvent['type'],
+    title: string,
+    message?: string,
+    extras?: Partial<Omit<CanvasActivityEvent, 'id' | 'workspaceId' | 'timestamp' | 'type' | 'title' | 'message'>>,
+  ) => {
+    appendCanvasActivity({
+      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `canvas-activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      workspaceId: canvasWorkspace.id,
+      timestamp: new Date().toISOString(),
+      type,
+      title,
+      message,
+      ...extras,
+    });
+  }, [appendCanvasActivity, canvasWorkspace.id]);
 
   const updateViewport = useCallback((tx: number, ty: number, zoom: number) => {
     persistWorkspace(() => ({
@@ -273,8 +326,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
     if (createdBlockId) {
       setSelectedBlockIds([createdBlockId]);
+      createCanvasEvent('note-added', t('canvas.addNote'), undefined, {
+        blockId: createdBlockId,
+      });
     }
-  }, [persistWorkspace, t]);
+  }, [createCanvasEvent, persistWorkspace, t]);
 
   const createNoteAtClient = useCallback((clientX: number, clientY: number) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -317,8 +373,45 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
     if (createdBlockId) {
       setSelectedBlockIds([createdBlockId]);
+      createCanvasEvent('window-added', linkedWindow.name, undefined, {
+        windowId,
+        blockId: createdBlockId,
+      });
     }
-  }, [persistWorkspace, windowsById]);
+  }, [createCanvasEvent, persistWorkspace, windowsById]);
+
+  const addWindowBlockFromWindow = useCallback((windowItem: typeof windows[number]) => {
+    let createdBlockId: string | null = null;
+
+    persistWorkspace((current) => {
+      const offsetIndex = current.blocks.filter((block) => block.type === 'window').length;
+      const nextBlock: CanvasWindowBlock = {
+        id: createCanvasBlockId('window'),
+        type: 'window',
+        windowId: windowItem.id,
+        x: 80 + offsetIndex * 28,
+        y: 80 + offsetIndex * 24,
+        width: DEFAULT_WINDOW_BLOCK_SIZE.width,
+        height: DEFAULT_WINDOW_BLOCK_SIZE.height,
+        zIndex: current.nextZIndex,
+        label: windowItem.name,
+      };
+      createdBlockId = nextBlock.id;
+
+      return {
+        blocks: [...current.blocks, nextBlock],
+        nextZIndex: current.nextZIndex + 1,
+      };
+    });
+
+    if (createdBlockId) {
+      setSelectedBlockIds([createdBlockId]);
+      createCanvasEvent('window-added', windowItem.name, undefined, {
+        windowId: windowItem.id,
+        blockId: createdBlockId,
+      });
+    }
+  }, [createCanvasEvent, persistWorkspace, windows]);
 
   const updateSingleBlock = useCallback((
     blockId: string,
@@ -395,7 +488,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       }),
     }));
     setRelinkingBlockId(null);
-  }, [persistWorkspace, windowsById]);
+    if (linkedWindow) {
+      createCanvasEvent('window-added', linkedWindow.name, t('canvas.activityRelinkedWindow'), {
+        windowId,
+        blockId,
+      });
+    }
+  }, [createCanvasEvent, persistWorkspace, windowsById]);
 
   const toggleWindowDisplayMode = useCallback((blockId: string, displayMode: 'summary' | 'live') => {
     const targetBlock = canvasWorkspace.blocks.find((block) => block.id === blockId);
@@ -426,7 +525,19 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         };
       }),
     }));
-  }, [canvasWorkspace.blocks, persistWorkspace]);
+    const block = canvasWorkspace.blocks.find((item) => item.id === blockId);
+    if (block?.type === 'window') {
+      createCanvasEvent(
+        displayMode === 'live' ? 'window-live-opened' : 'window-live-closed',
+        block.label || windowsById.get(block.windowId)?.name || t('canvas.unnamedWindow'),
+        undefined,
+        {
+          windowId: block.windowId,
+          blockId,
+        },
+      );
+    }
+  }, [canvasWorkspace.blocks, createCanvasEvent, persistWorkspace, t, windowsById]);
 
   const deleteBlocks = useCallback((blockIds: string[]) => {
     if (blockIds.length === 0) {
@@ -457,14 +568,88 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     updateCanvasWorkspace(canvasWorkspace.id, {
       name: nextName || canvasWorkspace.name,
     });
+    if (nextName && nextName !== canvasWorkspace.name) {
+      createCanvasEvent('workspace-renamed', nextName);
+    }
     setWorkspaceRenameOpen(false);
-  }, [canvasWorkspace.id, canvasWorkspace.name, updateCanvasWorkspace, workspaceNameDraft]);
+  }, [canvasWorkspace.id, canvasWorkspace.name, createCanvasEvent, updateCanvasWorkspace, workspaceNameDraft]);
 
   const handleWorkspaceDelete = useCallback(async () => {
     removeCanvasWorkspace(canvasWorkspace.id);
     setWorkspaceDeleteOpen(false);
     await onExitWorkspace?.();
   }, [canvasWorkspace.id, onExitWorkspace, removeCanvasWorkspace]);
+
+  const handleCreateWindowBlock = useCallback((payload: {
+    kind: 'local' | 'ssh' | 'code' | 'browser' | 'chat';
+    name?: string;
+    workingDirectory?: string;
+    command?: string;
+    url?: string;
+    linkedPaneId?: string;
+    sshProfileId?: string;
+  }) => {
+    const sshProfile = payload.sshProfileId
+      ? sshProfiles.find((profile) => profile.id === payload.sshProfileId)
+      : undefined;
+    const draftWindow = createCanvasWindowDraft(payload.kind, {
+      name: payload.name,
+      workingDirectory: payload.workingDirectory || canvasWorkspace.workingDirectory,
+      command: payload.command,
+      url: payload.url,
+      linkedPaneId: payload.linkedPaneId,
+      sshProfile,
+    });
+    addWindow(draftWindow);
+    addWindowBlockFromWindow(draftWindow);
+  }, [addWindow, addWindowBlockFromWindow, canvasWorkspace.workingDirectory, sshProfiles]);
+
+  const handleApplyTemplate = useCallback((templateId: string) => {
+    const template = resolvedTemplates.find((item) => item.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    const instantiated = instantiateCanvasWorkspaceFromTemplate(template, {
+      name: canvasWorkspace.name,
+      workingDirectory: canvasWorkspace.workingDirectory,
+      sshProfiles,
+    });
+
+    for (const windowItem of instantiated.windows) {
+      addWindow(windowItem);
+    }
+
+    updateCanvasWorkspace(canvasWorkspace.id, {
+      blocks: instantiated.workspace.blocks,
+      nextZIndex: instantiated.workspace.nextZIndex,
+      templateId: template.id,
+      updatedAt: new Date().toISOString(),
+    });
+    setSelectedBlockIds([]);
+    setTemplatesOpen(false);
+    createCanvasEvent('template-applied', template.name, template.description, {
+      templateId: template.id,
+    });
+  }, [
+    addWindow,
+    canvasWorkspace.id,
+    canvasWorkspace.name,
+    canvasWorkspace.workingDirectory,
+    createCanvasEvent,
+    resolvedTemplates,
+    sshProfiles,
+    updateCanvasWorkspace,
+  ]);
+
+  const handleSaveCurrentAsTemplate = useCallback(() => {
+    const template = createTemplateFromWorkspace(canvasWorkspace, windowsById);
+    upsertCanvasWorkspaceTemplate(template);
+    createCanvasEvent('workspace-created', template.name, t('canvas.activityTemplateSaved'), {
+      templateId: template.id,
+    });
+    setTemplatesOpen(true);
+  }, [canvasWorkspace, createCanvasEvent, t, upsertCanvasWorkspaceTemplate, windowsById]);
 
   const selectBlock = useCallback((blockId: string, additive: boolean) => {
     setSelectedBlockIds((previous) => {
@@ -661,10 +846,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         selectedCount={selectedBlockIds.length}
         zoom={canvasWorkspace.viewport.zoom}
         activeArrangeMode={lastArrangeMode}
-        canCreateTerminal={Boolean(onCreateTerminal)}
         canAddWindow={availableWindows.length > 0}
-        onCreateTerminal={() => onCreateTerminal?.(canvasWorkspace.id)}
-        onAddWindow={() => setPickerOpen(true)}
+        onCreateBlock={() => setCreateDialogOpen(true)}
+        onOpenTemplates={() => setTemplatesOpen(true)}
+        onOpenActivity={() => setActivityOpen(true)}
+        activityCount={workspaceActivity.length}
         onAddNote={() => {
           const rect = canvasRef.current?.getBoundingClientRect();
           if (!rect) {
@@ -751,7 +937,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
               <p className="mt-4 text-xs uppercase tracking-[0.2em] text-white/35">
                 {availableWindows.length > 0
                   ? t('canvas.availableWindows')
-                  : (onCreateTerminal ? t('canvas.emptyCreateTerminalHint') : t('canvas.noAvailableWindows'))}
+                  : t('canvas.emptyCreateTerminalHint')}
               </p>
             </div>
           </div>
@@ -1008,6 +1194,24 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         onPick={addWindowBlock}
       />
 
+      <CanvasCreateBlockDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        sshProfiles={sshProfiles}
+        templates={resolvedTemplates}
+        initialWorkingDirectory={canvasWorkspace.workingDirectory}
+        onCreateWindow={handleCreateWindowBlock}
+        onCreateNote={() => {
+          const rect = canvasRef.current?.getBoundingClientRect();
+          if (!rect) {
+            return;
+          }
+
+          createNoteAtClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }}
+        onApplyTemplate={handleApplyTemplate}
+      />
+
       <CanvasWindowPickerDialog
         open={Boolean(relinkingBlockId)}
         onOpenChange={(open) => {
@@ -1024,6 +1228,118 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           }
         }}
       />
+
+      <Dialog
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        title={t('canvas.templates')}
+        description={t('canvas.templatesDescription')}
+        contentClassName="!max-w-5xl"
+        showCloseButton
+        closeLabel={t('common.close')}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-[rgb(var(--muted-foreground))]">
+              {t('canvas.templateCount', { count: resolvedTemplates.length })}
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveCurrentAsTemplate}
+              className={idePopupActionButtonClassName()}
+            >
+              <Save size={14} />
+              {t('canvas.saveAsTemplate')}
+            </button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {resolvedTemplates.map((template) => (
+              <div key={template.id} className={`${idePopupCardClassName} rounded-2xl p-4`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{template.name}</div>
+                    {template.description ? (
+                      <p className="mt-1 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{template.description}</p>
+                    ) : null}
+                  </div>
+                  {!template.system ? (
+                    <button
+                      type="button"
+                      onClick={() => removeCanvasWorkspaceTemplate(template.id)}
+                      className={idePopupSecondaryButtonClassName}
+                    >
+                      {t('common.delete')}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3 text-xs text-[rgb(var(--muted-foreground))]">
+                  {t('canvas.templateBlockCount', { count: template.blocks.length })}
+                </div>
+                <div className="mt-4 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyTemplate(template.id)}
+                    className={idePopupActionButtonClassName()}
+                  >
+                    {t('canvas.applyTemplate')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        title={t('canvas.activity')}
+        description={t('canvas.activityDescription')}
+        contentClassName="!max-w-3xl"
+        showCloseButton
+        closeLabel={t('common.close')}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-[rgb(var(--muted-foreground))]">
+              {t('canvas.activityWithCount', { count: workspaceActivity.length })}
+            </div>
+            <button
+              type="button"
+              onClick={() => clearCanvasActivity(canvasWorkspace.id)}
+              className={idePopupSecondaryButtonClassName}
+            >
+              {t('canvas.clearActivity')}
+            </button>
+          </div>
+          {workspaceActivity.length === 0 ? (
+            <div className="rounded-2xl border border-[rgb(var(--border))] px-4 py-6 text-sm text-[rgb(var(--muted-foreground))]">
+              {t('canvas.emptyActivity')}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {workspaceActivity.map((event) => (
+                <div key={event.id} className={`${idePopupCardClassName} rounded-2xl p-4`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-medium text-[rgb(var(--foreground))]">
+                        <Activity size={14} />
+                        <span className="truncate">{event.title}</span>
+                      </div>
+                      {event.message ? (
+                        <p className="mt-1 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{event.message}</p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-xs text-[rgb(var(--muted-foreground))]">
+                      {formatRelativeTime(event.timestamp, language as AppLanguage)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Dialog>
 
       <Dialog
         open={workspaceRenameOpen}

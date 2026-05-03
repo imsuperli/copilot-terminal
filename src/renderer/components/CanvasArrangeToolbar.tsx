@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Grid2X2, Minus, MoveHorizontal, MoveVertical, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
+import { Activity, Grid2X2, LayoutTemplate, Minus, MoveHorizontal, MoveVertical, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
 import type { CanvasArrangeMode } from '../utils/canvasWorkspace';
 import { useI18n } from '../i18n';
 
@@ -8,10 +8,11 @@ interface CanvasArrangeToolbarProps {
   selectedCount: number;
   zoom: number;
   activeArrangeMode: CanvasArrangeMode | null;
-  canCreateTerminal: boolean;
   canAddWindow: boolean;
-  onCreateTerminal: () => void;
-  onAddWindow: () => void;
+  onCreateBlock: () => void;
+  onOpenTemplates: () => void;
+  onOpenActivity: () => void;
+  activityCount?: number;
   onAddNote: () => void;
   onArrange: (mode: CanvasArrangeMode) => void;
   onResetZoom: () => void;
@@ -91,10 +92,11 @@ export function CanvasArrangeToolbar({
   selectedCount,
   zoom,
   activeArrangeMode,
-  canCreateTerminal,
   canAddWindow,
-  onCreateTerminal,
-  onAddWindow,
+  onCreateBlock,
+  onOpenTemplates,
+  onOpenActivity,
+  activityCount = 0,
   onAddNote,
   onArrange,
   onResetZoom,
@@ -126,21 +128,11 @@ export function CanvasArrangeToolbar({
       <div className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-[rgba(11,16,24,0.86)] px-1.5 py-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.28)] backdrop-blur">
         <button
           type="button"
-          onClick={onCreateTerminal}
-          disabled={!canCreateTerminal}
+          onClick={onCreateBlock}
           className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Plus size={14} />
-          {t('canvas.createTerminal')}
-        </button>
-        <button
-          type="button"
-          onClick={onAddWindow}
-          disabled={!canAddWindow}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          <Plus size={14} />
-          {t('canvas.addWindow')}
+          {t('canvas.createBlock')}
         </button>
         <button
           type="button"
@@ -149,6 +141,22 @@ export function CanvasArrangeToolbar({
         >
           <Plus size={14} />
           {t('canvas.addNote')}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenTemplates}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
+        >
+          <LayoutTemplate size={14} />
+          {t('canvas.templates')}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenActivity}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
+        >
+          <Activity size={14} />
+          {activityCount > 0 ? t('canvas.activityWithCount', { count: activityCount }) : t('canvas.activity')}
         </button>
         <div className="mx-1 h-5 w-px bg-white/10" />
         <IconButton
@@ -178,6 +186,13 @@ export function CanvasArrangeToolbar({
         <div className="mx-1 h-5 w-px bg-white/10" />
         <IconButton title={t('canvas.fitToContent')} onClick={onFitToContent}>
           <Search size={14} />
+        </IconButton>
+        <IconButton
+          title={canAddWindow ? t('canvas.addWindow') : t('canvas.noAvailableWindows')}
+          disabled={!canAddWindow}
+          onClick={onCreateBlock}
+        >
+          <Plus size={14} />
         </IconButton>
         <IconButton
           title={t('canvas.deleteSelection')}

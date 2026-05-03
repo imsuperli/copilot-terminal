@@ -74,6 +74,48 @@ function createWorkspace(): Workspace {
         lastActiveAt: '2026-04-10T00:02:00.000Z',
       },
     ],
+    canvasWorkspaces: [
+      {
+        id: 'canvas-1',
+        name: 'Ops Board',
+        createdAt: '2026-04-10T00:02:30.000Z',
+        updatedAt: '2026-04-10T00:03:00.000Z',
+        workingDirectory: '/workspace/project-a',
+        blocks: [
+          {
+            id: 'note-1',
+            type: 'note',
+            x: 24,
+            y: 16,
+            width: 320,
+            height: 180,
+            zIndex: 1,
+            label: 'Checklist',
+            content: 'Review logs',
+          },
+        ],
+        viewport: { tx: 0, ty: 0, zoom: 1 },
+        nextZIndex: 2,
+      },
+    ],
+    canvasWorkspaceTemplates: [
+      {
+        id: 'template-1',
+        name: 'Troubleshooting',
+        createdAt: '2026-04-10T00:00:00.000Z',
+        updatedAt: '2026-04-10T00:00:00.000Z',
+        blocks: [],
+      },
+    ],
+    canvasActivity: [
+      {
+        id: 'activity-1',
+        workspaceId: 'canvas-1',
+        timestamp: '2026-04-10T00:03:30.000Z',
+        type: 'workspace-created',
+        title: 'Ops Board',
+      },
+    ],
     settings: {
       notificationsEnabled: true,
       theme: 'dark',
@@ -93,6 +135,10 @@ describe('useWorkspaceRestore', () => {
     useWindowStore.setState({
       windows: [],
       groups: [],
+      canvasWorkspaces: [],
+      canvasWorkspaceTemplates: [],
+      canvasActivity: [],
+      activeCanvasWorkspaceId: null,
       activeWindowId: null,
       activeGroupId: null,
       mruList: [],
@@ -135,6 +181,9 @@ describe('useWorkspaceRestore', () => {
     await waitFor(() => {
       expect(useWindowStore.getState().windows).toHaveLength(2);
       expect(useWindowStore.getState().groups).toHaveLength(1);
+      expect(useWindowStore.getState().canvasWorkspaces).toHaveLength(1);
+      expect(useWindowStore.getState().canvasWorkspaceTemplates).toHaveLength(1);
+      expect(useWindowStore.getState().canvasActivity).toHaveLength(1);
     });
 
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual([
@@ -142,6 +191,9 @@ describe('useWorkspaceRestore', () => {
       'window-2',
     ]);
     expect(useWindowStore.getState().groups[0]?.id).toBe('group-1');
+    expect(useWindowStore.getState().canvasWorkspaces[0]?.id).toBe('canvas-1');
+    expect(useWindowStore.getState().canvasWorkspaceTemplates[0]?.id).toBe('template-1');
+    expect(useWindowStore.getState().canvasActivity[0]?.id).toBe('activity-1');
 
     unmount();
   });

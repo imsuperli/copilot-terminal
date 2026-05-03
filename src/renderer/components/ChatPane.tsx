@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Copy, History, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
+import { BookmarkPlus, Check, ChevronDown, Copy, History, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../shared/types/agent';
 import type { AgentTimelineEvent } from '../../shared/types/agentTimeline';
-import type { ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
+import type { CanvasActivityEvent, CanvasWorkspace } from '../../shared/types/canvas';
+import type { ChatContextFragment, ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
 import type { Pane } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
@@ -67,9 +68,33 @@ function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings
   return {
     providers: settings?.providers ?? [],
     activeProviderId: settings?.activeProviderId,
-    defaultSystemPrompt: settings?.defaultSystemPrompt,
+    defaultSystemPrompt: settings?.defaultSystemPrompt ?? '',
+    workspaceInstructions: settings?.workspaceInstructions ?? '',
+    contextFilePaths: settings?.contextFilePaths ?? [],
     enableCommandSecurity: settings?.enableCommandSecurity ?? true,
   };
+}
+
+function createCheckpointId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `chat-checkpoint-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getPathLabel(filePath: string): string {
+  const segments = filePath.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] ?? filePath;
+}
+
+function extractFileMentions(text: string): string[] {
+  const matches = text.match(/(^|\s)@([^\s]+)/g) ?? [];
+  return Array.from(new Set(
+    matches
+      .map((match) => match.trim().slice(1))
+      .filter((value) => value.startsWith('/')),
+  ));
 }
 
 function encodeProviderModelSelection(providerId: string, model: string): string {
@@ -228,6 +253,61 @@ function formatHistoryTimestamp(timestamp: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function createCanvasActivityId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `canvas-activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function truncateActivityMessage(value: string, maxLength = 160): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function findCanvasWindowBlock(workspace: CanvasWorkspace, windowId: string): { id: string } | null {
+  for (let index = workspace.blocks.length - 1; index >= 0; index -= 1) {
+    const block = workspace.blocks[index];
+    if (block.type === 'window' && block.windowId === windowId) {
+      return block;
+    }
+  }
+
+  return null;
+}
+
+function resolveCanvasActivityTarget(windowId: string): { workspaceId: string; blockId?: string } | null {
+  const { activeCanvasWorkspaceId, canvasWorkspaces } = useWindowStore.getState();
+  const availableWorkspaces = canvasWorkspaces.filter((workspace) => !workspace.archived);
+
+  if (activeCanvasWorkspaceId) {
+    const activeWorkspace = availableWorkspaces.find((workspace) => workspace.id === activeCanvasWorkspaceId);
+    const activeBlock = activeWorkspace ? findCanvasWindowBlock(activeWorkspace, windowId) : null;
+    if (activeWorkspace && activeBlock) {
+      return {
+        workspaceId: activeWorkspace.id,
+        blockId: activeBlock.id,
+      };
+    }
+  }
+
+  const matches = availableWorkspaces.flatMap((workspace) => {
+    const block = findCanvasWindowBlock(workspace, windowId);
+    return block ? [{ workspaceId: workspace.id, blockId: block.id }] : [];
+  });
+
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function buildRollbackSnapshot(
@@ -678,6 +758,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const historyMenuRef = useRef<HTMLDivElement | null>(null);
   const historyButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
+  const lastCanvasErrorSignatureRef = useRef<string | null>(null);
   const [composerValue, setComposerValue] = useState('');
   const [settings, setSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -701,15 +782,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setCopiedMessageId(null);
   }, [pane.id]);
 
-  const terminalWindow = useWindowStore(useCallback(
-    (state) => state.windows.find((window) => window.id === windowId) ?? null,
-    [windowId],
-  ));
+  const windows = useWindowStore((state) => state.windows);
+  const currentWindow = useMemo(
+    () => windows.find((window) => window.id === windowId) ?? null,
+    [windowId, windows],
+  );
+  const terminalPaneEntries = useMemo(() => (
+    windows.flatMap((window) => getAllPanes(window.layout)
+      .filter((candidate) => isTerminalPane(candidate))
+      .map((candidate) => ({
+        windowId: window.id,
+        windowName: window.name,
+        pane: candidate,
+      })))
+  ), [windows]);
   const terminalPanes = useMemo(
-    () => terminalWindow
-      ? getAllPanes(terminalWindow.layout).filter((candidate) => isTerminalPane(candidate))
-      : [],
-    [terminalWindow],
+    () => terminalPaneEntries.map((entry) => entry.pane),
+    [terminalPaneEntries],
   );
 
   const chatState = pane.chat ?? { messages: [] };
@@ -740,6 +829,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     () => terminalPanes.find((candidate) => candidate.id === resolvedLinkedPaneId) ?? null,
     [resolvedLinkedPaneId, terminalPanes],
   );
+  const linkedPaneEntry = useMemo(
+    () => terminalPaneEntries.find((entry) => entry.pane.id === resolvedLinkedPaneId) ?? null,
+    [resolvedLinkedPaneId, terminalPaneEntries],
+  );
   const optimisticSshContext = useMemo(() => {
     if (!linkedPane || getPaneBackend(linkedPane) !== 'ssh' || !linkedPane.ssh) {
       return undefined;
@@ -755,10 +848,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       host,
       user,
       cwd: linkedPane.cwd || linkedPane.ssh.remoteCwd,
-      windowId,
+      windowId: linkedPaneEntry?.windowId ?? windowId,
       paneId: linkedPane.id,
     };
-  }, [linkedPane, windowId]);
+  }, [linkedPane, linkedPaneEntry?.windowId, windowId]);
   const hasExecutableLinkedSsh = hasExecutableSshBinding(linkedPane);
   const providers = settings.providers;
   const selectedProviderId = chatState.activeProviderId ?? agentState?.providerId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
@@ -771,6 +864,42 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     ? ['running', 'waiting_approval', 'waiting_interaction'].includes(agentState.status)
     : Boolean(chatState.isStreaming);
   const canSend = Boolean(selectedProvider && selectedModel && !isBusy);
+  const checkpoints = chatState.checkpoints ?? [];
+
+  const appendCanvasActivityEvent = useCallback((
+    type: CanvasActivityEvent['type'],
+    title: string,
+    message?: string,
+    extras?: Partial<Omit<CanvasActivityEvent, 'id' | 'workspaceId' | 'timestamp' | 'type' | 'title' | 'message'>>,
+  ) => {
+    const target = resolveCanvasActivityTarget(windowId);
+    if (!target) {
+      return;
+    }
+
+    useWindowStore.getState().appendCanvasActivity({
+      id: createCanvasActivityId(),
+      workspaceId: target.workspaceId,
+      timestamp: new Date().toISOString(),
+      type,
+      title,
+      message,
+      windowId,
+      blockId: target.blockId,
+      ...extras,
+    });
+  }, [windowId]);
+
+  const appendCanvasAgentError = useCallback((message: string, signature: string) => {
+    if (!message || lastCanvasErrorSignatureRef.current === signature) {
+      return;
+    }
+
+    lastCanvasErrorSignatureRef.current = signature;
+    appendCanvasActivityEvent('agent-error', t('chatPane.activityAgentError'), truncateActivityMessage(message), {
+      paneId: pane.id,
+    });
+  }, [appendCanvasActivityEvent, pane.id, t]);
 
   const persistChatState = useCallback((
     updater: (currentChat: NonNullable<Pane['chat']>) => NonNullable<Pane['chat']>,
@@ -1153,6 +1282,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       } else {
         syncAgentTask(payload.task);
       }
+      if (payload.task.status === 'failed' && payload.task.error) {
+        appendCanvasAgentError(payload.task.error, `${payload.task.taskId}:${payload.task.error}`);
+      }
       setOptimisticTask((currentTask) => {
         if (!currentTask) {
           return null;
@@ -1181,6 +1313,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         return;
       }
       setErrorMessage(payload.error);
+      appendCanvasAgentError(payload.error, `${pane.id}:${payload.error}`);
     };
 
     window.electronAPI.onAgentTaskState(handleTaskState);
@@ -1215,7 +1348,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       window.electronAPI.offAgentTaskState(handleTaskState);
       window.electronAPI.offAgentTaskError(handleTaskError);
     };
-  }, [pane.id, syncAgentTask, syncRunningAgentTask]);
+  }, [appendCanvasAgentError, pane.id, syncAgentTask, syncRunningAgentTask]);
 
   const handleProviderModelChange = useCallback((value: string) => {
     if (!value) {
@@ -1289,6 +1422,102 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
   }, [agentState, pane.id]);
 
+  const resolveContextFragments = useCallback(async (messageText: string): Promise<ChatContextFragment[]> => {
+    const configuredPaths = settings.contextFilePaths ?? [];
+    const paths = Array.from(new Set([
+      ...configuredPaths,
+      ...extractFileMentions(messageText),
+    ].map((value) => value.trim()).filter(Boolean)));
+
+    const fragments: ChatContextFragment[] = [];
+    for (const filePath of paths) {
+      try {
+        const response = await window.electronAPI.codePaneReadFile({
+          rootPath: filePath,
+          filePath,
+        });
+        if (!response.success || !response.data) {
+          continue;
+        }
+
+        fragments.push({
+          type: 'file',
+          path: filePath,
+          label: getPathLabel(filePath),
+          content: response.data.content,
+        });
+      } catch {
+        // Ignore invalid or inaccessible context files; the user can still send the message.
+      }
+    }
+
+    return fragments;
+  }, [settings.contextFilePaths]);
+
+  const handleSaveCheckpoint = useCallback(() => {
+    const snapshotMessages = chatState.messages.length > 0
+      ? cloneChatMessages(chatState.messages)
+      : cloneChatMessages(agentState?.messages ?? []);
+    const checkpoint = {
+      id: createCheckpointId(),
+      title: buildChatConversationTitle(snapshotMessages),
+      createdAt: new Date().toISOString(),
+      messages: snapshotMessages,
+      agent: normalizeAgentSnapshotForHistory(agentState ?? chatState.agent, pane.id, windowId),
+      composerValue,
+      linkedPaneId: resolvedLinkedPaneId,
+    };
+
+    persistChatState((currentChat) => ({
+      ...currentChat,
+      checkpoints: [checkpoint, ...(currentChat.checkpoints ?? [])].slice(0, 20),
+    }));
+    appendCanvasActivityEvent('checkpoint-saved', t('chatPane.activityCheckpointSaved'), checkpoint.title, {
+      paneId: pane.id,
+    });
+  }, [
+    appendCanvasActivityEvent,
+    agentState,
+    chatState.agent,
+    chatState.messages,
+    composerValue,
+    pane.id,
+    persistChatState,
+    resolvedLinkedPaneId,
+    t,
+    windowId,
+  ]);
+
+  const handleRestoreCheckpoint = useCallback(async (checkpointId: string) => {
+    const checkpoint = checkpoints.find((item) => item.id === checkpointId);
+    if (!checkpoint || isBusy) {
+      return;
+    }
+
+    try {
+      await resetCurrentAgentTask(agentState?.taskId);
+      setComposerValue(checkpoint.composerValue ?? '');
+      replaceConversationState({
+        conversationId: chatState.conversationId ?? createChatConversationHistoryId(),
+        messages: checkpoint.messages,
+        agent: normalizeAgentSnapshotForHistory(checkpoint.agent, pane.id, windowId),
+        linkedPaneId: checkpoint.linkedPaneId,
+      });
+      setHistoryMenuOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [
+    agentState?.taskId,
+    checkpoints,
+    chatState.conversationId,
+    isBusy,
+    pane.id,
+    replaceConversationState,
+    resetCurrentAgentTask,
+    windowId,
+  ]);
+
   const resolveSshContext = useCallback(async (): Promise<ChatSshContext | undefined> => {
     if (!linkedPane || getPaneBackend(linkedPane) !== 'ssh' || !linkedPane.ssh) {
       return undefined;
@@ -1321,10 +1550,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       host: profileResponse.data.host,
       user: profileResponse.data.user,
       cwd,
-      windowId,
+      windowId: linkedPaneEntry?.windowId ?? windowId,
       paneId: linkedPane.id,
     };
-  }, [linkedPane, windowId]);
+  }, [linkedPane, linkedPaneEntry?.windowId, windowId]);
 
   const handleSend = useCallback(async () => {
     const trimmed = composerValue.trim();
@@ -1358,6 +1587,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     hasAttemptedHistoryHydrationRef.current = true;
     setLiveAgentTask(optimisticTask);
     setOptimisticTask(optimisticTask);
+    lastCanvasErrorSignatureRef.current = null;
     persistChatState((currentChat) => ({
       ...currentChat,
       conversationId,
@@ -1368,10 +1598,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       linkedPaneId: resolvedLinkedPaneId,
       isStreaming: true,
     }), true);
+    appendCanvasActivityEvent('chat-sent', t('chatPane.activityChatSent'), truncateActivityMessage(trimmed), {
+      paneId: pane.id,
+    });
 
     let sshContext: ChatSshContext | undefined;
     try {
+      const contextFragments = await resolveContextFragments(trimmed);
       sshContext = await resolveSshContext();
+      const systemPrompt = [
+        settings.defaultSystemPrompt?.trim(),
+        settings.workspaceInstructions?.trim(),
+      ].filter(Boolean).join('\n\n');
+
+      persistChatState((currentChat) => ({
+        ...currentChat,
+        contextFragments,
+      }), true);
 
       const response = await window.electronAPI.agentSend({
         paneId: pane.id,
@@ -1379,10 +1622,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         text: trimmed,
         providerId: selectedProvider.id,
         model: selectedModel,
-        systemPrompt: settings.defaultSystemPrompt,
+        systemPrompt,
         enableTools: Boolean(sshContext),
         linkedPaneId: resolvedLinkedPaneId,
         sshContext,
+        contextFragments,
         seedMessages,
       });
 
@@ -1419,6 +1663,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setErrorMessage(message);
+      appendCanvasAgentError(message, `send:${message}`);
       hasLiveTaskRef.current = previousHasLiveTask;
       setLiveAgentTask(null);
       setOptimisticTask(null);
@@ -1435,13 +1680,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     isBusy,
     linkedPane,
     pane.id,
+    appendCanvasActivityEvent,
+    appendCanvasAgentError,
     persistChatState,
     resolvedLinkedPaneId,
     resolveSshContext,
     selectedModel,
     selectedProvider,
     settings.defaultSystemPrompt,
+    settings.workspaceInstructions,
     optimisticSshContext,
+    resolveContextFragments,
     t,
     windowId,
   ]);
@@ -1515,7 +1764,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const copiedMessageLabel = t('chatPane.copied');
   const sshConnected = hasExecutableLinkedSsh;
   const sshSignalTitle = sshConnected ? t('chatPane.sshConnected') : t('chatPane.sshDisconnected');
-  const emptyConversationTarget = resolveEmptyConversationTarget(terminalWindow?.name, linkedPane)
+  const emptyConversationTarget = resolveEmptyConversationTarget(currentWindow?.name, linkedPane)
     ?? t('chatPane.emptyWritingFallback');
 
   return (
@@ -1573,28 +1822,61 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                   <div className="px-2 pb-2 pt-1 text-[11px] font-medium tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
                     {t('chatPane.history')}
                   </div>
-                  {historyEntries.length > 0 ? (
-                    <div className="max-h-[360px] space-y-1 overflow-y-auto">
-                      {historyEntries.map((entry) => {
-                        const isCurrentConversation = entry.id === chatState.conversationId;
-                        return (
-                          <button
-                            key={entry.id}
-                            type="button"
-                            onClick={() => {
-                              void handleRestoreConversation(entry);
-                            }}
-                            className={`flex w-full flex-col rounded-[16px] px-3 py-2.5 text-left transition-colors ${isCurrentConversation ? 'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]' : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'}`}
-                          >
-                            <span className="truncate text-[13px] font-medium leading-5">
-                              {entry.title}
-                            </span>
-                            <span className="mt-1 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
-                              {formatHistoryTimestamp(entry.updatedAt)}
-                            </span>
-                          </button>
-                        );
-                      })}
+                  {historyEntries.length > 0 || checkpoints.length > 0 ? (
+                    <div className="max-h-[360px] space-y-3 overflow-y-auto">
+                      {historyEntries.length > 0 ? (
+                        <div className="space-y-1">
+                          {historyEntries.map((entry) => {
+                            const isCurrentConversation = entry.id === chatState.conversationId;
+                            return (
+                              <button
+                                key={entry.id}
+                                type="button"
+                                onClick={() => {
+                                  void handleRestoreConversation(entry);
+                                }}
+                                className={`flex w-full flex-col rounded-[16px] px-3 py-2.5 text-left transition-colors ${isCurrentConversation ? 'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]' : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'}`}
+                              >
+                                <span className="truncate text-[13px] font-medium leading-5">
+                                  {entry.title}
+                                </span>
+                                <span className="mt-1 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                                  {formatHistoryTimestamp(entry.updatedAt)}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                      {checkpoints.length > 0 ? (
+                        <div className="space-y-1">
+                          <div className="px-2 pb-1 pt-1 text-[11px] font-medium tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
+                            {t('chatPane.checkpoints')}
+                          </div>
+                          {checkpoints.map((checkpoint) => (
+                            <button
+                              key={checkpoint.id}
+                              type="button"
+                              onClick={() => {
+                                void handleRestoreCheckpoint(checkpoint.id);
+                              }}
+                              className="flex w-full items-center justify-between gap-3 rounded-[16px] px-3 py-2.5 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-[13px] font-medium leading-5">
+                                  {checkpoint.title}
+                                </div>
+                                <div className="mt-1 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                                  {formatHistoryTimestamp(checkpoint.createdAt)}
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                                {t('chatPane.restoreCheckpoint')}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-[16px] px-3 py-3 text-sm leading-6 text-[rgb(var(--muted-foreground))]">
@@ -1615,6 +1897,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               className={chatHeaderIconButtonClassName}
             >
               <MessageSquarePlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+            </button>
+
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('chatPane.saveCheckpoint')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={handleSaveCheckpoint}
+              disabled={isBusy || (!chatState.messages.length && !agentState?.messages.length)}
+              className={chatHeaderIconButtonClassName}
+            >
+              <BookmarkPlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
             </button>
 
             {onClose && (
@@ -1655,6 +1949,27 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 <div className="mt-4 text-[15px] leading-7 text-[rgb(var(--foreground))]">{t('chatPane.noProviderTitle')}</div>
                 <p className="mt-2 text-sm leading-7 text-[rgb(var(--muted-foreground))]">{t('chatPane.noProviderDescription')}</p>
               </div>
+            </div>
+          ) : checkpoints.length > 0 && !agentState && chatState.messages.length === 0 ? (
+            <div className="space-y-3 pt-4">
+              {checkpoints.map((checkpoint) => (
+                <button
+                  key={checkpoint.id}
+                  type="button"
+                  onClick={() => {
+                    void handleRestoreCheckpoint(checkpoint.id);
+                  }}
+                  className={`${idePopupCardClassName} flex w-full items-center justify-between rounded-[20px] px-4 py-3 text-left transition-colors hover:bg-[rgb(var(--accent))]`}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{checkpoint.title}</div>
+                    <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{formatHistoryTimestamp(checkpoint.createdAt)}</div>
+                  </div>
+                  <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                    {t('chatPane.restoreCheckpoint')}
+                  </div>
+                </button>
+              ))}
             </div>
           ) : agentState ? (
             <>

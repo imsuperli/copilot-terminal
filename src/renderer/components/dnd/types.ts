@@ -85,6 +85,8 @@ export interface DropResult {
   targetWindowId?: string;
   /** 目标组 ID（拖到某个组上时） */
   targetGroupId?: string;
+  /** 目标画布工作区 ID（拖到某个画布卡片上时） */
+  targetCanvasWorkspaceId?: string;
 }
 
 export interface PaneDropResult {

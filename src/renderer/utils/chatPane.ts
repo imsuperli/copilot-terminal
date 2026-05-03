@@ -27,6 +27,7 @@ export function createChatPaneDraft(
       activeProviderId: options?.activeProviderId,
       activeModel: options?.activeModel,
       isStreaming: false,
+      contextFragments: [],
     },
   };
 }
