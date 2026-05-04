@@ -336,6 +336,33 @@ describe('CreateWindowDialog', () => {
     expect(screen.queryByRole('tab', { name: /SSH 连接/ })).not.toBeInTheDocument()
   })
 
+  it('keeps mode tabs and footer actions on a single row structure for constrained widths', async () => {
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        sshEnabled={true}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(mockElectronAPI.getAvailableShells).toHaveBeenCalled()
+    })
+
+    const tabList = screen.getByRole('tablist', { name: /创建类型/ })
+    expect(tabList.className).toContain('overflow-x-auto')
+
+    const localTab = screen.getByRole('tab', { name: /本地终端/ })
+    expect(localTab.className).toContain('shrink-0')
+
+    const createButton = screen.getByRole('button', { name: /^创建$/ })
+    const cancelButton = screen.getByRole('button', { name: '取消' })
+    expect(createButton.className).toContain('whitespace-nowrap')
+    expect(cancelButton.className).toContain('whitespace-nowrap')
+    expect(createButton.className).toContain('w-full')
+    expect(cancelButton.className).toContain('w-full')
+  })
+
   it('creates an ssh profile from the grouped ssh tabs', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()

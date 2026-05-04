@@ -803,12 +803,12 @@ export function CreateWindowDialog({
   ) => (
     <Tabs.Trigger
       value={value}
-      className="group relative inline-flex items-center justify-center gap-2.5 rounded-[14px] border border-transparent px-5 py-3 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-all hover:text-[rgb(var(--foreground))] data-[state=active]:text-[rgb(var(--foreground))]"
+      className="group relative inline-flex shrink-0 items-center justify-center gap-2.5 rounded-[14px] border border-transparent px-5 py-3 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-all hover:text-[rgb(var(--foreground))] data-[state=active]:text-[rgb(var(--foreground))]"
     >
       <span className="transition-colors group-data-[state=active]:text-[rgb(var(--ring))]">
         {icon}
       </span>
-      <span>{title}</span>
+      <span className="whitespace-nowrap">{title}</span>
       <span className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-[rgb(var(--ring))] opacity-0 transition-opacity group-data-[state=active]:opacity-100" />
     </Tabs.Trigger>
   )
@@ -868,9 +868,10 @@ export function CreateWindowDialog({
   const selectTriggerClassName = `${idePopupSelectTriggerClassName} rounded-[12px] py-2.5 [color-scheme:dark]`
   const selectMenuClassName = `z-[80] w-[var(--radix-select-trigger-width)] rounded-[12px] [color-scheme:dark] ${idePopupSelectContentClassName}`
   const selectItemClassName = `${idePopupSelectItemClassName} rounded-[8px]`
-  const compactButtonClassName = 'h-10 rounded-[10px] px-4 text-sm font-medium'
+  const compactButtonClassName = 'inline-flex h-10 items-center justify-center rounded-[10px] px-4 text-sm font-medium whitespace-nowrap'
   const compactSecondaryButtonToneClassName = `${idePopupSecondaryButtonClassName} ${compactButtonClassName}`
   const compactPrimaryButtonToneClassName = `${idePopupActionButtonClassName('primary')} ${compactButtonClassName}`
+  const dialogActionButtonClassName = 'w-full sm:w-auto sm:min-w-[132px]'
   const sshTabListClassName = 'mb-5 flex gap-1 rounded-[14px] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-1'
   const sshRouteTabListClassName = 'grid grid-cols-2 gap-1.5 rounded-[14px] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-1 sm:grid-cols-3 lg:grid-cols-5'
   const sshRouteTabTriggerClassName = 'rounded-[10px] px-2.5 py-2 text-xs font-medium text-[rgb(var(--muted-foreground))] transition-all hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] data-[state=active]:text-[rgb(var(--foreground))] data-[state=active]:shadow-sm'
@@ -922,7 +923,7 @@ export function CreateWindowDialog({
         >
           {resolvedAvailableTabs.length > 1 && (
             <Tabs.List
-              className="inline-flex w-fit gap-1 border-b border-[rgb(var(--border))]"
+              className="flex max-w-full gap-1 overflow-x-auto border-b border-[rgb(var(--border))] pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
               aria-label={t('createWindow.modeTabsAriaLabel')}
             >
               {resolvedAvailableTabs.includes('local') && renderTabTrigger(
@@ -1576,7 +1577,7 @@ export function CreateWindowDialog({
           </div>
         </Tabs.Root>
 
-        <div className="mt-5 flex justify-end gap-2.5 border-t border-[rgb(var(--border))] pt-4">
+        <div className="mt-5 flex flex-col-reverse gap-2.5 border-t border-[rgb(var(--border))] pt-4 sm:flex-row sm:justify-end">
           <Button
             type="button"
             variant="secondary"
@@ -1584,7 +1585,7 @@ export function CreateWindowDialog({
               onOpenChange(false)
               resetDialog()
             }}
-            className={compactSecondaryButtonToneClassName}
+            className={`${compactSecondaryButtonToneClassName} ${dialogActionButtonClassName}`}
           >
             {t('common.cancel')}
           </Button>
@@ -1599,7 +1600,7 @@ export function CreateWindowDialog({
                   : isSavingSSH
             }
             aria-busy={activeTab === 'local' ? isCreating : activeTab === 'canvas' ? false : isSavingSSH}
-            className={compactPrimaryButtonToneClassName}
+            className={`${compactPrimaryButtonToneClassName} ${dialogActionButtonClassName}`}
           >
             {activeTab === 'local'
               ? (isCreating ? t('common.creating') : t('common.create'))

@@ -235,6 +235,19 @@ describe('CanvasWorkspaceView', () => {
     }
   });
 
+  it('keeps terminal card action buttons above the summary overlay', async () => {
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    const openTerminalButton = await screen.findByRole('button', { name: '打开终端' });
+    const actionContainer = openTerminalButton.parentElement?.parentElement;
+    expect(actionContainer?.className).toContain('z-10');
+    expect(actionContainer?.className).toContain('absolute');
+  });
+
   it('merges template blocks into the existing canvas instead of replacing current blocks', async () => {
     const user = userEvent.setup();
 

@@ -1847,8 +1847,8 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         </div>
                       </div>
                     ) : (
-                    <div className="flex h-full flex-col justify-between p-4 pb-16 text-sm text-white/70">
-                      <div>
+                    <div className="relative flex h-full flex-col p-4 pb-16 text-sm text-white/70">
+                      <div className="min-h-0 flex-1">
                         <div className="flex items-center gap-2 text-base font-medium text-white">
                           <MonitorSmartphone size={15} />
                           <span className="truncate">{linkedWindow?.name || t('canvas.missingWindow')}</span>
@@ -1888,8 +1888,8 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                       </div>
 
                       {linkedWindow && (
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
+                        <div className="absolute inset-x-4 bottom-4 z-10 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/55">
                               {getWindowKind(linkedWindow)}
                             </span>
@@ -1899,24 +1899,26 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               </span>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={() => onOpenWindow?.(linkedWindow.id)}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/15"
-                          >
-                            <MonitorSmartphone size={13} />
-                            {t('canvas.openTerminal')}
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={() => toggleWindowDisplayMode(block.id, 'live')}
-                            className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1.5 text-xs font-medium text-sky-100 transition hover:bg-sky-400/16"
-                          >
-                            <MonitorSmartphone size={13} />
-                            {t('canvas.openLive')}
-                          </button>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={() => onOpenWindow?.(linkedWindow.id)}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/15"
+                            >
+                              <MonitorSmartphone size={13} />
+                              {t('canvas.openTerminal')}
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={() => toggleWindowDisplayMode(block.id, 'live')}
+                              className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1.5 text-xs font-medium text-sky-100 transition hover:bg-sky-400/16"
+                            >
+                              <MonitorSmartphone size={13} />
+                              {t('canvas.openLive')}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
