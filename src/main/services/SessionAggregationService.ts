@@ -44,6 +44,8 @@ interface ClaudeJsonlEvent {
   };
 }
 
+type ClaudeRole = 'user' | 'assistant' | 'system';
+
 function normalizePreview(value: string | undefined, maxLength = 160): string | undefined {
   if (!value) {
     return undefined;
@@ -93,6 +95,12 @@ function normalizeChatMessage(message: AggregatedSessionMessage): ChatMessage {
   };
 }
 
+function normalizeClaudeRole(value: unknown): ClaudeRole | undefined {
+  return value === 'user' || value === 'assistant' || value === 'system'
+    ? value
+    : undefined;
+}
+
 export class SessionAggregationService {
   private readonly homeDir = os.homedir();
 
@@ -129,6 +137,19 @@ export class SessionAggregationService {
       messages: detail.messages.map(normalizeChatMessage),
       metadata: detail.metadata,
     };
+  }
+
+  private resolveClaudeRole(event: ClaudeJsonlEvent): ClaudeRole | undefined {
+    return normalizeClaudeRole(event.message?.role)
+      ?? normalizeClaudeRole(event.payload?.role);
+  }
+
+  private resolveClaudeTimestamp(event: ClaudeJsonlEvent, fallbackIndex: number): string {
+    if (typeof event.timestamp === 'string' && event.timestamp.trim()) {
+      return event.timestamp;
+    }
+
+    return new Date(fallbackIndex * 1000).toISOString();
   }
 
   private async listClaudeSessions(workspaceCwd?: string): Promise<AggregatedSessionEntry[]> {
@@ -177,7 +198,7 @@ export class SessionAggregationService {
             if (!preview) {
               preview = normalizePreview(content);
             }
-            if (title === path.basename(filePath, '.jsonl') && event.message?.role === 'user') {
+            if (title === path.basename(filePath, '.jsonl') && this.resolveClaudeRole(event) === 'user') {
               title = normalizePreview(content, 72) ?? title;
             }
           }
@@ -232,10 +253,10 @@ export class SessionAggregationService {
         gitBranch = event.gitBranch;
       }
 
-      const role = event.message?.role;
+      const role = this.resolveClaudeRole(event);
       const content = this.extractClaudeContent(event);
-      const timestamp = event.timestamp;
-      if (role && content && timestamp) {
+      const timestamp = this.resolveClaudeTimestamp(event, index);
+      if (role && content) {
         if (role === 'user' && title === path.basename(filePath, '.jsonl')) {
           title = normalizePreview(content, 72) ?? title;
         }
