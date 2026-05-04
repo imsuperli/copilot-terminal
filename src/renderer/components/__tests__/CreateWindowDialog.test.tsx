@@ -221,6 +221,39 @@ describe('CreateWindowDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('calls onLocalWindowCreated after creating a local window', async () => {
+    const onOpenChange = vi.fn()
+    const onLocalWindowCreated = vi.fn()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        onLocalWindowCreated={onLocalWindowCreated}
+      />,
+    )
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/工作目录/), { target: { value: '/test/path' } })
+    })
+
+    await waitFor(() => {
+      expect(mockElectronAPI.validatePath).toHaveBeenCalledWith('/test/path')
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /创建/ }))
+    })
+
+    await waitFor(() => {
+      expect(onLocalWindowCreated).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'window-1', name: 'Test Window' }),
+      )
+    })
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
   it('opens the custom shell picker and still allows creating a window', async () => {
     render(<CreateWindowDialog open={true} onOpenChange={() => {}} />)
 

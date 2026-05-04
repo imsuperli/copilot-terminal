@@ -6,6 +6,7 @@ import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { useWindowStore } from '../stores/windowStore'
 import { useI18n } from '../i18n'
+import type { Window } from '../types/window'
 import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh'
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo'
 import {
@@ -30,6 +31,7 @@ interface CreateWindowDialogProps {
   initialSSHProfile?: SSHProfile | null
   sshCredentialState?: SSHCredentialState | null
   onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void
+  onLocalWindowCreated?: (window: Window) => void
 }
 
 interface ShellProgramOption {
@@ -155,6 +157,7 @@ export function CreateWindowDialog({
   initialSSHProfile = null,
   sshCredentialState = null,
   onSSHProfileSaved,
+  onLocalWindowCreated,
 }: CreateWindowDialogProps) {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<CreateWindowTab>(
@@ -468,6 +471,7 @@ export function CreateWindowDialog({
 
       if (response && response.success && response.data) {
         addWindow(response.data)
+        onLocalWindowCreated?.(response.data)
         onOpenChange(false)
         resetDialog()
       } else {
