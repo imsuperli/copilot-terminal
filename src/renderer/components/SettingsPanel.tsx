@@ -13,6 +13,7 @@ import { FeatureSettings, IDEConfig, SSHClipboardImageSettings, StatusLineConfig
 import { KnownHostEntry } from '../../shared/types/ssh';
 import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceSkinMotionMode } from '../../shared/types/appearance';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
+import type { BrowserSyncProfile, BrowserSyncState } from '../../shared/types/task';
 import { useI18n } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
@@ -196,6 +197,20 @@ function joinClassNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
 }
 
+function formatSettingsTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+
+  return date.toLocaleString(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function AppearanceSkinPreview({ appearance }: { appearance: AppearanceSettings }) {
   const descriptor = getAppearanceBackdropDescriptor(appearance);
 
@@ -248,6 +263,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [knownHostsLoading, setKnownHostsLoading] = useState(false);
   const [knownHostsError, setKnownHostsError] = useState<string | null>(null);
   const [removingKnownHostId, setRemovingKnownHostId] = useState<string | null>(null);
+  const [browserSyncProfiles, setBrowserSyncProfiles] = useState<BrowserSyncProfile[]>([]);
+  const [browserSyncState, setBrowserSyncState] = useState<BrowserSyncState>({
+    enabled: false,
+    platformSupported: false,
+  });
+  const [browserSyncLoading, setBrowserSyncLoading] = useState(false);
+  const [browserSyncSyncing, setBrowserSyncSyncing] = useState(false);
 
   // tmux 兼容模式配置状态
   const [tmuxSettings, setTmuxSettings] = useState({
@@ -269,7 +291,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
 
     void loadSettings();
-    void loadKnownHosts();
     void loadAvailableShells();
     void loadSupportedIDENames();
   }, [open]);
@@ -279,6 +300,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       setHasVisitedPluginTab(true);
     }
   }, [currentTab]);
+
+  useEffect(() => {
+    if (!open || currentTab !== 'advanced') {
+      return;
+    }
+
+    void loadKnownHosts();
+    void loadBrowserSyncState();
+  }, [currentTab, open]);
 
   const loadSettings = async () => {
     try {
@@ -316,6 +346,28 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
+    }
+  };
+
+  const loadBrowserSyncState = async () => {
+    setBrowserSyncLoading(true);
+    try {
+      const [profilesResponse, stateResponse] = await Promise.all([
+        window.electronAPI.listBrowserSyncProfiles(),
+        window.electronAPI.getBrowserSyncState(),
+      ]);
+
+      if (profilesResponse.success && profilesResponse.data) {
+        setBrowserSyncProfiles(profilesResponse.data);
+      }
+
+      if (stateResponse.success && stateResponse.data) {
+        setBrowserSyncState(stateResponse.data);
+      }
+    } catch (error) {
+      console.error('Failed to load browser sync state:', error);
+    } finally {
+      setBrowserSyncLoading(false);
     }
   };
 
@@ -812,6 +864,34 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       setKnownHostsError(error instanceof Error ? error.message : t('settings.ssh.removeKnownHostFailed'));
     } finally {
       setRemovingKnownHostId(null);
+    }
+  };
+
+  const handleSyncBrowserProfile = async (profileId: string) => {
+    setBrowserSyncSyncing(true);
+    try {
+      const response = await window.electronAPI.syncBrowserProfile(profileId);
+      if (response.success && response.data) {
+        setBrowserSyncState(response.data);
+        await window.electronAPI.updateSettings({
+          browserSync: {
+            enabled: response.data.enabled,
+            source: 'chrome',
+            profileId: response.data.profileId,
+          },
+        });
+        notifyWorkspaceSettingsUpdated({
+          browserSync: {
+            enabled: response.data.enabled,
+            source: 'chrome',
+            profileId: response.data.profileId,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync browser profile:', error);
+    } finally {
+      setBrowserSyncSyncing(false);
     }
   };
 
@@ -2085,6 +2165,83 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           })}
                         </div>
                       )}
+                    </div>
+                  </CompactSettingsSection>
+
+                  <CompactSettingsSection
+                    title={t('settings.browserSync.title')}
+                    help={t('settings.browserSync.description')}
+                    icon={<Globe size={15} />}
+                  >
+                    <CompactSettingRow
+                      label={t('settings.browserSync.platform')}
+                      help={t('settings.browserSync.platformDescription')}
+                    >
+                      <span className="text-sm text-[rgb(var(--muted-foreground))]">
+                        {browserSyncState.platformSupported ? t('settings.browserSync.supported') : t('settings.browserSync.unsupported')}
+                      </span>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.browserSync.currentProfile')}
+                      help={t('settings.browserSync.currentProfileDescription')}
+                    >
+                      <span className="max-w-[360px] truncate text-sm text-[rgb(var(--foreground))]">
+                        {browserSyncState.profileName ?? browserSyncState.profileId ?? t('common.unknown')}
+                      </span>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.browserSync.lastSync')}
+                      help={t('settings.browserSync.lastSyncDescription')}
+                    >
+                      <span className="text-sm text-[rgb(var(--muted-foreground))]">
+                        {browserSyncState.lastSyncedAt ? formatSettingsTimestamp(browserSyncState.lastSyncedAt) : t('settings.browserSync.neverSynced')}
+                      </span>
+                    </CompactSettingRow>
+
+                    <div className="px-4 py-3">
+                      {!browserSyncState.platformSupported ? (
+                        <div className={`${idePopupEmptyStateClassName} px-5 py-6 text-center`}>
+                          <p className="text-sm text-[rgb(var(--muted-foreground))]">{t('settings.browserSync.unsupportedDescription')}</p>
+                        </div>
+                      ) : browserSyncLoading ? (
+                        <div className="text-sm text-[rgb(var(--muted-foreground))]">{t('common.loading')}</div>
+                      ) : browserSyncProfiles.length === 0 ? (
+                        <div className={`${idePopupEmptyStateClassName} px-5 py-6 text-center`}>
+                          <p className="text-sm text-[rgb(var(--muted-foreground))]">{t('settings.browserSync.emptyProfiles')}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {browserSyncProfiles.map((profile) => (
+                            <div
+                              key={profile.id}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_86%,transparent)] px-3 py-2.5"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{profile.name}</div>
+                                <div className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]">
+                                  {profile.email ?? profile.id}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleSyncBrowserProfile(profile.id);
+                                }}
+                                disabled={browserSyncSyncing}
+                                className={settingsPanelCompactSecondaryButtonClassName}
+                              >
+                                {browserSyncSyncing && browserSyncState.profileId === profile.id ? t('common.loading') : t('settings.browserSync.syncAction')}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {browserSyncState.lastSyncError ? (
+                        <p className="mt-3 text-sm text-[rgb(var(--foreground))]">{browserSyncState.lastSyncError}</p>
+                      ) : null}
                     </div>
                   </CompactSettingsSection>
 

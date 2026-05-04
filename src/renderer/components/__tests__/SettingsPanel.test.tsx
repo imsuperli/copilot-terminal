@@ -756,6 +756,97 @@ describe('SettingsPanel', () => {
     expect(window.electronAPI.listPlugins).toHaveBeenCalledTimes(1);
   });
 
+  it('shows MCP visibility and plugin capability summaries in the plugin center', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        ides: [],
+        plugins: {},
+      } as any,
+    });
+    vi.mocked(window.electronAPI.listPlugins).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'acme.java-language',
+          name: 'Java Language Support',
+          publisher: 'Acme',
+          source: 'marketplace',
+          installStatus: 'installed',
+          runtimeState: 'idle',
+          health: 'unknown',
+          enabledByDefault: true,
+          manifest: {
+            schemaVersion: 1,
+            id: 'acme.java-language',
+            name: 'Java Language Support',
+            publisher: 'Acme',
+            version: '1.0.0',
+            engines: {
+              app: '>=3.0.0',
+            },
+            capabilities: [
+              {
+                type: 'language-server',
+                languages: ['java'],
+                runtime: {
+                  type: 'java',
+                  entry: 'server/jdtls.jar',
+                },
+              },
+              {
+                type: 'command',
+                command: 'java.test.run',
+                title: 'Run Java Test',
+              },
+            ],
+          },
+        },
+      ] as any,
+    });
+    vi.mocked(window.electronAPI.getPluginRegistry).mockResolvedValue({
+      success: true,
+      data: {
+        schemaVersion: 1,
+        plugins: {},
+        globalPluginSettings: {},
+      },
+    });
+    vi.mocked(window.electronAPI.getMcpServerSnapshots).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          serverName: 'filesystem',
+          toolCount: 2,
+          tools: [
+            { serverName: 'filesystem', toolName: 'read_file' },
+            { serverName: 'filesystem', toolName: 'write_file' },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '插件' }));
+
+    expect(await screen.findByRole('heading', { name: '能力概览' })).toBeInTheDocument();
+    expect(screen.getByText('MCP 能力')).toBeInTheDocument();
+    expect(screen.getByText('filesystem')).toBeInTheDocument();
+    expect(screen.getByText('2 个工具')).toBeInTheDocument();
+    expect(screen.getByText('read_file')).toBeInTheDocument();
+    expect(screen.getByText('write_file')).toBeInTheDocument();
+    expect(screen.getByText('插件能力摘要')).toBeInTheDocument();
+    expect(screen.getByText('language-server')).toBeInTheDocument();
+    expect(screen.getByText('command')).toBeInTheDocument();
+  });
+
   it('loads and updates SSH clipboard image settings in the advanced tab', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
@@ -881,5 +972,83 @@ describe('SettingsPanel', () => {
     await user.click(screen.getByRole('tab', { name: /高级设置/ }));
 
     expect(await screen.findByRole('combobox', { name: '图片粘贴快捷键' })).toHaveTextContent('Ctrl+V');
+  });
+
+  it('shows browser sync profiles and syncs an explicit browser profile from advanced settings', async () => {
+    const user = userEvent.setup();
+    window.electronAPI.platform = 'darwin';
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        features: {
+          sshEnabled: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.listKnownHosts).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(window.electronAPI.listBrowserSyncProfiles).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'Profile 1',
+          name: 'Work',
+          email: 'work@example.com',
+          source: 'chrome',
+          supported: true,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.getBrowserSyncState).mockResolvedValue({
+      success: true,
+      data: {
+        enabled: false,
+        platformSupported: true,
+      },
+    });
+    vi.mocked(window.electronAPI.syncBrowserProfile).mockResolvedValue({
+      success: true,
+      data: {
+        enabled: true,
+        platformSupported: true,
+        profileId: 'Profile 1',
+        profileName: 'Work',
+        lastSyncedAt: '2026-05-04T10:30:00.000Z',
+        lastSyncCount: 24,
+      },
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /高级设置/ }));
+
+    expect(await screen.findByText('浏览器登录态同步')).toBeInTheDocument();
+    expect(screen.getByText('Work')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '同步' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.syncBrowserProfile).toHaveBeenCalledWith('Profile 1');
+      expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+        browserSync: {
+          enabled: true,
+          source: 'chrome',
+          profileId: 'Profile 1',
+        },
+      });
+    });
   });
 });

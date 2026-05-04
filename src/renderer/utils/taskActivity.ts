@@ -141,8 +141,9 @@ export function buildTaskActivityStream(input: {
   agent?: AgentTaskSnapshot;
   canvasEvents?: CanvasActivityEvent[];
   artifacts?: Array<{ id: string; title: string; createdAt: string; kind: string }>;
+  manualEvents?: TaskActivityEvent[];
 }): TaskActivityEvent[] {
-  const events: TaskActivityEvent[] = [];
+  const events: TaskActivityEvent[] = [...(input.manualEvents ?? [])];
 
   for (const message of input.messages) {
     if (!message.content.trim()) {

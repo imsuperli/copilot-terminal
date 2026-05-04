@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookmarkPlus, Check, ChevronDown, Copy, History, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
+import { Archive, BookmarkPlus, Check, ChevronDown, ChevronRight, Copy, FolderOpen, History, ListTodo, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../shared/types/agent';
 import type { AgentTimelineEvent } from '../../shared/types/agentTimeline';
 import type { CanvasActivityEvent, CanvasWorkspace } from '../../shared/types/canvas';
 import type { ChatContextFragment, ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
+import type { AggregatedSessionEntry, TaskActivityEvent, TaskArtifactRecord } from '../../shared/types/task';
 import type { Pane } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
@@ -27,6 +28,9 @@ import {
   upsertChatConversationHistory,
   type ChatConversationHistoryEntry,
 } from '../utils/chatHistory';
+import { TaskPlanPane } from './chat/TaskPlanPane';
+import { buildTaskActivityStream } from '../utils/taskActivity';
+import { extractTaskPlan } from '../utils/taskPlan';
 import { AgentTimeline } from './agent/AgentTimeline';
 import { renderMarkdownLike } from './agent/RichText';
 import {
@@ -234,6 +238,14 @@ function formatHistoryTimestamp(timestamp: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function createTaskActivityId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `task-activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function createCanvasActivityId(): string {
@@ -762,8 +774,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [optimisticTask, setOptimisticTask] = useState<AgentTaskSnapshot | null>(null);
   const [liveAgentTask, setLiveAgentTask] = useState<AgentTaskSnapshot | null>(null);
   const [historyEntries, setHistoryEntries] = useState<ChatConversationHistoryEntry[]>([]);
+  const [aggregatedSessions, setAggregatedSessions] = useState<AggregatedSessionEntry[]>([]);
+  const [taskArtifacts, setTaskArtifacts] = useState<TaskArtifactRecord[]>([]);
+  const [manualActivity, setManualActivity] = useState<TaskActivityEvent[]>([]);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [planPaneOpen, setPlanPaneOpen] = useState(false);
+  const [artifactSaving, setArtifactSaving] = useState(false);
+  const [enhancementSummaryOpen, setEnhancementSummaryOpen] = useState(false);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -772,10 +790,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   useEffect(() => {
     setLiveAgentTask(null);
     setOptimisticTask(null);
+    setAggregatedSessions(pane.chat?.aggregatedSessions ?? []);
+    setTaskArtifacts(pane.chat?.artifacts ?? []);
+    setManualActivity(pane.chat?.activity ?? []);
     autoScrollPinnedRef.current = true;
     hasAttemptedHistoryHydrationRef.current = false;
     setHistoryMenuOpen(false);
     setCopiedMessageId(null);
+    setPlanPaneOpen(false);
+    setEnhancementSummaryOpen(false);
   }, [pane.id]);
 
   const windows = useWindowStore((state) => state.windows);
@@ -865,6 +888,48 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     : Boolean(chatState.isStreaming);
   const canSend = Boolean(selectedProvider && selectedModel && !isBusy);
   const checkpoints = chatState.checkpoints ?? [];
+  const windowStoreCanvasActivity = useWindowStore((state) => state.canvasActivity);
+  const currentWindowCwd = useMemo(() => (
+    currentWindow
+      ? getAllPanes(currentWindow.layout).find((candidate) => candidate.cwd?.trim())?.cwd
+      : undefined
+  ), [currentWindow]);
+
+  const currentConversationId = chatState.conversationId;
+  const appendManualActivity = useCallback((event: Omit<TaskActivityEvent, 'id' | 'timestamp'>) => {
+    setManualActivity((currentEvents) => ([
+      ...currentEvents.slice(-39),
+      {
+        id: createTaskActivityId(),
+        timestamp: new Date().toISOString(),
+        ...event,
+      },
+    ]));
+  }, []);
+
+  const canvasEventsForWindow = useMemo(() => (
+    windowStoreCanvasActivity.filter((event) => event.windowId === windowId || event.paneId === pane.id)
+  ), [pane.id, windowId, windowStoreCanvasActivity]);
+
+  const extractedPlan = useMemo(() => (
+    extractTaskPlan({
+      assistantMessages: chatState.messages
+        .filter((message) => message.role === 'assistant' && !message.toolResult)
+        .map((message) => message.content),
+      agent: agentState,
+    })
+  ), [agentState, chatState.messages]);
+
+  const taskActivity = useMemo(() => (
+    buildTaskActivityStream({
+      conversationId: currentConversationId,
+      messages: chatState.messages,
+      agent: agentState,
+      canvasEvents: canvasEventsForWindow,
+      artifacts: taskArtifacts,
+      manualEvents: manualActivity,
+    })
+  ), [agentState, canvasEventsForWindow, chatState.messages, currentConversationId, manualActivity, taskArtifacts]);
 
   const appendCanvasActivityEvent = useCallback((
     type: CanvasActivityEvent['type'],
@@ -919,6 +984,44 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     const update = runtimeOnly ? updatePaneRuntime : updatePane;
     update(windowId, pane.id, { chat: nextChat });
   }, [pane.id, updatePane, updatePaneRuntime, windowId]);
+
+  const refreshAggregatedSessions = useCallback(async () => {
+    try {
+      const cwd = linkedPane?.cwd || currentWindowCwd;
+      const response = await window.electronAPI.listAggregatedSessions({
+        cwd: cwd || undefined,
+        limit: 24,
+      });
+      if (response.success && response.data) {
+        setAggregatedSessions(response.data);
+        persistChatState((currentChat) => ({
+          ...currentChat,
+          aggregatedSessions: response.data,
+        }), true);
+      }
+    } catch (error) {
+      console.error('Failed to load aggregated sessions:', error);
+    }
+  }, [currentWindowCwd, linkedPane?.cwd, persistChatState]);
+
+  const refreshTaskArtifacts = useCallback(async (conversationId?: string) => {
+    try {
+      const response = await window.electronAPI.listTaskArtifacts({
+        windowId,
+        paneId: pane.id,
+        conversationId,
+      });
+      if (response.success && response.data) {
+        setTaskArtifacts(response.data);
+        persistChatState((currentChat) => ({
+          ...currentChat,
+          artifacts: response.data,
+        }), true);
+      }
+    } catch (error) {
+      console.error('Failed to load task artifacts:', error);
+    }
+  }, [pane.id, persistChatState, windowId]);
 
   const syncAgentTask = useCallback((task: NonNullable<NonNullable<Pane['chat']>['agent']>) => {
     hasLiveTaskRef.current = true;
@@ -1045,6 +1148,56 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
   }, [agentState?.taskId, isBusy, pane.id, replaceConversationState, resetCurrentAgentTask, windowId]);
 
+  const handleRestoreAggregatedSession = useCallback(async (entry: AggregatedSessionEntry) => {
+    if (isBusy) {
+      return;
+    }
+
+    try {
+      const response = await window.electronAPI.restoreAggregatedSession({ entryId: entry.id });
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to restore aggregated session');
+      }
+
+      await resetCurrentAgentTask(agentState?.taskId);
+      setComposerValue('');
+      hasAttemptedHistoryHydrationRef.current = true;
+      replaceConversationState({
+        conversationId: response.data.conversationId,
+        messages: response.data.messages,
+        agent: undefined,
+        linkedPaneId: resolvedLinkedPaneId,
+      });
+      appendManualActivity({
+        conversationId: response.data.conversationId,
+        paneId: pane.id,
+        windowId,
+        kind: 'history-restored',
+        title: t('chatPane.activityHistoryRestored'),
+        message: entry.title,
+        metadata: {
+          source: entry.source,
+          restoreKind: response.data.restoreKind,
+        },
+      });
+      setHistoryMenuOpen(false);
+      void refreshTaskArtifacts(response.data.conversationId);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [
+    agentState?.taskId,
+    appendManualActivity,
+    isBusy,
+    pane.id,
+    refreshTaskArtifacts,
+    replaceConversationState,
+    resetCurrentAgentTask,
+    resolvedLinkedPaneId,
+    t,
+    windowId,
+  ]);
+
   const handleRollbackToMessage = useCallback(async (messageId: string, content: string) => {
     if (isBusy) {
       return;
@@ -1117,6 +1270,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   useEffect(() => {
     refreshHistoryEntries();
   }, [refreshHistoryEntries]);
+
+  useEffect(() => {
+    void refreshAggregatedSessions();
+  }, [refreshAggregatedSessions]);
+
+  useEffect(() => {
+    void refreshTaskArtifacts(currentConversationId);
+  }, [currentConversationId, refreshTaskArtifacts]);
 
   useEffect(() => () => {
     if (copyResetTimerRef.current !== null) {
@@ -1226,6 +1387,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     refreshHistoryEntries,
     windowId,
   ]);
+
+  useEffect(() => {
+    persistChatState((currentChat) => ({
+      ...currentChat,
+      activity: taskActivity,
+      plan: {
+        items: extractedPlan.items,
+        updatedAt: extractedPlan.updatedAt,
+        source: extractedPlan.source,
+      },
+    }), true);
+  }, [extractedPlan.items, extractedPlan.source, extractedPlan.updatedAt, persistChatState, taskActivity]);
 
   const handleTranscriptScroll = useCallback(() => {
     const element = scrollContainerRef.current;
@@ -1399,6 +1572,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           conversationId: undefined,
           messages: [],
           agent: undefined,
+          artifacts: [],
+          activity: [],
+          plan: undefined,
           isStreaming: false,
         }));
       } catch (error) {
@@ -1490,6 +1666,90 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     resetCurrentAgentTask,
     windowId,
   ]);
+
+  const handleSaveArtifact = useCallback(async () => {
+    const transcriptMessages = chatState.messages.length > 0
+      ? chatState.messages
+      : agentState?.messages ?? [];
+    if (transcriptMessages.length === 0 && !agentState) {
+      return;
+    }
+
+    setArtifactSaving(true);
+    try {
+      const title = buildChatConversationTitle(transcriptMessages);
+      const markdown = transcriptMessages
+        .map((message) => `## ${message.role}\n\n${message.content}`)
+        .join('\n\n');
+      const response = await window.electronAPI.saveTaskArtifact({
+        kind: 'conversation',
+        title,
+        windowId,
+        paneId: pane.id,
+        conversationId: currentConversationId,
+        markdown,
+        preview: title,
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to save task artifact');
+      }
+
+      if (extractedPlan.items.length > 0) {
+        await window.electronAPI.saveTaskArtifact({
+          kind: 'plan',
+          title: `${title} Plan`,
+          windowId,
+          paneId: pane.id,
+          conversationId: currentConversationId,
+          json: {
+            items: extractedPlan.items,
+            updatedAt: extractedPlan.updatedAt,
+            source: extractedPlan.source,
+          },
+          preview: extractedPlan.items[0]?.text,
+        });
+      }
+
+      appendManualActivity({
+        conversationId: currentConversationId,
+        paneId: pane.id,
+        windowId,
+        kind: 'artifact-saved',
+        title: t('chatPane.activityArtifactSaved'),
+        message: response.data.title,
+        metadata: {
+          artifactId: response.data.id,
+          kind: response.data.kind,
+        },
+      });
+      void refreshTaskArtifacts(currentConversationId);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setArtifactSaving(false);
+    }
+  }, [
+    agentState,
+    appendManualActivity,
+    chatState.messages,
+    currentConversationId,
+    pane.id,
+    refreshTaskArtifacts,
+    t,
+    windowId,
+  ]);
+
+  const handleDeleteArtifact = useCallback(async (artifactId: string) => {
+    try {
+      const response = await window.electronAPI.deleteTaskArtifact(artifactId);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete task artifact');
+      }
+      void refreshTaskArtifacts(currentConversationId);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [currentConversationId, refreshTaskArtifacts]);
 
   const resolveSshContext = useCallback(async (): Promise<ChatSshContext | undefined> => {
     if (!linkedPane || getPaneBackend(linkedPane) !== 'ssh' || !linkedPane.ssh) {
@@ -1734,8 +1994,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const copiedMessageLabel = t('chatPane.copied');
   const sshConnected = hasExecutableLinkedSsh;
   const sshSignalTitle = sshConnected ? t('chatPane.sshConnected') : t('chatPane.sshDisconnected');
+  const planStatusLabels: Record<NonNullable<typeof extractedPlan.items[number]>['status'], string> = {
+    pending: t('chatPane.planStatus.pending'),
+    running: t('chatPane.planStatus.running'),
+    completed: t('chatPane.planStatus.completed'),
+    blocked: t('chatPane.planStatus.blocked'),
+    cancelled: t('chatPane.planStatus.cancelled'),
+  };
   const emptyConversationTarget = resolveEmptyConversationTarget(currentWindow?.name, linkedPane)
     ?? t('chatPane.emptyWritingFallback');
+  const hasEnhancementSummary = aggregatedSessions.length > 0 || taskArtifacts.length > 0 || taskActivity.length > 0;
 
   return (
     <div
@@ -1792,7 +2060,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                   <div className="px-2 pb-2 pt-1 text-[11px] font-medium tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
                     {t('chatPane.history')}
                   </div>
-                  {historyEntries.length > 0 || checkpoints.length > 0 ? (
+                  {historyEntries.length > 0 || checkpoints.length > 0 || aggregatedSessions.length > 0 ? (
                     <div className="max-h-[360px] space-y-3 overflow-y-auto">
                       {historyEntries.length > 0 ? (
                         <div className="space-y-1">
@@ -1816,6 +2084,40 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                               </button>
                             );
                           })}
+                        </div>
+                      ) : null}
+                      {aggregatedSessions.length > 0 ? (
+                        <div className="space-y-1">
+                          <div className="px-2 pb-1 pt-1 text-[11px] font-medium tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
+                            {t('chatPane.aggregatedSessions')}
+                          </div>
+                          {aggregatedSessions.map((entry) => (
+                            <button
+                              key={entry.id}
+                              type="button"
+                              onClick={() => {
+                                void handleRestoreAggregatedSession(entry);
+                              }}
+                              className="flex w-full items-start justify-between gap-3 rounded-[16px] px-3 py-2.5 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-[13px] font-medium leading-5">
+                                  {entry.title}
+                                </div>
+                                <div className="mt-1 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                                  {entry.sourceLabel} · {formatHistoryTimestamp(new Date(entry.updatedAt).toISOString())}
+                                </div>
+                                {entry.preview ? (
+                                  <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                                    {entry.preview}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="shrink-0 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                                {t('chatPane.restoreHistory')}
+                              </div>
+                            </button>
+                          ))}
                         </div>
                       ) : null}
                       {checkpoints.length > 0 ? (
@@ -1881,6 +2183,31 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               <BookmarkPlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
             </button>
 
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('chatPane.saveArtifact')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void handleSaveArtifact();
+              }}
+              disabled={artifactSaving || (!chatState.messages.length && !agentState?.messages.length)}
+              className={chatHeaderIconButtonClassName}
+            >
+              <Archive size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+            </button>
+
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('chatPane.plan')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => setPlanPaneOpen((open) => !open)}
+              className={chatHeaderIconButtonClassName}
+            >
+              <ListTodo size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+            </button>
+
             {onClose && (
               <button
                 type="button"
@@ -1897,12 +2224,114 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </div>
       </div>
 
-      <div
-        ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 pb-4 pt-1"
-        onScroll={handleTranscriptScroll}
-      >
-        <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto px-4 pb-4 pt-1"
+          onScroll={handleTranscriptScroll}
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col">
+            {hasEnhancementSummary ? (
+              <div className="pb-4 pt-3">
+                <div className={`${idePopupCardClassName} rounded-[20px] px-4 py-3`}>
+                  <button
+                    type="button"
+                    onClick={() => setEnhancementSummaryOpen((open) => !open)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
+                        {t('chatPane.workspaceEnhancements')}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-[rgb(var(--muted-foreground))]">
+                        {taskActivity.length > 0 ? <span>{t('chatPane.activityCount', { count: taskActivity.length })}</span> : null}
+                        {taskArtifacts.length > 0 ? <span>{t('chatPane.artifactCount', { count: taskArtifacts.length })}</span> : null}
+                        {aggregatedSessions.length > 0 ? <span>{t('chatPane.aggregatedSessionCount', { count: aggregatedSessions.length })}</span> : null}
+                      </div>
+                    </div>
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[rgb(var(--border))] text-[rgb(var(--muted-foreground))]">
+                      {enhancementSummaryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                  </button>
+
+                  {enhancementSummaryOpen ? (
+                    <div className="mt-3 space-y-3">
+                      {taskActivity.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
+                              {t('chatPane.activity')}
+                            </div>
+                            <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                              {t('chatPane.activityCount', { count: taskActivity.length })}
+                            </div>
+                          </div>
+                          {taskActivity.slice(-4).map((event) => (
+                            <div key={event.id} className="rounded-[16px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_54%,transparent)] px-3 py-2.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{event.title}</div>
+                                <div className="shrink-0 text-[11px] text-[rgb(var(--muted-foreground))]">
+                                  {formatHistoryTimestamp(event.timestamp)}
+                                </div>
+                              </div>
+                              {event.message ? (
+                                <div className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">
+                                  {event.message}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {taskArtifacts.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
+                              {t('chatPane.artifacts')}
+                            </div>
+                            <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                              {t('chatPane.artifactCount', { count: taskArtifacts.length })}
+                            </div>
+                          </div>
+                          {taskArtifacts.slice(0, 3).map((artifact) => (
+                            <div key={artifact.id} className="flex items-center justify-between gap-3 rounded-[16px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_54%,transparent)] px-3 py-2.5">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{artifact.title}</div>
+                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                                  {formatHistoryTimestamp(artifact.createdAt)}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void window.electronAPI.openFolder(artifact.filePath);
+                                  }}
+                                  className={`${idePopupSecondaryButtonClassName} inline-flex h-8 items-center gap-1 rounded-[12px] px-3 text-xs`}
+                                >
+                                  <FolderOpen size={13} />
+                                  {t('common.open')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleDeleteArtifact(artifact.id);
+                                  }}
+                                  className={`${idePopupSecondaryButtonClassName} inline-flex h-8 items-center rounded-[12px] px-3 text-xs`}
+                                >
+                                  {t('common.delete')}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           {!settingsLoaded ? (
             <div className={`${idePopupCardClassName} rounded-[24px] px-5 py-4 text-sm text-[rgb(var(--muted-foreground))]`}>
               {t('common.loading')}
@@ -1996,6 +2425,19 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             </div>
           )}
         </div>
+        </div>
+
+        {planPaneOpen ? (
+          <TaskPlanPane
+            items={extractedPlan.items}
+            updatedAt={extractedPlan.updatedAt}
+            onClose={() => setPlanPaneOpen(false)}
+            title={t('chatPane.closePlan')}
+            emptyLabel={t('chatPane.planEmpty')}
+            badgeLabel={t('chatPane.planBadge')}
+            statusLabelFormatter={(status) => planStatusLabels[status]}
+          />
+        ) : null}
       </div>
 
       <div className="px-4 pb-4 pt-2">

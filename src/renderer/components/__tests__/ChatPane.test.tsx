@@ -3631,4 +3631,155 @@ describe('ChatPane', () => {
     expect(activity[1]?.title).toBe('保存了一个聊天检查点');
     expect(activity[2]?.message).toBe('Agent task crashed');
   });
+
+  it('restores aggregated sessions and archives the restored transcript', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.listAggregatedSessions).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'claude-code:/tmp/session.jsonl',
+          source: 'claude-code',
+          scope: 'workspace',
+          title: 'Nginx 排查',
+          updatedAt: Date.now(),
+          sourceLabel: 'Claude Code',
+          restoreKind: 'history-only',
+          preview: '检查磁盘和 nginx error log',
+        },
+      ],
+    } as any);
+    vi.mocked(window.electronAPI.restoreAggregatedSession).mockResolvedValue({
+      success: true,
+      data: {
+        conversationId: 'aggregated-1',
+        title: 'Nginx 排查',
+        restoreKind: 'history-only',
+        messages: [
+          {
+            id: 'agg-user-1',
+            role: 'user',
+            content: '帮我看 nginx 错误',
+            timestamp: new Date().toISOString(),
+          },
+          {
+            id: 'agg-assistant-1',
+            role: 'assistant',
+            content: '先检查磁盘和 nginx error log。',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.listTaskArtifacts).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(window.electronAPI.saveTaskArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'artifact-1',
+        kind: 'conversation',
+        title: 'Nginx 排查',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        conversationId: 'aggregated-1',
+        filePath: '/tmp/nginx-investigation.md',
+        contentType: 'text/markdown',
+        sizeBytes: 128,
+      },
+    } as any);
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'History Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '对话历史' }));
+    await user.click(await screen.findByRole('button', { name: /Nginx 排查/ }));
+
+    expect(await screen.findByText('帮我看 nginx 错误')).toBeInTheDocument();
+    expect(screen.getByText('先检查磁盘和 nginx error log。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '归档对话' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.restoreAggregatedSession).toHaveBeenCalledWith({
+        entryId: 'claude-code:/tmp/session.jsonl',
+      });
+      expect(window.electronAPI.saveTaskArtifact).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'conversation',
+        conversationId: 'aggregated-1',
+      }));
+    });
+  });
 });

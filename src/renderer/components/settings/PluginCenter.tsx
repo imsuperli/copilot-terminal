@@ -12,6 +12,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { Settings, StatusLineConfig } from '../../../shared/types/workspace';
+import type { McpServerConfigSnapshot } from '../../../shared/types/task';
 import type {
   PluginCatalogEntry,
   PluginListItem,
@@ -72,6 +73,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeActionKeys, setActiveActionKeys] = useState<string[]>([]);
+  const [mcpSnapshots, setMcpSnapshots] = useState<McpServerConfigSnapshot[]>([]);
   const hasLoadedCatalogRef = useRef(hasLoadedCatalog);
 
   useEffect(() => {
@@ -91,13 +93,14 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     setErrorMessage(null);
 
     try {
-      const [settingsResponse, installedResponse, registryResponse, catalogResponse] = await Promise.all([
+      const [settingsResponse, installedResponse, registryResponse, mcpResponse, catalogResponse] = await Promise.all([
         window.electronAPI.getSettings(),
         window.electronAPI.listPlugins({
           includeCatalog,
           refreshCatalog,
         }),
         window.electronAPI.getPluginRegistry(),
+        window.electronAPI.getMcpServerSnapshots(),
         refreshCatalog
           ? window.electronAPI.listPluginCatalog({ refresh: true })
           : Promise.resolve(null),
@@ -118,6 +121,9 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       setWorkspacePluginSettings(settingsResponse.data.plugins ?? {});
       setInstalledPlugins(installedResponse.data);
       setPluginRegistry(registryResponse.data);
+      if (mcpResponse.success && mcpResponse.data) {
+        setMcpSnapshots(mcpResponse.data);
+      }
       setPluginSettingDrafts(buildPluginSettingDrafts(
         installedResponse.data,
         registryResponse.data,
@@ -177,6 +183,18 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     const installedPluginIds = new Set(installedPlugins.map((plugin) => plugin.id));
     return catalogEntries.filter((entry) => !installedPluginIds.has(entry.id));
   }, [catalogEntries, installedPlugins]);
+  const pluginCapabilitySummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const plugin of installedPlugins) {
+      for (const capability of plugin.manifest?.capabilities ?? []) {
+        counts.set(capability.type, (counts.get(capability.type) ?? 0) + 1);
+      }
+    }
+
+    return Array.from(counts.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((left, right) => left.type.localeCompare(right.type));
+  }, [installedPlugins]);
 
   const isInitialLoad = isHydrating && !hasLoadedOnce;
   const hasPluginMutationInFlight = activeActionKeys.some((actionKey) => (
@@ -547,6 +565,70 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           </div>
         )}
       </CompactSettingsSection>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Plug size={18} className="text-[rgb(var(--primary))]" />
+          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.sections.capabilities')}</h3>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <CompactSettingsSection
+            title={t('settings.plugins.mcp.title')}
+            help={t('settings.plugins.mcp.description')}
+            icon={<Wrench size={15} />}
+            contentClassName="p-4"
+            divided={false}
+          >
+            {mcpSnapshots.length === 0 ? (
+              <div className={barePanelClassName}>
+                <div className="text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.mcp.empty')}</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {mcpSnapshots.map((snapshot) => (
+                  <div key={snapshot.serverName} className={idePopupCardClassName}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{snapshot.serverName}</div>
+                      <div className={badgeClassName}>{t('settings.plugins.mcp.toolCount', { count: snapshot.toolCount })}</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {snapshot.tools.map((tool) => (
+                        <span key={`${snapshot.serverName}:${tool.toolName}`} className={chipClassName}>
+                          {tool.toolName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CompactSettingsSection>
+
+          <CompactSettingsSection
+            title={t('settings.plugins.capabilitySummary.title')}
+            help={t('settings.plugins.capabilitySummary.description')}
+            icon={<Settings2 size={15} />}
+            contentClassName="p-4"
+            divided={false}
+          >
+            {pluginCapabilitySummary.length === 0 ? (
+              <div className={barePanelClassName}>
+                <div className="text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.capabilitySummary.empty')}</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pluginCapabilitySummary.map((item) => (
+                  <div key={item.type} className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] px-3 py-2.5">
+                    <div className="text-sm font-medium text-[rgb(var(--foreground))]">{item.type}</div>
+                    <div className={badgeClassName}>{item.count}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CompactSettingsSection>
+        </div>
+      </section>
 
       <section className="space-y-4">
         <div className="flex items-center gap-3">
