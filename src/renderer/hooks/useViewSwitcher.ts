@@ -87,6 +87,15 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
   }, [t]);
 
   const switchToCanvasView = useCallback(async (canvasWorkspaceId: string) => {
+    const previousState = {
+      currentView,
+      activeWindowId,
+      activeCanvasWorkspaceId,
+      storeActiveWindowId: useWindowStore.getState().activeWindowId,
+      storeActiveCanvasWorkspaceId: useWindowStore.getState().activeCanvasWorkspaceId,
+      storeActiveGroupId: useWindowStore.getState().activeGroupId,
+    };
+
     try {
       setError(null);
       setCurrentView('canvas');
@@ -97,13 +106,19 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
       setActiveCanvasWorkspace(canvasWorkspaceId);
       await window.electronAPI.switchToCanvasView(canvasWorkspaceId);
     } catch (err) {
+      setCurrentView(previousState.currentView);
+      setActiveWindowId(previousState.activeWindowId);
+      setActiveCanvasWorkspaceId(previousState.activeCanvasWorkspaceId);
+      setActiveWindow(previousState.storeActiveWindowId);
+      useWindowStore.getState().setActiveGroup(previousState.storeActiveGroupId);
+      setActiveCanvasWorkspace(previousState.storeActiveCanvasWorkspaceId);
       const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toCanvasFailed');
       setError(errorMessage);
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to switch to canvas view:', err);
       }
     }
-  }, [setActiveCanvasWorkspace, setActiveWindow, t]);
+  }, [activeCanvasWorkspaceId, activeWindowId, currentView, setActiveCanvasWorkspace, setActiveWindow, t]);
 
   useEffect(() => {
     const handler = (

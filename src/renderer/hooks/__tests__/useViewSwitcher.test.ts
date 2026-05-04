@@ -204,6 +204,37 @@ describe('useViewSwitcher', () => {
       expect(result.current.activeCanvasWorkspaceId).toBe('canvas-123');
       expect(useWindowStore.getState().activeCanvasWorkspaceId).toBe('canvas-123');
     });
+
+    it('应该在切换失败时回滚本地画布视图状态', async () => {
+      vi.mocked(window.electronAPI.switchToCanvasView).mockRejectedValue(new Error('canvas switch failed'));
+      const terminalWindow = createSinglePaneWindow('Test', 'D:\\repo', 'pwsh.exe');
+      terminalWindow.id = 'window-123';
+      useWindowStore.setState({
+        windows: [terminalWindow],
+        activeWindowId: 'window-123',
+        activeCanvasWorkspaceId: null,
+        activeGroupId: null,
+      });
+
+      const { result } = renderHook(() => useViewSwitcher());
+
+      await act(async () => {
+        await result.current.switchToTerminalView('window-123');
+      });
+
+      expect(result.current.currentView).toBe('terminal');
+
+      await act(async () => {
+        await result.current.switchToCanvasView('canvas-123');
+      });
+
+      expect(result.current.currentView).toBe('terminal');
+      expect(result.current.activeWindowId).toBe('window-123');
+      expect(result.current.activeCanvasWorkspaceId).toBeNull();
+      expect(useWindowStore.getState().activeWindowId).toBe('window-123');
+      expect(useWindowStore.getState().activeCanvasWorkspaceId).toBeNull();
+      expect(result.current.error).toBe('canvas switch failed');
+    });
   });
 
   describe('view-changed 事件处理', () => {

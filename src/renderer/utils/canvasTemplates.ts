@@ -129,6 +129,7 @@ export function createTemplateFromWorkspace(
   windowsById: Map<string, Window>,
 ): CanvasWorkspaceTemplate {
   const now = nowIso();
+  const templateBlockIds = new Map<string, string>();
 
   return {
     id: uuidv4(),
@@ -140,9 +141,12 @@ export function createTemplateFromWorkspace(
     chatDefaults: workspace.chatDefaults,
     exportSettings: workspace.exportSettings,
     blocks: workspace.blocks.map((block) => {
+      const templateBlockId = uuidv4();
+      templateBlockIds.set(block.id, templateBlockId);
+
       if (block.type === 'note') {
         return {
-          id: uuidv4(),
+          id: templateBlockId,
           kind: 'note',
           x: block.x,
           y: block.y,
@@ -158,7 +162,7 @@ export function createTemplateFromWorkspace(
       const pane = windowItem?.layout.type === 'pane' ? windowItem.layout.pane : undefined;
 
       return {
-        id: uuidv4(),
+        id: templateBlockId,
         kind,
         x: block.x,
         y: block.y,
@@ -180,8 +184,8 @@ export function createTemplateFromWorkspace(
     }),
     links: (workspace.links ?? []).map((link) => ({
       id: uuidv4(),
-      fromBlockId: link.fromBlockId,
-      toBlockId: link.toBlockId,
+      fromBlockId: templateBlockIds.get(link.fromBlockId) ?? link.fromBlockId,
+      toBlockId: templateBlockIds.get(link.toBlockId) ?? link.toBlockId,
       kind: link.kind,
       label: link.label,
     }) satisfies CanvasTemplateLinkDefinition),
@@ -286,5 +290,26 @@ export function instantiateCanvasWorkspaceFromTemplate(
       exportSettings: template.exportSettings,
     },
     windows,
+  };
+}
+
+export function mergeCanvasWorkspaceContents(
+  current: Pick<CanvasWorkspace, 'blocks' | 'links' | 'nextZIndex'>,
+  incoming: Pick<CanvasWorkspace, 'blocks' | 'links' | 'nextZIndex'>,
+  offset: { x: number; y: number },
+): Pick<CanvasWorkspace, 'blocks' | 'links' | 'nextZIndex'> {
+  const shiftedBlocks = incoming.blocks.map((block) => ({
+    ...block,
+    x: block.x + offset.x,
+    y: block.y + offset.y,
+    zIndex: block.zIndex + current.nextZIndex - 1,
+  }));
+
+  const shiftedLinks = (incoming.links ?? []).map((link) => ({ ...link }));
+
+  return {
+    blocks: [...current.blocks, ...shiftedBlocks],
+    links: [...(current.links ?? []), ...shiftedLinks],
+    nextZIndex: current.nextZIndex + Math.max(incoming.nextZIndex - 1, shiftedBlocks.length),
   };
 }

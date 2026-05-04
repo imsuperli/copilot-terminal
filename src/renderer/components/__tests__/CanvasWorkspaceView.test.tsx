@@ -235,6 +235,26 @@ describe('CanvasWorkspaceView', () => {
     }
   });
 
+  it('merges template blocks into the existing canvas instead of replacing current blocks', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '模板' }));
+    const applyButtons = await screen.findAllByRole('button', { name: '应用模板' });
+    await user.click(applyButtons[0]);
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      expect(updated?.blocks.some((block) => block.id === 'note-1')).toBe(true);
+      expect((updated?.blocks.length ?? 0)).toBeGreaterThan(3);
+    });
+  });
+
   it('sends selected evidence into a new note block with links', async () => {
     const user = userEvent.setup();
 

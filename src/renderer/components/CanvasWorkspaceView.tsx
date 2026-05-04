@@ -34,7 +34,12 @@ import {
   normalizeCanvasRect,
   resizeCanvasBlock,
 } from '../utils/canvasWorkspace';
-import { createTemplateFromWorkspace, createDefaultCanvasTemplates, instantiateCanvasWorkspaceFromTemplate } from '../utils/canvasTemplates';
+import {
+  createTemplateFromWorkspace,
+  createDefaultCanvasTemplates,
+  instantiateCanvasWorkspaceFromTemplate,
+  mergeCanvasWorkspaceContents,
+} from '../utils/canvasTemplates';
 import { createCanvasWindowDraft } from '../utils/canvasWindowFactory';
 import { buildCanvasBlockSummary, buildSelectedCanvasContext, exportCanvasWorkspaceReport, serializeCanvasBlockEvidence } from '../utils/canvasInsights';
 import { dispatchAppError, dispatchAppSuccess } from '../utils/appNotice';
@@ -930,10 +935,27 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       addWindow(windowItem);
     }
 
+    const mergedWorkspace = mergeCanvasWorkspaceContents(
+      {
+        blocks: canvasWorkspace.blocks,
+        links: canvasWorkspace.links ?? [],
+        nextZIndex: canvasWorkspace.nextZIndex,
+      },
+      {
+        blocks: instantiated.workspace.blocks,
+        links: instantiated.workspace.links ?? [],
+        nextZIndex: instantiated.workspace.nextZIndex,
+      },
+      {
+        x: 80,
+        y: 60,
+      },
+    );
+
     updateCanvasWorkspace(canvasWorkspace.id, {
-      blocks: instantiated.workspace.blocks,
-      links: instantiated.workspace.links,
-      nextZIndex: instantiated.workspace.nextZIndex,
+      blocks: mergedWorkspace.blocks,
+      links: mergedWorkspace.links,
+      nextZIndex: mergedWorkspace.nextZIndex,
       templateId: template.id,
       chatDefaults: instantiated.workspace.chatDefaults,
       exportSettings: instantiated.workspace.exportSettings,

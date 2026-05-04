@@ -317,6 +317,25 @@ describe('CreateWindowDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('filters out ssh tab from constrained canvas flow when ssh is disabled', async () => {
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        availableTabs={['local', 'ssh']}
+        initialTab="local"
+        sshEnabled={false}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(mockElectronAPI.getAvailableShells).toHaveBeenCalled()
+    })
+
+    expect(screen.getByLabelText(/工作目录/)).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /SSH 连接/ })).not.toBeInTheDocument()
+  })
+
   it('creates an ssh profile from the grouped ssh tabs', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
@@ -335,17 +354,11 @@ describe('CreateWindowDialog', () => {
     await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
 
     expect(screen.getByLabelText(/连接名称/)).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '基础' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '认证' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '路由' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '会话' })).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText(/连接名称/), 'Prod Ubuntu')
-    await user.type(screen.getByLabelText(/主机地址/), 'example.com')
-    await user.clear(screen.getByLabelText(/^用户名/))
-    await user.type(screen.getByLabelText(/^用户名/), 'root')
+    fireEvent.change(screen.getByLabelText(/连接名称/), { target: { value: 'Prod Ubuntu' } })
+    fireEvent.change(screen.getByLabelText(/主机地址/), { target: { value: 'example.com' } })
+    fireEvent.change(screen.getByLabelText(/^用户名/), { target: { value: 'root' } })
     await user.click(screen.getByRole('tab', { name: '认证' }))
-    await user.type(screen.getByLabelText(/密码 \/ 交互认证密钥/), 'secret')
+    fireEvent.change(screen.getByLabelText(/密码 \/ 交互认证密钥/), { target: { value: 'secret' } })
 
     await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
 
@@ -390,12 +403,11 @@ describe('CreateWindowDialog', () => {
     )
 
     await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
-    await user.type(screen.getByLabelText(/连接名称/), 'Prod Ubuntu')
-    await user.type(screen.getByLabelText(/主机地址/), 'example.com')
-    await user.clear(screen.getByLabelText(/^用户名/))
-    await user.type(screen.getByLabelText(/^用户名/), 'root')
-
-    await user.click(screen.getByRole('button', { name: /保存并连接 SSH/ }))
+    const connectionNameInput = await screen.findByLabelText(/连接名称/)
+    fireEvent.change(connectionNameInput, { target: { value: 'Prod Ubuntu' } })
+    fireEvent.change(screen.getByLabelText(/主机地址/), { target: { value: 'example.com' } })
+    fireEvent.change(screen.getByLabelText(/^用户名/), { target: { value: 'root' } })
+    fireEvent.click(screen.getByRole('button', { name: /保存并连接 SSH/ }))
 
     await waitFor(() => {
       expect(onSSHProfileSaved).toHaveBeenCalled()

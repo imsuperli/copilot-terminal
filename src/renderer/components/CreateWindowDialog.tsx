@@ -155,6 +155,21 @@ function createInitialSSHForm(profile?: SSHProfile | null, duplicate = false): S
   }
 }
 
+function normalizeAvailableTabs(
+  tabs: CreateWindowTab[] | undefined,
+  sshEnabled: boolean,
+): CreateWindowTab[] | undefined {
+  if (!tabs || tabs.length === 0) {
+    return undefined
+  }
+
+  const nextTabs = Array.from(new Set(tabs)).filter((tab) => (
+    tab !== 'ssh' || sshEnabled
+  ))
+
+  return nextTabs.length > 0 ? nextTabs : undefined
+}
+
 export function CreateWindowDialog({
   open,
   onOpenChange,
@@ -175,13 +190,17 @@ export function CreateWindowDialog({
   const { t } = useI18n()
   const isEditingSSHProfile = Boolean(editingSSHProfile)
   const isDuplicatingSSHProfile = !isEditingSSHProfile && Boolean(initialSSHProfile)
+  const normalizedAvailableTabs = useMemo(
+    () => normalizeAvailableTabs(availableTabs, sshEnabled),
+    [availableTabs, sshEnabled],
+  )
   const resolvedAvailableTabs = useMemo<CreateWindowTab[]>(() => {
     if ((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled) {
       return ['ssh']
     }
 
-    if (availableTabs && availableTabs.length > 0) {
-      return Array.from(new Set(availableTabs))
+    if (normalizedAvailableTabs && normalizedAvailableTabs.length > 0) {
+      return normalizedAvailableTabs
     }
 
     const nextTabs: CreateWindowTab[] = ['local']
@@ -190,7 +209,7 @@ export function CreateWindowDialog({
     }
     nextTabs.push('canvas')
     return nextTabs
-  }, [availableTabs, isDuplicatingSSHProfile, isEditingSSHProfile, sshEnabled])
+  }, [isDuplicatingSSHProfile, isEditingSSHProfile, normalizedAvailableTabs, sshEnabled])
   const resolveInitialTab = useMemo(() => {
     if ((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled && resolvedAvailableTabs.includes('ssh')) {
       return 'ssh' as const
