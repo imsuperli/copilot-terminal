@@ -8,6 +8,7 @@ import type { CanvasActivityEvent, CanvasWorkspaceTemplate } from './canvas';
 import type { ChatSettings } from './chat';
 import type { WorkspacePluginSettings } from './plugin';
 import type { AppearanceSettings } from './appearance';
+import type { BrowserSyncSettings } from './browser-sync';
 
 export interface IDEConfig {
   id: string;
@@ -94,6 +95,7 @@ export interface Settings {
   defaultSidebarTab?: 'all' | 'active' | 'local' | 'ssh' | 'archived' | string; // string 也可能是自定义分类或状态筛选 ID
   chat?: ChatSettings;
   plugins?: WorkspacePluginSettings;
+  browserSync?: BrowserSyncSettings;
 }
 
 export interface Workspace {

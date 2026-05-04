@@ -26,6 +26,10 @@ import { LanguageFeatureService } from '../services/language/LanguageFeatureServ
 import { LanguageProjectContributionService } from '../services/language/LanguageProjectContributionService';
 import { LanguageWorkspaceHostService } from '../services/language/LanguageWorkspaceHostService';
 import { PluginManager } from '../services/plugins/PluginManager';
+import { SessionAggregationService } from '../services/SessionAggregationService';
+import { TaskArtifactService } from '../services/TaskArtifactService';
+import { BrowserSyncService } from '../services/BrowserSyncService';
+import { McpCapabilityService } from '../services/McpCapabilityService';
 import { Workspace } from '../types/workspace';
 
 /**
@@ -61,6 +65,10 @@ export interface HandlerContext {
   languageProjectContributionService?: LanguageProjectContributionService | null;
   languageWorkspaceHostService?: LanguageWorkspaceHostService | null;
   pluginManager?: PluginManager | null;
+  sessionAggregationService?: SessionAggregationService | null;
+  taskArtifactService?: TaskArtifactService | null;
+  browserSyncService?: BrowserSyncService | null;
+  mcpCapabilityService?: McpCapabilityService | null;
   currentWorkspace: Workspace | null;
   getMainWindow?: () => BrowserWindow | null;
   getCurrentWorkspace: () => Workspace | null;

@@ -1,4 +1,11 @@
 import type { AgentTaskSnapshot } from './agent';
+import type {
+  AggregatedSessionEntry,
+  AggregatedSessionRestoreKind,
+  TaskActivityEvent,
+  TaskArtifactRecord,
+  TaskPlanItem,
+} from './task';
 
 /**
  * Chat 功能相关类型定义
@@ -136,6 +143,18 @@ export interface ChatPaneState {
   }>;
   /** 新 agent 子系统快照 */
   agent?: AgentTaskSnapshot;
+  /** 统一任务活动流 */
+  activity?: TaskActivityEvent[];
+  /** 当前解析出的计划 */
+  plan?: {
+    items: TaskPlanItem[];
+    updatedAt?: string;
+    source?: string;
+  };
+  /** 最近访问的聚合会话 */
+  aggregatedSessions?: AggregatedSessionEntry[];
+  /** 该对话关联的产物摘要 */
+  artifacts?: TaskArtifactRecord[];
 }
 
 // ─── SSH 上下文 ───────────────────────────────────────────────────────────────
@@ -232,4 +251,16 @@ export interface ChatExecuteToolRequest {
   windowId: string;
   toolCall: ToolCall;
   sshContext?: ChatSshContext;
+}
+
+export interface RestoreAggregatedSessionRequest {
+  entryId: string;
+}
+
+export interface RestoreAggregatedSessionResult {
+  conversationId: string;
+  title: string;
+  restoreKind: AggregatedSessionRestoreKind;
+  messages: ChatMessage[];
+  metadata?: Record<string, unknown>;
 }

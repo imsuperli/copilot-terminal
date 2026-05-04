@@ -23,6 +23,8 @@ import type {
   ChatToolApprovalRequestPayload,
   ChatToolApprovalResponse,
   ChatExecuteToolRequest,
+  RestoreAggregatedSessionRequest,
+  RestoreAggregatedSessionResult,
   ToolResult,
   ChatSettings,
   ChatProviderValidationRequest,
@@ -62,6 +64,14 @@ import type {
   PluginRuntimeState,
   WorkspacePluginSettings,
 } from './plugin';
+import type {
+  AggregatedSessionDetail,
+  AggregatedSessionEntry,
+  BrowserSyncProfile,
+  BrowserSyncState,
+  McpServerConfigSnapshot,
+  TaskArtifactRecord,
+} from './task';
 
 export interface IpcResponse<T = void> {
   success: boolean;
@@ -256,6 +266,30 @@ export interface PaneStatusChangedPayload {
   paneId: string;
   status: WindowStatus;
   timestamp: string;
+}
+
+export interface ListAggregatedSessionsQuery {
+  cwd?: string;
+  limit?: number;
+}
+
+export interface SaveTaskArtifactRequest {
+  kind: TaskArtifactRecord['kind'];
+  title: string;
+  workspaceId?: string;
+  windowId?: string;
+  paneId?: string;
+  conversationId?: string;
+  markdown?: string;
+  json?: unknown;
+  preview?: string;
+}
+
+export interface ListTaskArtifactsQuery {
+  workspaceId?: string;
+  windowId?: string;
+  paneId?: string;
+  conversationId?: string;
 }
 
 export interface WindowGitBranchChangedPayload {
@@ -1898,6 +1932,18 @@ export interface ElectronAPI {
   offCleanupStarted: (callback: ElectronSignalHandler) => void;
   onCleanupProgress: (callback: ElectronEventHandler<CleanupProgressPayload>) => void;
   offCleanupProgress: (callback: ElectronEventHandler<CleanupProgressPayload>) => void;
+
+  // Task/session enhancements
+  listAggregatedSessions: (query?: ListAggregatedSessionsQuery) => Promise<IpcResponse<AggregatedSessionEntry[]>>;
+  getAggregatedSessionDetail: (entryId: string) => Promise<IpcResponse<AggregatedSessionDetail>>;
+  restoreAggregatedSession: (request: RestoreAggregatedSessionRequest) => Promise<IpcResponse<RestoreAggregatedSessionResult>>;
+  saveTaskArtifact: (request: SaveTaskArtifactRequest) => Promise<IpcResponse<TaskArtifactRecord>>;
+  listTaskArtifacts: (query?: ListTaskArtifactsQuery) => Promise<IpcResponse<TaskArtifactRecord[]>>;
+  deleteTaskArtifact: (artifactId: string) => Promise<IpcResponse<void>>;
+  listBrowserSyncProfiles: () => Promise<IpcResponse<BrowserSyncProfile[]>>;
+  getBrowserSyncState: () => Promise<IpcResponse<BrowserSyncState>>;
+  syncBrowserProfile: (profileId: string) => Promise<IpcResponse<BrowserSyncState>>;
+  getMcpServerSnapshots: () => Promise<IpcResponse<McpServerConfigSnapshot[]>>;
 
   // Group management
   createGroup: (name: string, windowIds: string[]) => Promise<IpcResponse<WindowGroup>>;

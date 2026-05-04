@@ -529,6 +529,26 @@ const electronAPI: ElectronAPI = {
   offCleanupProgress: (callback) => {
     ipcRenderer.removeListener('cleanup-progress', callback);
   },
+  listAggregatedSessions: (query) =>
+    ipcRenderer.invoke('list-aggregated-sessions', query),
+  getAggregatedSessionDetail: (entryId) =>
+    ipcRenderer.invoke('get-aggregated-session-detail', { entryId }),
+  restoreAggregatedSession: (request) =>
+    ipcRenderer.invoke('restore-aggregated-session', request),
+  saveTaskArtifact: (request) =>
+    ipcRenderer.invoke('save-task-artifact', request),
+  listTaskArtifacts: (query) =>
+    ipcRenderer.invoke('list-task-artifacts', query),
+  deleteTaskArtifact: (artifactId) =>
+    ipcRenderer.invoke('delete-task-artifact', { artifactId }),
+  listBrowserSyncProfiles: () =>
+    ipcRenderer.invoke('list-browser-sync-profiles'),
+  getBrowserSyncState: () =>
+    ipcRenderer.invoke('get-browser-sync-state'),
+  syncBrowserProfile: (profileId) =>
+    ipcRenderer.invoke('sync-browser-profile', { profileId }),
+  getMcpServerSnapshots: () =>
+    ipcRenderer.invoke('get-mcp-server-snapshots'),
 
   // Group management
   createGroup: (name: string, windowIds: string[]) =>

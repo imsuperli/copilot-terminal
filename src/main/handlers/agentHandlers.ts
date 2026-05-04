@@ -18,6 +18,10 @@ import { ToolExecutor } from '../services/chat/ToolExecutor';
 
 let controller: AgentController | null = null;
 
+export function getAgentController(): AgentController | null {
+  return controller;
+}
+
 const CHAT_ENVIRONMENT_DETAILS_MAX_CHARS = 4000;
 const CHAT_ENVIRONMENT_PROBE_COMMAND = [
   'printf "[host]\\n"; hostname 2>/dev/null || true',

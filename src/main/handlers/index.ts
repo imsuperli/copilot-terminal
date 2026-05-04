@@ -18,6 +18,7 @@ import { registerChatHandlers } from './chatHandlers';
 import { registerAgentHandlers } from './agentHandlers';
 import { registerLanguageHandlers } from './languageHandlers';
 import { registerPluginHandlers } from './pluginHandlers';
+import { registerTaskEnhancementHandlers } from './taskEnhancementHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -78,6 +79,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // Structured agent runtime
   registerAgentHandlers(ctx);
+
+  // Session aggregation / artifacts / browser sync / MCP summary
+  registerTaskEnhancementHandlers(ctx);
 
   // 其他 (ping)
   registerMiscHandlers(ctx);

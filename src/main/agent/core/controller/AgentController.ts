@@ -192,4 +192,8 @@ export class AgentController {
     }
     this.tasksByTaskId.delete(snapshot.taskId);
   }
+
+  getMcpHub(): McpHub {
+    return this.mcpHub;
+  }
 }

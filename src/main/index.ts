@@ -42,11 +42,16 @@ import { PluginInstallerService } from './services/plugins/PluginInstallerServic
 import { PluginManager } from './services/plugins/PluginManager';
 import { PluginCapabilityRuntimeService } from './services/plugins/PluginCapabilityRuntimeService';
 import { PluginRegistryStore } from './services/plugins/PluginRegistryStore';
+import { SessionAggregationService } from './services/SessionAggregationService';
+import { TaskArtifactService } from './services/TaskArtifactService';
+import { BrowserSyncService } from './services/BrowserSyncService';
+import { McpCapabilityService } from './services/McpCapabilityService';
 import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
 import { normalizeImagePath, toFileUrl } from '../shared/utils/appImage';
+import { getAgentController } from './handlers/agentHandlers';
 
 const APP_DISPLAY_NAME = 'Synapse';
 const USER_DATA_DIR_NAME = 'synapse';
@@ -107,6 +112,10 @@ let languageFeatureService: LanguageFeatureService | null = null;
 let languageProjectContributionService: LanguageProjectContributionService | null = null;
 let languageWorkspaceHostService: LanguageWorkspaceHostService | null = null;
 let pluginManager: PluginManager | null = null;
+let sessionAggregationService: SessionAggregationService | null = null;
+let taskArtifactService: TaskArtifactService | null = null;
+let browserSyncService: BrowserSyncService | null = null;
+let mcpCapabilityService: McpCapabilityService | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
@@ -646,6 +655,10 @@ app.whenReady().then(async () => {
     catalogService: pluginCatalogService,
     installerService: pluginInstallerService,
   });
+  sessionAggregationService = new SessionAggregationService();
+  taskArtifactService = new TaskArtifactService();
+  browserSyncService = new BrowserSyncService();
+  mcpCapabilityService = new McpCapabilityService(() => getAgentController()?.getMcpHub() ?? null);
   const languagePluginResolver = new LanguagePluginResolver({
     registryStore: pluginRegistryStore,
   });
@@ -813,6 +826,10 @@ app.whenReady().then(async () => {
     languageProjectContributionService,
     languageWorkspaceHostService,
     pluginManager,
+    sessionAggregationService,
+    taskArtifactService,
+    browserSyncService,
+    mcpCapabilityService,
     currentWorkspace,
     getMainWindow: () => mainWindow,
     getCurrentWorkspace: () => currentWorkspace,
