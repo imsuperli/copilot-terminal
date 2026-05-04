@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderApp } from './appTestUtils';
 
 describe('App - Main Window and Basic Layout', () => {
@@ -30,14 +31,30 @@ describe('App - Main Window and Basic Layout', () => {
     await renderApp();
     expect(
       await screen.findByRole('heading', { level: 2, name: '欢迎使用 Synapse' }),
-    ).toHaveClass('text-2xl', 'font-semibold', 'text-[rgb(var(--foreground))]', 'mb-2');
+    ).toHaveClass('mb-6', 'text-xl', 'font-semibold', 'text-[rgb(var(--foreground))]');
     expect(screen.getByText('创建你的第一个终端窗口开始工作')).toBeInTheDocument();
   });
 
   it('renders the primary create actions in the unified view', async () => {
     await renderApp();
-    expect(await screen.findAllByRole('button', { name: '新建终端' })).toHaveLength(2);
+    expect(await screen.findAllByRole('button', { name: '新建终端' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: '批量添加' })).toBeInTheDocument();
+  });
+
+  it('opens only one create dialog from the unified home screen', async () => {
+    const user = userEvent.setup();
+
+    await renderApp();
+    await user.click((await screen.findAllByRole('button', { name: '新建终端' }))[0]!);
+
+    const dialogs = await screen.findAllByRole('dialog');
+    const createDialogs = dialogs.filter((dialog) => (
+      within(dialog).queryByText('新建终端或 SSH 连接') !== null
+    ));
+
+    expect(createDialogs).toHaveLength(1);
+    expect(within(createDialogs[0]!).getAllByRole('button', { name: '取消' })).toHaveLength(1);
+    expect(within(createDialogs[0]!).getAllByRole('button', { name: '创建' })).toHaveLength(1);
   });
 
   it('renders the current sidebar navigation tabs', async () => {

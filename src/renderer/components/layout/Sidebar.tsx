@@ -2,7 +2,6 @@ import React, { Suspense, lazy, useState, useEffect, useMemo, useRef } from 'rea
 import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
-import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CategoryDropZone } from '../dnd/CategoryDropZone';
@@ -38,8 +37,6 @@ interface SidebarProps {
   version?: string;
   onCreateWindow?: () => void;
   onCreateGroup?: () => void;
-  isDialogOpen?: boolean;
-  onDialogChange?: (open: boolean) => void;
   sshEnabled?: boolean;
   sshProfileCount?: number;
   sshProfiles?: SSHProfile[];
@@ -55,8 +52,6 @@ export function Sidebar({
   version = '0.1.0',
   onCreateWindow,
   onCreateGroup,
-  isDialogOpen = false,
-  onDialogChange,
   sshEnabled = false,
   sshProfiles = [],
   onSSHProfileSaved,
@@ -729,14 +724,6 @@ export function Sidebar({
           })()}
         </div>
       </aside>
-
-      <CreateWindowDialog
-        open={isDialogOpen}
-        onOpenChange={onDialogChange ?? (() => {})}
-        sshEnabled={sshEnabled}
-        sshProfiles={sshProfiles}
-        onSSHProfileSaved={onSSHProfileSaved}
-      />
 
       <BatchCreateWindowDialog
         open={isBatchDialogOpen}

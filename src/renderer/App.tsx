@@ -1430,8 +1430,6 @@ function AppContent() {
               onSSHProfileSaved={handleSSHProfileSaved}
               sshProfileCount={sshProfiles.length}
               onCreateGroup={handleCreateGroup}
-              isDialogOpen={isDialogOpen}
-              onDialogChange={handleDialogChange}
               currentTab={currentTab}
               onTabChange={handleTabChange}
               searchQuery={searchQuery}

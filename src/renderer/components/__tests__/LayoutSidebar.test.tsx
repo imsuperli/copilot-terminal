@@ -6,12 +6,14 @@ import { useWindowStore } from '../../stores/windowStore';
 import { createSinglePaneWindow } from '../../utils/layoutHelpers';
 import { WindowStatus, type Window } from '../../types/window';
 
+const mockCreateWindowDialog = vi.fn(() => null);
+
 vi.mock('../StatusBar', () => ({
   StatusBar: () => <div data-testid="status-bar" />,
 }));
 
 vi.mock('../CreateWindowDialog', () => ({
-  CreateWindowDialog: () => null,
+  CreateWindowDialog: mockCreateWindowDialog,
 }));
 
 vi.mock('../BatchCreateWindowDialog', () => ({
@@ -55,6 +57,19 @@ describe('Layout Sidebar', () => {
       mruList: [],
       groupMruList: [],
     });
+  });
+
+  it('does not mount the create window dialog from the home sidebar', () => {
+    render(
+      <Sidebar
+        currentTab="active"
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onTabChange={vi.fn()}
+      />,
+    );
+
+    expect(mockCreateWindowDialog).not.toHaveBeenCalled();
   });
 
   it('deletes active window records when clearing the workspace tab', async () => {
