@@ -193,7 +193,7 @@ describe('CanvasWorkspaceView', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '新建块' }));
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
     await user.click(screen.getByRole('button', { name: /本地终端/i }));
     await user.click(screen.getByRole('button', { name: '创建' }));
 
@@ -201,6 +201,23 @@ describe('CanvasWorkspaceView', () => {
       const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
       expect(updated?.blocks.filter((block) => block.type === 'window')).toHaveLength(3);
     });
+  });
+
+  it('opens the existing terminal picker from the canvas create dialog', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /引用终端/i }));
+    await user.click(screen.getByRole('button', { name: '选择终端' }));
+
+    expect(await screen.findByText('选择一个现有终端窗口加入画布。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Terminal Beta/i })).toBeInTheDocument();
   });
 
   it('toggles a window block into live embedded mode', async () => {
@@ -244,8 +261,9 @@ describe('CanvasWorkspaceView', () => {
 
     const openTerminalButton = await screen.findByRole('button', { name: '打开终端' });
     const actionContainer = openTerminalButton.parentElement?.parentElement;
-    expect(actionContainer?.className).toContain('z-10');
+    expect(actionContainer?.className).toMatch(/z-\d+/);
     expect(actionContainer?.className).toContain('absolute');
+    expect(actionContainer?.className).toContain('bottom-4');
   });
 
   it('merges template blocks into the existing canvas instead of replacing current blocks', async () => {
@@ -323,6 +341,39 @@ describe('CanvasWorkspaceView', () => {
     await waitFor(() => {
       expect(useWindowStore.getState().getCanvasWorkspaceById('canvas-1')?.links ?? []).toHaveLength(0);
     });
+  });
+
+  it('renders canvas links from block edges instead of from block centers', async () => {
+    const user = userEvent.setup();
+
+    const { container, rerender } = render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByText('Checklist'));
+    await user.keyboard('{Control>}');
+    await user.click(screen.getByText('Prod Host'));
+    await user.keyboard('{/Control}');
+    await user.click(screen.getByTitle('连接选中块'));
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().getCanvasWorkspaceById('canvas-1')?.links).toHaveLength(1);
+    });
+
+    rerender(
+      <CanvasWorkspaceView
+        canvasWorkspace={useWindowStore.getState().getCanvasWorkspaceById('canvas-1')!}
+      />,
+    );
+
+    const linkPath = container.querySelector('[data-testid="canvas-link-path"]');
+    expect(linkPath).not.toBeNull();
+    expect(linkPath?.getAttribute('d')).toContain('M 340 ');
+    expect(linkPath?.getAttribute('d')).toContain(' 420 ');
+    expect(linkPath?.getAttribute('d')).not.toContain('M 180 120');
+    expect(linkPath?.getAttribute('d')).not.toContain(' 600 150');
   });
 
   it('exports the canvas report to clipboard', async () => {

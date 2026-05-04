@@ -65,13 +65,13 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
       tabIndex={0}
       onClick={() => onClick?.(canvasWorkspace.id)}
       onKeyDown={handleKeyDown}
-      className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col border-t border-t-[rgba(125,211,252,0.55)]`}
+      className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col border-t border-t-[rgb(var(--primary))]/55`}
       aria-label={`${t('canvas.cardAriaLabel')}: ${canvasWorkspace.name}`}
     >
       <div className="flex min-h-0 flex-1 flex-col p-4">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgba(125,211,252,0.22)] bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.22),rgba(14,116,144,0.08))] text-[rgb(var(--foreground))]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgb(var(--primary))]/22 bg-[linear-gradient(180deg,rgb(var(--primary))/0.14_0%,color-mix(in_srgb,rgb(var(--card))_72%,transparent)_100%)] text-[rgb(var(--foreground))]">
               <Orbit size={20} />
             </div>
             <div className="min-w-0">

@@ -20,6 +20,7 @@ import { getAllPanes, getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusLabelKey } from '../utils/statusHelpers';
 import {
   arrangeCanvasBlocks,
+  buildCanvasLinkGeometry,
   type CanvasArrangeMode,
   type CanvasRect,
   type CanvasResizeDirection,
@@ -132,27 +133,6 @@ function createMessageId(prefix: string): string {
 }
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
-
-function buildCanvasLinkPath(fromBlock: CanvasBlock, toBlock: CanvasBlock): string {
-  const startX = fromBlock.x + fromBlock.width / 2;
-  const startY = fromBlock.y + fromBlock.height / 2;
-  const endX = toBlock.x + toBlock.width / 2;
-  const endY = toBlock.y + toBlock.height / 2;
-  const distanceX = endX - startX;
-  const controlOffset = Math.max(80, Math.abs(distanceX) * 0.4);
-
-  return [
-    `M ${startX} ${startY}`,
-    `C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`,
-  ].join(' ');
-}
-
-function getCanvasLinkMidpoint(fromBlock: CanvasBlock, toBlock: CanvasBlock): { x: number; y: number } {
-  return {
-    x: (fromBlock.x + fromBlock.width / 2 + toBlock.x + toBlock.width / 2) / 2,
-    y: (fromBlock.y + fromBlock.height / 2 + toBlock.y + toBlock.height / 2) / 2,
-  };
-}
 
 function inferCanvasLinkKind(fromBlock: CanvasBlock, toBlock: CanvasBlock): CanvasBlockLink['kind'] {
   if (fromBlock.type === 'note' && toBlock.type === 'window') {
@@ -1527,16 +1507,17 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   }, [dragState]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(88,188,255,0.08),transparent_28%),linear-gradient(180deg,rgba(7,11,18,0.98),rgba(11,16,24,1))]">
-      <div className="pointer-events-none absolute left-5 top-4 z-20 flex items-center gap-3 rounded-full border border-white/10 bg-black/35 px-4 py-2 text-sm text-white/80 backdrop-blur">
-        <span className="font-medium text-white">{canvasWorkspace.name}</span>
-        <span className="text-white/45">·</span>
+    <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--card))_82%,transparent)_100%)]">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.28]" style={{ background: 'radial-gradient(circle at top, rgb(var(--primary) / 0.14), transparent 30%)' }} />
+      <div className="pointer-events-none absolute left-5 top-4 z-20 flex items-center gap-3 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-4 py-2 text-sm text-[rgb(var(--muted-foreground))] shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur">
+        <span className="font-medium text-[rgb(var(--foreground))]">{canvasWorkspace.name}</span>
+        <span className="text-[rgb(var(--muted-foreground))]">·</span>
         <span>{t('canvas.blockCount', { count: canvasWorkspace.blocks.length })}</span>
-        <span className="text-white/45">·</span>
+        <span className="text-[rgb(var(--muted-foreground))]">·</span>
         <span>{formatRelativeTime(canvasWorkspace.updatedAt, language as AppLanguage)}</span>
         {selectedBlockIds.length > 0 && (
           <>
-            <span className="text-white/45">·</span>
+            <span className="text-[rgb(var(--muted-foreground))]">·</span>
             <span>{t('canvas.selectionCount', { count: selectedBlockIds.length })}</span>
           </>
         )}
@@ -1547,20 +1528,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         selectedCount={selectedBlockIds.length}
         zoom={canvasWorkspace.viewport.zoom}
         activeArrangeMode={lastArrangeMode}
-        canAddWindow={availableWindows.length > 0}
         canLinkSelection={selectedBlockIds.length === 2}
         onCreateBlock={() => setCreateDialogOpen(true)}
         onOpenTemplates={() => setTemplatesOpen(true)}
         onOpenActivity={() => setActivityOpen(true)}
         activityCount={workspaceActivity.length}
-        onAddNote={() => {
-          const rect = canvasRef.current?.getBoundingClientRect();
-          if (!rect) {
-            return;
-          }
-
-          createNoteAtClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
-        }}
         onAskAI={() => {
           void askAIForSelection();
         }}
@@ -1633,7 +1605,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         <div
           className="pointer-events-none absolute inset-0 opacity-50"
           style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(rgb(var(--border) / 0.32) 1px, transparent 1px)',
             backgroundSize: `${24 * canvasWorkspace.viewport.zoom}px ${24 * canvasWorkspace.viewport.zoom}px`,
             backgroundPosition: `${canvasWorkspace.viewport.tx}px ${canvasWorkspace.viewport.ty}px`,
           }}
@@ -1641,10 +1613,10 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
         {canvasWorkspace.blocks.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
-            <div className="max-w-md rounded-3xl border border-white/10 bg-[rgba(12,16,24,0.82)] px-8 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur">
-              <div className="text-lg font-semibold text-white">{t('canvas.emptyTitle')}</div>
-              <p className="mt-2 text-sm leading-6 text-white/60">{t('canvas.emptyDescription')}</p>
-              <p className="mt-4 text-xs uppercase tracking-[0.2em] text-white/35">
+            <div className="max-w-md rounded-3xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] px-8 py-7 text-center text-[rgb(var(--foreground))] shadow-[0_24px_80px_rgba(0,0,0,0.24)] backdrop-blur">
+              <div className="text-lg font-semibold">{t('canvas.emptyTitle')}</div>
+              <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('canvas.emptyDescription')}</p>
+              <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[rgb(var(--muted-foreground))]">
                 {availableWindows.length > 0
                   ? t('canvas.availableWindows')
                   : t('canvas.emptyCreateTerminalHint')}
@@ -1663,29 +1635,31 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                   return null;
                 }
 
-                const midpoint = getCanvasLinkMidpoint(fromBlock, toBlock);
+                const geometry = buildCanvasLinkGeometry(fromBlock, toBlock);
+                const isSelected = selectedBlockIds.includes(link.fromBlockId) || selectedBlockIds.includes(link.toBlockId);
                 return (
                   <g key={link.id}>
                     <path
-                      d={buildCanvasLinkPath(fromBlock, toBlock)}
+                      data-testid="canvas-link-path"
+                      d={geometry.path}
                       fill="none"
-                      stroke={selectedBlockIds.includes(link.fromBlockId) || selectedBlockIds.includes(link.toBlockId)
-                        ? 'rgba(125,211,252,0.95)'
-                        : 'rgba(148,163,184,0.55)'}
-                      strokeWidth={selectedBlockIds.includes(link.fromBlockId) || selectedBlockIds.includes(link.toBlockId) ? 2.5 : 1.75}
+                      stroke={isSelected ? 'rgb(var(--primary) / 0.95)' : 'rgb(var(--muted-foreground) / 0.48)'}
+                      strokeWidth={isSelected ? 2.5 : 1.75}
                       strokeDasharray={link.kind === 'depends-on' ? '8 6' : undefined}
+                      strokeLinecap="round"
                     />
                     <circle
-                      cx={midpoint.x}
-                      cy={midpoint.y}
+                      data-testid="canvas-link-midpoint"
+                      cx={geometry.midpoint.x}
+                      cy={geometry.midpoint.y}
                       r={3}
-                      fill="rgba(125,211,252,0.95)"
+                      fill="rgb(var(--primary) / 0.95)"
                     />
                     {(link.label || link.kind !== 'related') ? (
                       <text
-                        x={midpoint.x + 8}
-                        y={midpoint.y - 8}
-                        fill="rgba(226,232,240,0.9)"
+                        x={geometry.midpoint.x + 8}
+                        y={geometry.midpoint.y - 8}
+                        fill="rgb(var(--foreground) / 0.9)"
                         fontSize="11"
                       >
                         {link.label || link.kind}
@@ -1699,7 +1673,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
           {selectionRect && (
             <div
-              className="pointer-events-none absolute border border-sky-300/70 bg-sky-400/10"
+              className="pointer-events-none absolute border border-[rgb(var(--primary))]/70 bg-[rgb(var(--primary))]/10"
               style={{
                 left: selectionRect.x,
                 top: selectionRect.y,
@@ -1770,7 +1744,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                       }}
                       onBlur={() => commitBlockTitle(block, title)}
                       aria-label={t('canvas.blockTitle')}
-                      className="w-full rounded-md border border-white/10 bg-white/10 px-2 py-1 text-sm text-white outline-none focus:border-sky-300/50"
+                      className="w-full rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1 text-sm text-[rgb(var(--foreground))] outline-none focus:border-[rgb(var(--ring))]"
                     />
                   ) : undefined}
                   onMouseDown={(event) => {
@@ -1825,13 +1799,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                   {block.type === 'window' ? (
                     block.displayMode === 'live' && linkedWindow ? (
                       <div className="flex h-full min-h-0 flex-col">
-                        <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-xs text-white/55">
+                        <div className="flex items-center justify-between border-b border-[rgb(var(--border))] px-4 py-2 text-xs text-[rgb(var(--muted-foreground))]">
                           <span className="truncate">{workingDirectory || t('canvas.unnamedWindow')}</span>
                           <button
                             type="button"
                             onMouseDown={(event) => event.stopPropagation()}
                             onClick={() => toggleWindowDisplayMode(block.id, 'summary')}
-                            className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
+                            className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-2.5 py-1 text-[11px] font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                           >
                             {t('canvas.closeLive')}
                           </button>
@@ -1847,22 +1821,14 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         </div>
                       </div>
                     ) : (
-                    <div className="relative flex h-full flex-col p-4 pb-16 text-sm text-white/70">
+                    <div className="relative flex h-full flex-col p-4 pb-20 text-sm text-[rgb(var(--muted-foreground))]">
                       <div className="min-h-0 flex-1">
-                        <div className="flex items-center gap-2 text-base font-medium text-white">
-                          <MonitorSmartphone size={15} />
-                          <span className="truncate">{linkedWindow?.name || t('canvas.missingWindow')}</span>
-                        </div>
                         {linkedWindow ? (
-                          <div className="mt-3 space-y-2 text-white/55">
+                          <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
                             <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
                             <div className="line-clamp-2">
                               {t('canvas.windowDirectory', { path: workingDirectory || 'N/A' })}
                             </div>
-                            <div>{t('canvas.windowPaneCount', { count: panes.length })}</div>
-                            {blockSummary.bullets?.slice(0, 2).map((bullet) => (
-                              <div key={bullet} className="line-clamp-2">{bullet}</div>
-                            ))}
                             {outputPreview ? (
                               <div className="line-clamp-3">{outputPreview}</div>
                             ) : (
@@ -1870,7 +1836,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                             )}
                           </div>
                         ) : (
-                          <div className="mt-3 space-y-3 text-white/55">
+                          <div className="mt-3 space-y-3 text-[rgb(var(--muted-foreground))]">
                             <div className="line-clamp-3">
                               {t('canvas.windowMissingHint')}
                             </div>
@@ -1878,7 +1844,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               type="button"
                               onMouseDown={(event) => event.stopPropagation()}
                               onClick={() => setRelinkingBlockId(block.id)}
-                              className="inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-400/16"
+                              className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--warning))/0.28] bg-[rgb(var(--warning))/0.10] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:bg-[rgb(var(--warning))/0.16]"
                             >
                               <Link2 size={13} />
                               {t('canvas.relinkWindow')}
@@ -1888,13 +1854,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                       </div>
 
                       {linkedWindow && (
-                        <div className="absolute inset-x-4 bottom-4 z-10 flex flex-wrap items-center justify-between gap-3">
+                        <div className="absolute inset-x-4 bottom-4 z-20 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/55">
+                            <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-2.5 py-1 text-xs text-[rgb(var(--muted-foreground))]">
                               {getWindowKind(linkedWindow)}
                             </span>
                             {linkedBlockCount > 1 && (
-                              <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/55">
+                              <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-2.5 py-1 text-xs text-[rgb(var(--muted-foreground))]">
                                 {t('canvas.windowLinkedCount', { count: linkedBlockCount })}
                               </span>
                             )}
@@ -1904,7 +1870,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               type="button"
                               onMouseDown={(event) => event.stopPropagation()}
                               onClick={() => onOpenWindow?.(linkedWindow.id)}
-                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/15"
+                              className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                             >
                               <MonitorSmartphone size={13} />
                               {t('canvas.openTerminal')}
@@ -1913,7 +1879,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               type="button"
                               onMouseDown={(event) => event.stopPropagation()}
                               onClick={() => toggleWindowDisplayMode(block.id, 'live')}
-                              className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1.5 text-xs font-medium text-sky-100 transition hover:bg-sky-400/16"
+                              className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary))] transition hover:bg-[rgb(var(--primary))]/16"
                             >
                               <MonitorSmartphone size={13} />
                               {t('canvas.openLive')}
@@ -1925,12 +1891,12 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                     )
                   ) : (
                     <div className="flex h-full flex-col">
-                      <div className="px-4 pt-3 text-xs uppercase tracking-[0.18em] text-white/30">
+                      <div className="px-4 pt-3 text-xs uppercase tracking-[0.18em] text-[rgb(var(--muted-foreground))]">
                         <StickyNote size={12} className="mr-2 inline" />
                         {t('canvas.defaultNoteTitle')}
                       </div>
                       {blockSummary.bullets?.length ? (
-                        <div className="px-4 pt-2 text-xs text-white/45">
+                        <div className="px-4 pt-2 text-xs text-[rgb(var(--muted-foreground))]">
                           {blockSummary.bullets.slice(0, 2).map((bullet) => (
                             <div key={bullet} className="line-clamp-1">{bullet}</div>
                           ))}
@@ -1944,7 +1910,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         }}
                         onChange={(event) => updateSingleBlock(block.id, { content: event.target.value })}
                         placeholder={t('canvas.notePlaceholder')}
-                        className="pointer-events-auto h-full w-full resize-none border-0 bg-transparent px-4 pb-4 pt-2 text-sm text-white outline-none placeholder:text-white/30"
+                        className="pointer-events-auto h-full w-full resize-none border-0 bg-transparent px-4 pb-4 pt-2 text-sm text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
                       />
                     </div>
                   )}
@@ -1972,9 +1938,10 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         sshProfiles={sshProfiles}
-        templates={resolvedTemplates}
+        hasAvailableWindows={availableWindows.length > 0}
         initialWorkingDirectory={canvasWorkspace.workingDirectory}
         onCreateWindow={handleCreateWindowBlock}
+        onOpenWindowPicker={() => setPickerOpen(true)}
         onCreateNote={() => {
           const rect = canvasRef.current?.getBoundingClientRect();
           if (!rect) {
@@ -1983,7 +1950,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
           createNoteAtClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
         }}
-        onApplyTemplate={handleApplyTemplate}
       />
 
       <CanvasWindowPickerDialog

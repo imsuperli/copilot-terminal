@@ -72,9 +72,9 @@ export function CanvasBlockChrome({
   return (
     <div
       className={[
-        'pointer-events-auto absolute overflow-hidden rounded-2xl border bg-[rgba(17,24,39,0.94)] shadow-[0_24px_80px_rgba(0,0,0,0.38)] transition-shadow',
-        selected ? 'border-sky-300/60 shadow-[0_24px_80px_rgba(14,165,233,0.12)]' : 'border-white/10',
-        missing ? 'border-amber-300/35' : '',
+        'pointer-events-auto absolute overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--appearance-card-surface-top)_100%,transparent)_0%,color-mix(in_srgb,var(--appearance-card-surface-bottom)_100%,transparent)_100%)] shadow-[0_24px_80px_rgba(0,0,0,0.28)] transition-shadow',
+        selected ? 'border-[rgb(var(--primary))]/60 shadow-[0_24px_80px_rgba(14,165,233,0.10)]' : 'border-[rgb(var(--border))]',
+        missing ? 'border-[rgb(var(--warning))/0.40]' : '',
       ].join(' ')}
       onMouseDown={onMouseDown}
       style={{
@@ -89,8 +89,8 @@ export function CanvasBlockChrome({
         className={[
           'flex cursor-grab items-center justify-between border-b px-4 py-2 text-sm active:cursor-grabbing',
           selected
-            ? 'border-white/12 bg-sky-400/[0.10] text-white/85'
-            : 'border-white/10 bg-white/5 text-white/70',
+            ? 'border-[rgb(var(--primary))]/24 bg-[rgb(var(--primary))]/10 text-[rgb(var(--foreground))]'
+            : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] text-[rgb(var(--muted-foreground))]',
         ].join(' ')}
         onMouseDown={onHeaderMouseDown}
       >
@@ -107,7 +107,7 @@ export function CanvasBlockChrome({
             </div>
           ) : (
             <>
-              <span className="truncate font-medium text-white">{title}</span>
+              <span className="truncate font-medium text-[rgb(var(--foreground))]">{title}</span>
               {onStartTitleEdit && (
                 <button
                   type="button"
@@ -116,7 +116,7 @@ export function CanvasBlockChrome({
                     event.stopPropagation();
                     onStartTitleEdit();
                   }}
-                  className="inline-flex items-center justify-center rounded-md p-1 text-white/35 transition hover:bg-white/10 hover:text-white"
+                  className="inline-flex items-center justify-center rounded-md p-1 text-[rgb(var(--muted-foreground))] transition hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                   title={t('canvas.renameBlock')}
                 >
                   <Edit3 size={13} />
@@ -130,7 +130,7 @@ export function CanvasBlockChrome({
             type="button"
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onRemove}
-            className="inline-flex items-center justify-center rounded-md p-1 text-white/45 transition hover:bg-white/10 hover:text-white"
+            className="inline-flex items-center justify-center rounded-md p-1 text-[rgb(var(--muted-foreground))] transition hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             title={t('canvas.removeBlock')}
           >
             <Trash2 size={14} />
@@ -138,16 +138,16 @@ export function CanvasBlockChrome({
         )}
       </div>
 
-      <div className="h-[calc(100%-37px)]">{children}</div>
+      <div className="relative h-[calc(100%-37px)] overflow-hidden">{children}</div>
 
       {!editingTitle && summary && (summary.metrics?.length || summary.tags?.length) ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] border-t border-white/8 bg-[linear-gradient(180deg,rgba(9,13,19,0.15),rgba(9,13,19,0.92))] px-3 py-2 backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[4] border-t border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_8%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_72%,transparent)_100%)] px-3 py-2 backdrop-blur">
           {summary.metrics?.length ? (
             <div className="flex flex-wrap gap-1.5">
               {summary.metrics.slice(0, 4).map((metric) => (
                 <span
                   key={`${metric.label}-${metric.value}`}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/60"
+                  className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_48%,transparent)] px-2 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]"
                 >
                   {metric.label}: {metric.value}
                 </span>
@@ -159,7 +159,7 @@ export function CanvasBlockChrome({
               {summary.tags.slice(0, 4).map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-sky-300/15 bg-sky-400/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-sky-100/70"
+                  className="rounded-full border border-[rgb(var(--primary))]/18 bg-[rgb(var(--primary))]/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--primary))]"
                 >
                   {tag}
                 </span>

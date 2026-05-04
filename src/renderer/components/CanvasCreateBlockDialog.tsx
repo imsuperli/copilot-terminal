@@ -1,25 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { Bot, Globe, LayoutTemplate, Monitor, Server, StickyNote, Workflow } from 'lucide-react';
-import type { CanvasWindowDraftKind, CanvasWorkspaceTemplate } from '../../shared/types/canvas';
+import * as Select from '@radix-ui/react-select';
+import { Bot, Globe, Monitor, Server, StickyNote, Workflow } from 'lucide-react';
+import type { CanvasWindowDraftKind } from '../../shared/types/canvas';
 import type { SSHProfile } from '../../shared/types/ssh';
 import { Dialog } from './ui/Dialog';
 import { useI18n } from '../i18n';
 import {
+  idePopupAccentCardClassName,
   idePopupActionButtonClassName,
   idePopupBadgeClassName,
-  idePopupCardClassName,
   idePopupInputClassName,
+  idePopupSelectContentClassName,
+  idePopupSelectItemClassName,
+  idePopupSelectTriggerClassName,
   idePopupSecondaryButtonClassName,
   idePopupTonalButtonClassName,
 } from './ui/ide-popup';
+import { Check, ChevronDown } from 'lucide-react';
 
-type CanvasCreateMode = CanvasWindowDraftKind | 'note' | 'template';
+type CanvasCreateMode = 'existing' | CanvasWindowDraftKind | 'note';
 
 interface CanvasCreateBlockDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sshProfiles: SSHProfile[];
-  templates: CanvasWorkspaceTemplate[];
+  hasAvailableWindows?: boolean;
   initialWorkingDirectory?: string;
   onCreateWindow: (payload: {
     kind: CanvasWindowDraftKind;
@@ -30,8 +35,8 @@ interface CanvasCreateBlockDialogProps {
     linkedPaneId?: string;
     sshProfileId?: string;
   }) => void;
+  onOpenWindowPicker: () => void;
   onCreateNote: () => void;
-  onApplyTemplate: (templateId: string) => void;
 }
 
 const MODES: Array<{
@@ -39,33 +44,32 @@ const MODES: Array<{
   icon: React.ReactNode;
   tone: 'sky' | 'amber' | 'emerald' | 'violet' | 'zinc';
 }> = [
+  { id: 'existing', icon: <Monitor size={16} />, tone: 'sky' },
   { id: 'local', icon: <Monitor size={16} />, tone: 'sky' },
   { id: 'ssh', icon: <Server size={16} />, tone: 'amber' },
   { id: 'code', icon: <Workflow size={16} />, tone: 'emerald' },
   { id: 'browser', icon: <Globe size={16} />, tone: 'violet' },
   { id: 'chat', icon: <Bot size={16} />, tone: 'sky' },
   { id: 'note', icon: <StickyNote size={16} />, tone: 'zinc' },
-  { id: 'template', icon: <LayoutTemplate size={16} />, tone: 'emerald' },
 ];
 
 export function CanvasCreateBlockDialog({
   open,
   onOpenChange,
   sshProfiles,
-  templates,
+  hasAvailableWindows = false,
   initialWorkingDirectory,
   onCreateWindow,
+  onOpenWindowPicker,
   onCreateNote,
-  onApplyTemplate,
 }: CanvasCreateBlockDialogProps) {
   const { t } = useI18n();
-  const [mode, setMode] = useState<CanvasCreateMode>('local');
+  const [mode, setMode] = useState<CanvasCreateMode>(hasAvailableWindows ? 'existing' : 'local');
   const [name, setName] = useState('');
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [command, setCommand] = useState('');
   const [url, setUrl] = useState('https://duckduckgo.com/');
   const [selectedSSHProfileId, setSelectedSSHProfileId] = useState(sshProfiles[0]?.id ?? '');
-  const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0]?.id ?? '');
 
   const selectedSSHProfile = useMemo(
     () => sshProfiles.find((profile) => profile.id === selectedSSHProfileId) ?? null,
@@ -73,13 +77,12 @@ export function CanvasCreateBlockDialog({
   );
 
   const reset = () => {
-    setMode('local');
+    setMode(hasAvailableWindows ? 'existing' : 'local');
     setName('');
     setWorkingDirectory(initialWorkingDirectory ?? '');
     setCommand('');
     setUrl('https://duckduckgo.com/');
     setSelectedSSHProfileId(sshProfiles[0]?.id ?? '');
-    setSelectedTemplateId(templates[0]?.id ?? '');
   };
 
   const close = (nextOpen: boolean) => {
@@ -96,10 +99,8 @@ export function CanvasCreateBlockDialog({
       return;
     }
 
-    if (mode === 'template') {
-      if (selectedTemplateId) {
-        onApplyTemplate(selectedTemplateId);
-      }
+    if (mode === 'existing') {
+      onOpenWindowPicker();
       close(false);
       return;
     }
@@ -126,12 +127,13 @@ export function CanvasCreateBlockDialog({
       closeLabel={t('common.close')}
     >
       <div className="space-y-5">
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {MODES.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setMode(item.id)}
+              disabled={item.id === 'existing' && !hasAvailableWindows}
               className={`${idePopupTonalButtonClassName} flex items-center justify-between rounded-2xl px-3 py-3 text-left ${mode === item.id ? 'border-[rgb(var(--primary))]/65 bg-[rgb(var(--primary))]/10' : ''}`}
             >
               <span className="flex items-center gap-2 text-sm font-medium text-[rgb(var(--foreground))]">
@@ -145,47 +147,17 @@ export function CanvasCreateBlockDialog({
           ))}
         </div>
 
-        {mode === 'template' ? (
-          <div className="space-y-3">
-            <select
-              value={selectedTemplateId}
-              onChange={(event) => setSelectedTemplateId(event.target.value)}
-              className={idePopupInputClassName}
-            >
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-            <div className="grid gap-3 md:grid-cols-2">
-              {templates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => setSelectedTemplateId(template.id)}
-                  className={`${idePopupCardClassName} rounded-2xl p-4 text-left ${selectedTemplateId === template.id ? 'border-[rgb(var(--primary))]/55' : ''}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-[rgb(var(--foreground))]">{template.name}</span>
-                    {template.system && (
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${idePopupBadgeClassName('emerald')}`}>
-                        {t('canvas.templateSystem')}
-                      </span>
-                    )}
-                  </div>
-                  {template.description && (
-                    <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{template.description}</p>
-                  )}
-                  <div className="mt-3 text-xs text-[rgb(var(--muted-foreground))]">
-                    {t('canvas.templateBlockCount', { count: template.blocks.length })}
-                  </div>
-                </button>
-              ))}
+        {mode === 'existing' ? (
+          <div className={`${idePopupAccentCardClassName} rounded-2xl p-4`}>
+            <div className="text-sm font-medium text-[rgb(var(--foreground))]">
+              {hasAvailableWindows ? t('canvas.createExistingDescription') : t('canvas.noAvailableWindows')}
             </div>
+            <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">
+              {hasAvailableWindows ? t('canvas.windowPickerDescription') : t('canvas.emptyCreateTerminalHint')}
+            </p>
           </div>
         ) : mode === 'note' ? (
-          <div className={`${idePopupCardClassName} rounded-2xl p-4 text-sm leading-6 text-[rgb(var(--muted-foreground))]`}>
+          <div className={`${idePopupAccentCardClassName} rounded-2xl p-4 text-sm leading-6 text-[rgb(var(--muted-foreground))]`}>
             {t('canvas.createNoteDescription')}
           </div>
         ) : (
@@ -225,17 +197,48 @@ export function CanvasCreateBlockDialog({
             )}
 
             {mode === 'ssh' && (
-              <select
-                value={selectedSSHProfileId}
-                onChange={(event) => setSelectedSSHProfileId(event.target.value)}
-                className={idePopupInputClassName}
-              >
-                {sshProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name} ({profile.user}@{profile.host}:{profile.port})
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-2">
+                <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                  {t('canvas.sshProfileLabel')}
+                </div>
+                <Select.Root value={selectedSSHProfileId} onValueChange={setSelectedSSHProfileId}>
+                  <Select.Trigger className={idePopupSelectTriggerClassName} aria-label={t('canvas.sshProfileLabel')}>
+                    <span className="min-w-0 flex-1 truncate">
+                      <Select.Value />
+                    </span>
+                    <Select.Icon className="shrink-0">
+                      <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                    </Select.Icon>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content
+                      position="popper"
+                      side="bottom"
+                      align="start"
+                      sideOffset={6}
+                      className={idePopupSelectContentClassName}
+                    >
+                      <Select.Viewport className="p-1">
+                        {sshProfiles.map((profile) => (
+                          <Select.Item key={profile.id} value={profile.id} className={idePopupSelectItemClassName}>
+                            <Select.ItemText>
+                              {profile.name} ({profile.user}@{profile.host}:{profile.port})
+                            </Select.ItemText>
+                            <Select.ItemIndicator className="shrink-0">
+                              <Check size={14} />
+                            </Select.ItemIndicator>
+                          </Select.Item>
+                        ))}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+                <p className="text-xs leading-5 text-[rgb(var(--muted-foreground))]">
+                  {selectedSSHProfile
+                    ? `${selectedSSHProfile.user}@${selectedSSHProfile.host}:${selectedSSHProfile.port}`
+                    : t('canvas.noAvailableWindows')}
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -254,7 +257,7 @@ export function CanvasCreateBlockDialog({
             disabled={mode === 'ssh' && !selectedSSHProfile}
             className={idePopupActionButtonClassName()}
           >
-            {mode === 'template' ? t('canvas.applyTemplate') : t('common.create')}
+            {mode === 'existing' ? t('canvas.pickExistingWindow') : t('common.create')}
           </button>
         </div>
       </div>

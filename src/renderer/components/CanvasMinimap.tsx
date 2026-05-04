@@ -8,14 +8,13 @@ interface CanvasMinimapProps {
   onPan: (tx: number, ty: number) => void;
 }
 
-const TILE_COLORS: Record<CanvasBlock['type'], string> = {
-  window: '#4a9eff',
-  note: '#e2c08d',
-};
-
 const WIDTH = 160;
 const HEIGHT = 100;
 const PADDING = 20;
+
+function rgbaFromRgbToken(token: string, alpha: number): string {
+  return `rgba(${token.replace(/\s+/g, ', ')}, ${alpha})`;
+}
 
 export function CanvasMinimap({
   blocks,
@@ -25,6 +24,14 @@ export function CanvasMinimap({
 }: CanvasMinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef(false);
+  const themeSignature = typeof document !== 'undefined'
+    ? [
+        getComputedStyle(document.documentElement).getPropertyValue('--primary'),
+        getComputedStyle(document.documentElement).getPropertyValue('--warning'),
+        getComputedStyle(document.documentElement).getPropertyValue('--border'),
+        getComputedStyle(document.documentElement).getPropertyValue('--background'),
+      ].join('|')
+    : '';
 
   const getBounds = useCallback(() => {
     if (blocks.length === 0) {
@@ -62,14 +69,20 @@ export function CanvasMinimap({
     const scale = Math.min(WIDTH / worldW, HEIGHT / worldH) * 0.9;
     const offX = (WIDTH - worldW * scale) / 2 - minX * scale;
     const offY = (HEIGHT - worldH * scale) / 2 - minY * scale;
+    const styles = getComputedStyle(document.documentElement);
+    const primary = styles.getPropertyValue('--primary').trim() || '88 188 255';
+    const warning = styles.getPropertyValue('--warning').trim() || '226 192 141';
+    const border = styles.getPropertyValue('--border').trim() || '140 140 140';
+    const background = styles.getPropertyValue('--background').trim() || '12 16 24';
 
     for (const block of blocks) {
       const x = block.x * scale + offX;
       const y = block.y * scale + offY;
       const w = Math.max(2, block.width * scale);
       const h = Math.max(2, block.height * scale);
-      context.fillStyle = `${TILE_COLORS[block.type]}88`;
-      context.strokeStyle = `${TILE_COLORS[block.type]}cc`;
+      const rgb = block.type === 'window' ? primary : warning;
+      context.fillStyle = rgbaFromRgbToken(rgb, 0.42);
+      context.strokeStyle = rgbaFromRgbToken(rgb, 0.82);
       context.lineWidth = 0.5;
       context.beginPath();
       context.roundRect(x, y, w, h, 1);
@@ -81,12 +94,12 @@ export function CanvasMinimap({
     const vy = (-viewport.ty / viewport.zoom) * scale + offY;
     const vw = (canvasSize.w / viewport.zoom) * scale;
     const vh = (canvasSize.h / viewport.zoom) * scale;
-    context.strokeStyle = 'rgba(255,255,255,0.3)';
+    context.strokeStyle = rgbaFromRgbToken(border, 0.72);
     context.lineWidth = 1;
     context.strokeRect(vx, vy, vw, vh);
-    context.fillStyle = 'rgba(255,255,255,0.04)';
+    context.fillStyle = rgbaFromRgbToken(background, 0.14);
     context.fillRect(vx, vy, vw, vh);
-  }, [blocks, canvasSize, getBounds, viewport]);
+  }, [blocks, canvasSize, getBounds, themeSignature, viewport]);
 
   const panTo = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -118,7 +131,7 @@ export function CanvasMinimap({
 
   return (
     <div
-      className="absolute bottom-4 left-4 z-20 overflow-hidden rounded-lg border border-white/10 bg-[rgba(12,16,24,0.9)] shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+      className="absolute bottom-4 left-4 z-20 overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_82%,transparent)] shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur"
       style={{ cursor: 'crosshair' }}
     >
       <canvas

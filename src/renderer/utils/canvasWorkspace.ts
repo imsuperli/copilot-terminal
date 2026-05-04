@@ -16,6 +16,22 @@ export interface CanvasRect {
   height: number;
 }
 
+export interface CanvasLinkPoint {
+  x: number;
+  y: number;
+}
+
+export type CanvasLinkAnchorSide = 'left' | 'right' | 'top' | 'bottom';
+
+export interface CanvasLinkGeometry {
+  path: string;
+  midpoint: CanvasLinkPoint;
+  start: CanvasLinkPoint;
+  end: CanvasLinkPoint;
+  startSide: CanvasLinkAnchorSide;
+  endSide: CanvasLinkAnchorSide;
+}
+
 export const CANVAS_GAP = 40;
 export const CANVAS_BOUNDS_PADDING = 48;
 export const CANVAS_MIN_ZOOM = 0.3;
@@ -27,6 +43,150 @@ const MIN_BLOCK_SIZE: Record<CanvasBlockType, { width: number; height: number }>
   note: { width: 220, height: 140 },
   window: { width: 280, height: 180 },
 };
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function getCanvasBlockCenter(block: CanvasBlock): CanvasLinkPoint {
+  return {
+    x: block.x + block.width / 2,
+    y: block.y + block.height / 2,
+  };
+}
+
+function getCanvasLinkAnchorNormal(side: CanvasLinkAnchorSide): CanvasLinkPoint {
+  switch (side) {
+    case 'left':
+      return { x: -1, y: 0 };
+    case 'right':
+      return { x: 1, y: 0 };
+    case 'top':
+      return { x: 0, y: -1 };
+    case 'bottom':
+      return { x: 0, y: 1 };
+    default:
+      return { x: 1, y: 0 };
+  }
+}
+
+function getCanvasBlockEdgeAnchor(block: CanvasBlock, targetPoint: CanvasLinkPoint): {
+  point: CanvasLinkPoint;
+  side: CanvasLinkAnchorSide;
+} {
+  const center = getCanvasBlockCenter(block);
+  const halfWidth = block.width / 2;
+  const halfHeight = block.height / 2;
+  const dx = targetPoint.x - center.x;
+  const dy = targetPoint.y - center.y;
+
+  if (dx === 0 && dy === 0) {
+    return {
+      point: {
+        x: block.x + block.width,
+        y: center.y,
+      },
+      side: 'right',
+    };
+  }
+
+  const scaleX = dx === 0 ? Number.POSITIVE_INFINITY : halfWidth / Math.abs(dx);
+  const scaleY = dy === 0 ? Number.POSITIVE_INFINITY : halfHeight / Math.abs(dy);
+  const intersectsHorizontalEdge = scaleX <= scaleY;
+  const cornerInset = Math.min(18, block.width / 4, block.height / 4);
+
+  if (intersectsHorizontalEdge) {
+    return {
+      point: {
+        x: dx >= 0 ? block.x + block.width : block.x,
+        y: clamp(
+          center.y + dy * scaleX,
+          block.y + cornerInset,
+          block.y + block.height - cornerInset,
+        ),
+      },
+      side: dx >= 0 ? 'right' : 'left',
+    };
+  }
+
+  return {
+    point: {
+      x: clamp(
+        center.x + dx * scaleY,
+        block.x + cornerInset,
+        block.x + block.width - cornerInset,
+      ),
+      y: dy >= 0 ? block.y + block.height : block.y,
+    },
+    side: dy >= 0 ? 'bottom' : 'top',
+  };
+}
+
+function getCubicBezierPoint(
+  start: CanvasLinkPoint,
+  control1: CanvasLinkPoint,
+  control2: CanvasLinkPoint,
+  end: CanvasLinkPoint,
+  t: number,
+): CanvasLinkPoint {
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const t2 = t * t;
+
+  return {
+    x: mt2 * mt * start.x + 3 * mt2 * t * control1.x + 3 * mt * t2 * control2.x + t2 * t * end.x,
+    y: mt2 * mt * start.y + 3 * mt2 * t * control1.y + 3 * mt * t2 * control2.y + t2 * t * end.y,
+  };
+}
+
+export function buildCanvasLinkGeometry(fromBlock: CanvasBlock, toBlock: CanvasBlock): CanvasLinkGeometry {
+  const fromCenter = getCanvasBlockCenter(fromBlock);
+  const toCenter = getCanvasBlockCenter(toBlock);
+  const startAnchor = getCanvasBlockEdgeAnchor(fromBlock, toCenter);
+  const endAnchor = getCanvasBlockEdgeAnchor(toBlock, fromCenter);
+  const dx = endAnchor.point.x - startAnchor.point.x;
+  const dy = endAnchor.point.y - startAnchor.point.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance < 1) {
+    return {
+      path: `M ${startAnchor.point.x} ${startAnchor.point.y} L ${endAnchor.point.x} ${endAnchor.point.y}`,
+      midpoint: {
+        x: (startAnchor.point.x + endAnchor.point.x) / 2,
+        y: (startAnchor.point.y + endAnchor.point.y) / 2,
+      },
+      start: startAnchor.point,
+      end: endAnchor.point,
+      startSide: startAnchor.side,
+      endSide: endAnchor.side,
+    };
+  }
+
+  const controlOffset = clamp(distance * 0.32, 36, 180);
+  const startNormal = getCanvasLinkAnchorNormal(startAnchor.side);
+  const endNormal = getCanvasLinkAnchorNormal(endAnchor.side);
+  const control1 = {
+    x: startAnchor.point.x + startNormal.x * controlOffset,
+    y: startAnchor.point.y + startNormal.y * controlOffset,
+  };
+  const control2 = {
+    x: endAnchor.point.x + endNormal.x * controlOffset,
+    y: endAnchor.point.y + endNormal.y * controlOffset,
+  };
+  const midpoint = getCubicBezierPoint(startAnchor.point, control1, control2, endAnchor.point, 0.5);
+
+  return {
+    path: [
+      `M ${startAnchor.point.x} ${startAnchor.point.y}`,
+      `C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${endAnchor.point.x} ${endAnchor.point.y}`,
+    ].join(' '),
+    midpoint,
+    start: startAnchor.point,
+    end: endAnchor.point,
+    startSide: startAnchor.side,
+    endSide: endAnchor.side,
+  };
+}
 
 export function clampZoom(zoom: number): number {
   return Math.max(CANVAS_MIN_ZOOM, Math.min(CANVAS_MAX_ZOOM, zoom));

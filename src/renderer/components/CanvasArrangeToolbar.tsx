@@ -18,18 +18,21 @@ import {
 import type { CanvasArrangeMode } from '../utils/canvasWorkspace';
 import { useI18n } from '../i18n';
 
+const toolbarSurfaceClassName = 'rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] shadow-[0_14px_32px_rgba(0,0,0,0.22)] backdrop-blur';
+const toolbarNeutralButtonClassName = 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_64%,transparent)] text-[rgb(var(--foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]';
+const toolbarPrimaryButtonClassName = 'border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))] hover:bg-[rgb(var(--primary))]/16';
+const toolbarDangerButtonClassName = 'border-[rgb(var(--error))]/24 bg-[rgb(var(--error))]/10 text-[rgb(var(--foreground))] hover:bg-[rgb(var(--error))]/16';
+
 interface CanvasArrangeToolbarProps {
   blockCount: number;
   selectedCount: number;
   zoom: number;
   activeArrangeMode: CanvasArrangeMode | null;
-  canAddWindow: boolean;
   canLinkSelection?: boolean;
   onCreateBlock: () => void;
   onOpenTemplates: () => void;
   onOpenActivity: () => void;
   activityCount?: number;
-  onAddNote: () => void;
   onAskAI: () => void;
   onSendToNote: () => void;
   onLinkSelection: () => void;
@@ -61,14 +64,15 @@ function IconButton({
     <button
       type="button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       disabled={disabled}
       className={[
-        'inline-flex h-8 w-8 items-center justify-center rounded-lg border text-white transition',
+        'inline-flex h-8 w-8 items-center justify-center rounded-lg border transition',
         active
-          ? 'border-sky-300/50 bg-sky-400/15 text-sky-100'
-          : 'border-white/10 bg-white/[0.06] text-white/75 hover:bg-white/[0.12] hover:text-white',
-        disabled ? 'cursor-not-allowed opacity-40 hover:bg-white/[0.06] hover:text-white/75' : '',
+          ? toolbarPrimaryButtonClassName
+          : toolbarNeutralButtonClassName,
+        disabled ? 'cursor-not-allowed opacity-40 hover:border-[rgb(var(--border))] hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_64%,transparent)] hover:text-[rgb(var(--foreground))]' : '',
       ].join(' ')}
     >
       {children}
@@ -88,14 +92,14 @@ function ZoomPill({
   onZoomIn: () => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-[rgba(11,16,24,0.9)] px-1 py-1 shadow-[0_10px_28px_rgba(0,0,0,0.26)] backdrop-blur">
+    <div className={`inline-flex items-center gap-1 px-1 py-1 ${toolbarSurfaceClassName}`}>
       <IconButton title="Zoom out" onClick={onZoomOut}>
         <Minus size={14} />
       </IconButton>
       <button
         type="button"
         onClick={onResetZoom}
-        className="min-w-[64px] rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-medium tabular-nums text-white/85 transition hover:bg-white/[0.12] hover:text-white"
+        className={`min-w-[64px] rounded-lg px-2 py-1 text-[11px] font-medium tabular-nums transition ${toolbarNeutralButtonClassName}`}
         title="Reset zoom"
       >
         {Math.round(zoom * 100)}%
@@ -112,13 +116,11 @@ export function CanvasArrangeToolbar({
   selectedCount,
   zoom,
   activeArrangeMode,
-  canAddWindow,
   canLinkSelection = false,
   onCreateBlock,
   onOpenTemplates,
   onOpenActivity,
   activityCount = 0,
-  onAddNote,
   onAskAI,
   onSendToNote,
   onLinkSelection,
@@ -149,28 +151,20 @@ export function CanvasArrangeToolbar({
   };
 
   return (
-    <div className="absolute right-5 top-4 z-20 flex max-w-[min(82vw,980px)] flex-wrap items-center justify-end gap-2">
-      <div className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-[rgba(11,16,24,0.86)] px-1.5 py-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.28)] backdrop-blur">
+    <div className="absolute right-5 top-4 z-20 flex max-w-[min(76vw,940px)] flex-col items-end gap-2">
+      <div className={`inline-flex flex-wrap items-center justify-end gap-1.5 px-2 py-2 ${toolbarSurfaceClassName}`}>
         <button
           type="button"
           onClick={onCreateBlock}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-1.5 text-sm font-medium transition ${toolbarPrimaryButtonClassName}`}
         >
           <Plus size={14} />
-          {t('canvas.createBlock')}
-        </button>
-        <button
-          type="button"
-          onClick={onAddNote}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
-        >
-          <Plus size={14} />
-          {t('canvas.addNote')}
+          {t('canvas.addContent')}
         </button>
         <button
           type="button"
           onClick={onOpenTemplates}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${toolbarNeutralButtonClassName}`}
         >
           <LayoutTemplate size={14} />
           {t('canvas.templates')}
@@ -178,17 +172,16 @@ export function CanvasArrangeToolbar({
         <button
           type="button"
           onClick={onOpenActivity}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${toolbarNeutralButtonClassName}`}
         >
           <Activity size={14} />
           {activityCount > 0 ? t('canvas.activityWithCount', { count: activityCount }) : t('canvas.activity')}
         </button>
-        <div className="mx-1 h-5 w-px bg-white/10" />
         <button
           type="button"
           onClick={onAskAI}
           disabled={selectedCount === 0}
-          className="inline-flex items-center gap-2 rounded-lg border border-sky-300/20 bg-sky-400/10 px-3 py-1.5 text-sm text-sky-50 transition hover:bg-sky-400/16 disabled:cursor-not-allowed disabled:opacity-45"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${toolbarPrimaryButtonClassName}`}
         >
           <Bot size={14} />
           {t('canvas.askAI')}
@@ -197,27 +190,22 @@ export function CanvasArrangeToolbar({
           type="button"
           onClick={onSendToNote}
           disabled={selectedCount === 0}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${toolbarNeutralButtonClassName}`}
         >
           <NotebookPen size={14} />
           {t('canvas.sendToNote')}
         </button>
-        <IconButton
-          title={t('canvas.linkSelection')}
-          disabled={!canLinkSelection}
-          onClick={onLinkSelection}
-        >
-          <Link2 size={14} />
-        </IconButton>
         <button
           type="button"
           onClick={onExportReport}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${toolbarNeutralButtonClassName}`}
         >
           <FileOutput size={14} />
           {t('canvas.exportReport')}
         </button>
-        <div className="mx-1 h-5 w-px bg-white/10" />
+      </div>
+
+      <div className={`inline-flex flex-wrap items-center justify-end gap-1 px-1.5 py-1.5 ${toolbarSurfaceClassName}`}>
         <IconButton
           title={t('canvas.arrangeGrid')}
           active={activeArrangeMode === 'grid'}
@@ -242,16 +230,16 @@ export function CanvasArrangeToolbar({
         >
           <MoveVertical size={14} />
         </IconButton>
-        <div className="mx-1 h-5 w-px bg-white/10" />
+        <div className="mx-1 h-5 w-px bg-[rgb(var(--border))]" />
         <IconButton title={t('canvas.fitToContent')} onClick={onFitToContent}>
           <Search size={14} />
         </IconButton>
         <IconButton
-          title={canAddWindow ? t('canvas.addWindow') : t('canvas.noAvailableWindows')}
-          disabled={!canAddWindow}
-          onClick={onCreateBlock}
+          title={t('canvas.linkSelection')}
+          disabled={!canLinkSelection}
+          onClick={onLinkSelection}
         >
-          <Plus size={14} />
+          <Link2 size={14} />
         </IconButton>
         <IconButton
           title={t('canvas.deleteSelection')}
@@ -260,31 +248,25 @@ export function CanvasArrangeToolbar({
         >
           <Trash2 size={14} />
         </IconButton>
-        <div className="mx-1 h-5 w-px bg-white/10" />
-        <button
-          type="button"
-          onClick={onRenameWorkspace}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
-        >
+        <IconButton title={t('canvas.renameWorkspace')} onClick={onRenameWorkspace}>
           <PencilLine size={14} />
-          {t('canvas.renameWorkspace')}
-        </button>
+        </IconButton>
         <button
           type="button"
           onClick={onDeleteWorkspace}
-          className="inline-flex items-center gap-2 rounded-lg border border-rose-400/20 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-100 transition hover:bg-rose-500/16"
+          aria-label={t('canvas.deleteWorkspace')}
+          title={t('canvas.deleteWorkspace')}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${toolbarDangerButtonClassName}`}
         >
           <Trash2 size={14} />
-          {t('canvas.deleteWorkspace')}
         </button>
+        <ZoomPill
+          zoom={zoom}
+          onZoomOut={onZoomOut}
+          onResetZoom={onResetZoom}
+          onZoomIn={onZoomIn}
+        />
       </div>
-
-      <ZoomPill
-        zoom={zoom}
-        onZoomOut={onZoomOut}
-        onResetZoom={onResetZoom}
-        onZoomIn={onZoomIn}
-      />
     </div>
   );
 }

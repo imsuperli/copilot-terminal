@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CanvasBlock } from '../../../shared/types/canvas';
 import {
   arrangeCanvasBlocks,
+  buildCanvasLinkGeometry,
   fitViewportToBlocks,
   moveCanvasBlocks,
   resizeCanvasBlock,
@@ -55,5 +56,19 @@ describe('canvasWorkspace utils', () => {
     expect(resized.height).toBeGreaterThanOrEqual(140);
     expect(resized.x).toBeGreaterThanOrEqual(sampleBlocks[0].x);
     expect(resized.y).toBeGreaterThanOrEqual(sampleBlocks[0].y);
+  });
+
+  it('builds edge-to-edge link geometry instead of connecting block centers', () => {
+    const geometry = buildCanvasLinkGeometry(sampleBlocks[0], sampleBlocks[1]);
+
+    expect(geometry.start.x).toBe(sampleBlocks[0].x + sampleBlocks[0].width);
+    expect(geometry.start.y).toBeGreaterThan(sampleBlocks[0].y);
+    expect(geometry.start.y).toBeLessThan(sampleBlocks[0].y + sampleBlocks[0].height);
+    expect(geometry.end.x).toBe(sampleBlocks[1].x);
+    expect(geometry.end.y).toBeGreaterThan(sampleBlocks[1].y);
+    expect(geometry.end.y).toBeLessThan(sampleBlocks[1].y + sampleBlocks[1].height);
+    expect(geometry.start.x).not.toBe(sampleBlocks[0].x + sampleBlocks[0].width / 2);
+    expect(geometry.end.x).not.toBe(sampleBlocks[1].x + sampleBlocks[1].width / 2);
+    expect(geometry.path.startsWith(`M ${geometry.start.x} ${geometry.start.y}`)).toBe(true);
   });
 });
