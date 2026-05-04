@@ -84,4 +84,20 @@ describe('CustomTitleBar', () => {
 
     expect(mouseDownEvent.defaultPrevented).toBe(true);
   });
+
+  it('uses the custom close handler when provided', () => {
+    const onClose = vi.fn();
+
+    render(
+      <CustomTitleBar
+        title="Workspace"
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.windowClose).not.toHaveBeenCalled();
+  });
 });

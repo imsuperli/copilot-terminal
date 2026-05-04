@@ -1209,6 +1209,11 @@ function AppContent() {
     await switchToUnifiedView();
   }, [canvasTerminalReturnTargetId, switchToCanvasView, switchToUnifiedView]);
 
+  const handleReturnFromCanvas = useCallback(async () => {
+    setCanvasTerminalReturnTargetId(null);
+    await switchToUnifiedView();
+  }, [switchToUnifiedView]);
+
   const handleTabChange = useCallback((tab: 'all' | 'active' | 'archived' | string) => {
     setCurrentTab(tab);
     // 持久化到 settings
@@ -1396,7 +1401,12 @@ function AppContent() {
         gitBranch={titleBarGitBranch}
         showAppName={currentView === 'unified'}
         appName={appVersion.name}
-        onReturn={currentView !== 'unified' ? (activeGroupId ? handleReturnFromGroup : handleReturnFromTerminal) : undefined}
+        onReturn={currentView === 'canvas'
+          ? handleReturnFromCanvas
+          : currentView !== 'unified'
+            ? (activeGroupId ? handleReturnFromGroup : handleReturnFromTerminal)
+            : undefined}
+        onClose={currentView === 'canvas' ? handleReturnFromCanvas : undefined}
       />
 
       {/* 内容区域 */}
@@ -1509,7 +1519,7 @@ function AppContent() {
                     />
                   );
                 }}
-                onExitWorkspace={switchToUnifiedView}
+                onExitWorkspace={handleReturnFromCanvas}
               />
             ))}
         </div>

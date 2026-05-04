@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
@@ -43,6 +43,12 @@ vi.mock('../components/AppNotice', () => ({
 
 vi.mock('../components/CleanupOverlay', () => ({
   CleanupOverlay: () => null,
+}));
+
+vi.mock('../components/CanvasWorkspaceView', () => ({
+  CanvasWorkspaceView: ({ canvasWorkspace }: { canvasWorkspace: { name: string } }) => (
+    <div data-testid="canvas-workspace-view">{canvasWorkspace.name}</div>
+  ),
 }));
 
 vi.mock('../components/QuickNavPanel', () => ({
@@ -299,5 +305,54 @@ describe('App terminal mounting', () => {
       pid: null,
     });
     expect(useWindowStore.getState().getPaneById(terminalWindow.id, paneId)?.sessionId).toBeUndefined();
+  });
+
+  it('returns directly to unified view from canvas title bar home and close actions', async () => {
+    const switchToUnifiedView = vi.fn().mockResolvedValue(undefined);
+
+    mockUseViewSwitcher.mockReturnValue({
+      currentView: 'canvas',
+      activeWindowId: null,
+      activeCanvasWorkspaceId: 'canvas-1',
+      switchToTerminalView: vi.fn(),
+      switchToCanvasView: vi.fn(),
+      switchToUnifiedView,
+      error: null,
+    });
+
+    useWindowStore.setState({
+      windows: [],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Ops Board',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z',
+          blocks: [],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 1,
+        },
+      ],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: null,
+      activeGroupId: null,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    expect(screen.getByTestId('canvas-workspace-view')).toHaveTextContent('Ops Board');
+
+    fireEvent.click(screen.getByLabelText('Home'));
+    await waitFor(() => {
+      expect(switchToUnifiedView).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByLabelText('Close'));
+    await waitFor(() => {
+      expect(switchToUnifiedView).toHaveBeenCalledTimes(2);
+    });
   });
 });

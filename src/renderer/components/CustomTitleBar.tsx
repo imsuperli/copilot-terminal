@@ -12,6 +12,7 @@ interface CustomTitleBarProps {
   showAppName?: boolean;
   appName?: string;
   onReturn?: () => void;
+  onClose?: () => void;
 }
 
 export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
@@ -20,6 +21,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   showAppName = false,
   appName = 'Synapse',
   onReturn,
+  onClose,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const isMac = window.electronAPI?.platform === 'darwin';
@@ -59,7 +61,14 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
       ? window.electronAPI?.windowToggleFullScreen()
       : window.electronAPI?.windowMaximize()
   );
-  const handleClose = () => window.electronAPI?.windowClose();
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+
+    window.electronAPI?.windowClose();
+  };
   const handleDoubleClick = () => { if (!isMac) handleMaximize(); };
 
   // macOS: 左侧红黄绿圆点 + logo，中间标题，右侧留空
@@ -89,7 +98,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
         {title && (
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {onReturn && (
-              <button type="button" tabIndex={-1} onMouseDown={preventMouseButtonFocus} onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded text-[rgb(var(--titlebar-muted))] hover:bg-[rgb(var(--titlebar-hover))] hover:text-[rgb(var(--titlebar-foreground))] transition-colors flex-shrink-0">
+              <button type="button" tabIndex={-1} onMouseDown={preventMouseButtonFocus} onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded text-[rgb(var(--titlebar-muted))] hover:bg-[rgb(var(--titlebar-hover))] hover:text-[rgb(var(--titlebar-foreground))] transition-colors flex-shrink-0" aria-label="Home">
                 <Home size={15} />
               </button>
             )}
@@ -136,7 +145,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
       {title && (
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           {onReturn && (
-            <button type="button" tabIndex={-1} onMouseDown={preventMouseButtonFocus} onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded text-[rgb(var(--titlebar-muted))] hover:bg-[rgb(var(--titlebar-hover))] hover:text-[rgb(var(--titlebar-foreground))] transition-colors flex-shrink-0">
+            <button type="button" tabIndex={-1} onMouseDown={preventMouseButtonFocus} onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded text-[rgb(var(--titlebar-muted))] hover:bg-[rgb(var(--titlebar-hover))] hover:text-[rgb(var(--titlebar-foreground))] transition-colors flex-shrink-0" aria-label="Home">
               <Home size={15} />
             </button>
           )}
