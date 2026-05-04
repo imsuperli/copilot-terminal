@@ -4,14 +4,18 @@ import { AppLanguage } from '../../shared/i18n';
 import {
   CanvasActivityEvent,
   CanvasBlock,
+  CanvasBlockLink,
   CanvasNoteBlock,
   CanvasWindowBlock,
   CanvasWorkspace,
 } from '../../shared/types/canvas';
+import type { AgentTaskSnapshot } from '../../shared/types/agent';
+import type { ChatContextFragment, ChatMessage, ChatSettings, ChatSshContext } from '../../shared/types/chat';
 import type { SSHProfile } from '../../shared/types/ssh';
-import { getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { getPaneBackend, getWindowKind, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
+import type { Pane } from '../types/window';
 import { getAllPanes, getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusLabelKey } from '../utils/statusHelpers';
 import {
@@ -23,6 +27,7 @@ import {
   DEFAULT_NOTE_BLOCK_SIZE,
   DEFAULT_WINDOW_BLOCK_SIZE,
   fitViewportToBlocks,
+  getCanvasBounds,
   getIntersectingCanvasBlockIds,
   getWorldPointFromClient,
   moveCanvasBlocks,
@@ -31,6 +36,17 @@ import {
 } from '../utils/canvasWorkspace';
 import { createTemplateFromWorkspace, createDefaultCanvasTemplates, instantiateCanvasWorkspaceFromTemplate } from '../utils/canvasTemplates';
 import { createCanvasWindowDraft } from '../utils/canvasWindowFactory';
+import { buildCanvasBlockSummary, buildSelectedCanvasContext, exportCanvasWorkspaceReport, serializeCanvasBlockEvidence } from '../utils/canvasInsights';
+import { dispatchAppError, dispatchAppSuccess } from '../utils/appNotice';
+import { getSmartBrowserSplitDirection } from '../utils/browserPane';
+import { createChatPaneDraft, selectPreferredChatLinkedPaneId } from '../utils/chatPane';
+import {
+  buildChatSystemPrompt,
+  mergeChatSettingsWithCanvasDefaults,
+  normalizeChatSettings,
+  resolveChatContextFragments,
+} from '../utils/chatContext';
+import { createChatConversationHistoryId } from '../utils/chatHistory';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { CanvasArrangeToolbar } from './CanvasArrangeToolbar';
 import { CanvasBlockChrome } from './CanvasBlockChrome';
@@ -94,8 +110,113 @@ function createCanvasBlockId(prefix: 'note' | 'window'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createCanvasLinkId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `link-${crypto.randomUUID()}`;
+  }
+
+  return `link-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createMessageId(prefix: string): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
+
+function buildCanvasLinkPath(fromBlock: CanvasBlock, toBlock: CanvasBlock): string {
+  const startX = fromBlock.x + fromBlock.width / 2;
+  const startY = fromBlock.y + fromBlock.height / 2;
+  const endX = toBlock.x + toBlock.width / 2;
+  const endY = toBlock.y + toBlock.height / 2;
+  const distanceX = endX - startX;
+  const controlOffset = Math.max(80, Math.abs(distanceX) * 0.4);
+
+  return [
+    `M ${startX} ${startY}`,
+    `C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`,
+  ].join(' ');
+}
+
+function getCanvasLinkMidpoint(fromBlock: CanvasBlock, toBlock: CanvasBlock): { x: number; y: number } {
+  return {
+    x: (fromBlock.x + fromBlock.width / 2 + toBlock.x + toBlock.width / 2) / 2,
+    y: (fromBlock.y + fromBlock.height / 2 + toBlock.y + toBlock.height / 2) / 2,
+  };
+}
+
+function inferCanvasLinkKind(fromBlock: CanvasBlock, toBlock: CanvasBlock): CanvasBlockLink['kind'] {
+  if (fromBlock.type === 'note' && toBlock.type === 'window') {
+    return 'evidence';
+  }
+
+  if (fromBlock.type === 'window' && toBlock.type === 'note') {
+    return 'context';
+  }
+
+  return 'related';
+}
+
+function createOptimisticAgentTask(options: {
+  taskId: string;
+  paneId: string;
+  windowId: string;
+  providerId: string;
+  model: string;
+  linkedPaneId?: string;
+  sshContext?: ChatSshContext;
+  messages: ChatMessage[];
+}): AgentTaskSnapshot {
+  const timestamp = new Date().toISOString();
+  return {
+    taskId: options.taskId,
+    paneId: options.paneId,
+    windowId: options.windowId,
+    status: 'running',
+    providerId: options.providerId,
+    model: options.model,
+    linkedPaneId: options.linkedPaneId,
+    sshContext: options.sshContext,
+    timeline: [],
+    messages: options.messages,
+    offloadRefs: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function sanitizeFilename(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    || 'canvas-report';
+}
+
 function countLinkedWindowBlocks(blocks: CanvasBlock[], windowId: string): number {
   return blocks.filter((block) => block.type === 'window' && block.windowId === windowId).length;
+}
+
+function getChatPaneFromWindow(windowItem: ReturnType<typeof useWindowStore.getState>['windows'][number]): Pane | null {
+  return getAllPanes(windowItem.layout).find((pane) => pane.kind === 'chat') ?? null;
+}
+
+function findCanvasWindowBlockByWindowId(
+  blocks: CanvasWorkspace['blocks'],
+  windowId: string,
+): CanvasWindowBlock | null {
+  for (const block of blocks) {
+    if (block.type === 'window' && block.windowId === windowId) {
+      return block;
+    }
+  }
+
+  return null;
 }
 
 export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
@@ -110,6 +231,10 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const updateCanvasWorkspace = useWindowStore((state) => state.updateCanvasWorkspace);
   const removeCanvasWorkspace = useWindowStore((state) => state.removeCanvasWorkspace);
   const addWindow = useWindowStore((state) => state.addWindow);
+  const updatePane = useWindowStore((state) => state.updatePane);
+  const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
+  const splitPaneInWindow = useWindowStore((state) => state.splitPaneInWindow);
+  const setActivePane = useWindowStore((state) => state.setActivePane);
   const canvasWorkspaceTemplates = useWindowStore((state) => state.canvasWorkspaceTemplates);
   const setCanvasWorkspaceTemplates = useWindowStore((state) => state.setCanvasWorkspaceTemplates);
   const upsertCanvasWorkspaceTemplate = useWindowStore((state) => state.upsertCanvasWorkspaceTemplate);
@@ -131,6 +256,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const [workspaceRenameOpen, setWorkspaceRenameOpen] = useState(false);
   const [workspaceDeleteOpen, setWorkspaceDeleteOpen] = useState(false);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState(canvasWorkspace.name);
+  const [chatSettings, setChatSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [canvasSize, setCanvasSize] = useState({
     w: typeof window === 'undefined' ? 1280 : window.innerWidth,
     h: typeof window === 'undefined' ? 720 : window.innerHeight,
@@ -147,10 +273,51 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       .sort((left, right) => right.timestamp.localeCompare(left.timestamp)),
     [canvasActivity, canvasWorkspace.id],
   );
+  const blockMap = useMemo(
+    () => new Map(canvasWorkspace.blocks.map((block) => [block.id, block] as const)),
+    [canvasWorkspace.blocks],
+  );
   const resolvedTemplates = useMemo(
     () => canvasWorkspaceTemplates.length > 0 ? canvasWorkspaceTemplates : createDefaultCanvasTemplates(),
     [canvasWorkspaceTemplates],
   );
+  const linkedTerminalPaneEntries = useMemo(() => (
+    windows.flatMap((windowItem) => getAllPanes(windowItem.layout)
+      .filter((pane) => isTerminalPane(pane))
+      .map((pane) => ({ windowId: windowItem.id, pane })))
+  ), [windows]);
+  const linkedTerminalPanes = useMemo(
+    () => linkedTerminalPaneEntries.map((entry) => entry.pane),
+    [linkedTerminalPaneEntries],
+  );
+  const selectedCanvasContext = useMemo(() => buildSelectedCanvasContext({
+    workspace: canvasWorkspace,
+    windowsById,
+    selectedBlockIds,
+    t,
+  }), [canvasWorkspace, selectedBlockIds, t, windowsById]);
+  const selectedBlocks = selectedCanvasContext.selectedBlocks;
+  const selectedWindowBlocks = useMemo(
+    () => selectedBlocks.filter((block): block is CanvasWindowBlock => block.type === 'window'),
+    [selectedBlocks],
+  );
+  const selectedNoteBlocks = useMemo(
+    () => selectedBlocks.filter((block): block is CanvasNoteBlock => block.type === 'note'),
+    [selectedBlocks],
+  );
+  const canvasLinks = canvasWorkspace.links ?? [];
+  const linksByBlockId = useMemo(() => {
+    const map = new Map<string, CanvasBlockLink[]>();
+    for (const link of canvasLinks) {
+      const from = map.get(link.fromBlockId) ?? [];
+      from.push(link);
+      map.set(link.fromBlockId, from);
+      const to = map.get(link.toBlockId) ?? [];
+      to.push(link);
+      map.set(link.toBlockId, to);
+    }
+    return map;
+  }, [canvasLinks]);
 
   const availableWindows = useMemo(() => {
     const linkedWindowIds = new Set(
@@ -187,6 +354,25 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       setCanvasWorkspaceTemplates(createDefaultCanvasTemplates());
     }
   }, [canvasWorkspaceTemplates.length, setCanvasWorkspaceTemplates]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void window.electronAPI.getSettings().then((response) => {
+      if (!cancelled && response.success) {
+        setChatSettings(mergeChatSettingsWithCanvasDefaults(
+          normalizeChatSettings(response.data?.chat),
+          canvasWorkspace,
+        ));
+      }
+    }).catch(() => {
+      // Ignore settings load failures and keep defaults.
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canvasWorkspace]);
 
   useEffect(() => {
     setWorkspaceNameDraft(canvasWorkspace.name);
@@ -450,6 +636,129 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     }));
   }, [persistWorkspace]);
 
+  const updateChatPaneState = useCallback((
+    windowId: string,
+    paneId: string,
+    updater: (current: NonNullable<Pane['chat']>) => NonNullable<Pane['chat']>,
+    runtimeOnly = false,
+  ) => {
+    const windowItem = useWindowStore.getState().getWindowById(windowId);
+    if (!windowItem) {
+      return;
+    }
+
+    const pane = getAllPanes(windowItem.layout).find((item) => item.id === paneId && item.kind === 'chat');
+    if (!pane) {
+      return;
+    }
+
+    const currentChat = {
+      messages: [],
+      ...(pane.chat ?? {}),
+    };
+    const nextChat = updater(currentChat);
+    const apply = runtimeOnly ? updatePaneRuntime : updatePane;
+    apply(windowId, paneId, { chat: nextChat });
+  }, [updatePane, updatePaneRuntime]);
+
+  const ensureCanvasChatTarget = useCallback((preferredWindowBlock?: CanvasWindowBlock | null): {
+    windowId: string;
+    paneId: string;
+    pane: Pane;
+    blockId: string;
+  } | null => {
+    const state = useWindowStore.getState();
+    const preferredWindow = preferredWindowBlock ? state.getWindowById(preferredWindowBlock.windowId) : null;
+    const preferredPane = preferredWindow ? getChatPaneFromWindow(preferredWindow) : null;
+    if (preferredWindow && preferredPane && preferredWindowBlock) {
+      return {
+        windowId: preferredWindow.id,
+        paneId: preferredPane.id,
+        pane: preferredPane,
+        blockId: preferredWindowBlock.id,
+      };
+    }
+
+    for (const block of canvasWorkspace.blocks) {
+      if (block.type !== 'window') {
+        continue;
+      }
+
+      const windowItem = state.getWindowById(block.windowId);
+      if (!windowItem) {
+        continue;
+      }
+
+      const chatPane = getChatPaneFromWindow(windowItem);
+      if (!chatPane) {
+        continue;
+      }
+
+      return {
+        windowId: windowItem.id,
+        paneId: chatPane.id,
+        pane: chatPane,
+        blockId: block.id,
+      };
+    }
+
+    const sourceWindowBlock = preferredWindowBlock ?? selectedWindowBlocks[0] ?? null;
+    const sourceWindow = sourceWindowBlock ? state.getWindowById(sourceWindowBlock.windowId) : null;
+    if (sourceWindow) {
+      const panes = getAllPanes(sourceWindow.layout);
+      const terminalPane = panes.find((pane) => isTerminalPane(pane)) ?? null;
+      if (terminalPane) {
+        const newPaneId = createMessageId('canvas-chat-pane');
+        const linkedPaneId = selectPreferredChatLinkedPaneId(
+          panes,
+          getPaneBackend(terminalPane) === 'ssh' ? terminalPane.id : undefined,
+        );
+        const newPane = createChatPaneDraft(newPaneId, { linkedPaneId });
+        const direction = getSmartBrowserSplitDirection(sourceWindow.layout, terminalPane.id);
+        splitPaneInWindow(sourceWindow.id, terminalPane.id, direction, newPane, CHAT_PANE_DEFAULT_SPLIT_SIZES);
+        setActivePane(sourceWindow.id, newPaneId);
+
+        return {
+          windowId: sourceWindow.id,
+          paneId: newPaneId,
+          pane: newPane,
+          blockId: sourceWindowBlock?.id ?? findCanvasWindowBlockByWindowId(canvasWorkspace.blocks, sourceWindow.id)?.id ?? '',
+        };
+      }
+    }
+
+    const draftWindow = createCanvasWindowDraft('chat', {
+      name: t('canvas.selectionChatTitle'),
+      linkedPaneId: selectPreferredChatLinkedPaneId(linkedTerminalPanes),
+    });
+    addWindow(draftWindow);
+    addWindowBlockFromWindow(draftWindow);
+    const createdBlock = findCanvasWindowBlockByWindowId(
+      useWindowStore.getState().getCanvasWorkspaceById(canvasWorkspace.id)?.blocks ?? canvasWorkspace.blocks,
+      draftWindow.id,
+    );
+    if (draftWindow.layout.type !== 'pane' || draftWindow.layout.pane.kind !== 'chat' || !createdBlock) {
+      return null;
+    }
+
+    return {
+      windowId: draftWindow.id,
+      paneId: draftWindow.layout.pane.id,
+      pane: draftWindow.layout.pane,
+      blockId: createdBlock.id,
+    };
+  }, [
+    addWindow,
+    addWindowBlockFromWindow,
+    canvasWorkspace.blocks,
+    canvasWorkspace.id,
+    linkedTerminalPanes,
+    selectedWindowBlocks,
+    setActivePane,
+    splitPaneInWindow,
+    t,
+  ]);
+
   const startEditingBlockTitle = useCallback((block: CanvasBlock, fallbackTitle: string) => {
     setEditingBlockId(block.id);
     setDraftBlockTitle(block.label ?? fallbackTitle);
@@ -547,6 +856,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     const ids = new Set(blockIds);
     persistWorkspace((current) => ({
       blocks: current.blocks.filter((block) => !ids.has(block.id)),
+      links: (current.links ?? []).filter((link) => !ids.has(link.fromBlockId) && !ids.has(link.toBlockId)),
     }));
     setSelectedBlockIds((previous) => previous.filter((blockId) => !ids.has(blockId)));
   }, [persistWorkspace]);
@@ -622,8 +932,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
     updateCanvasWorkspace(canvasWorkspace.id, {
       blocks: instantiated.workspace.blocks,
+      links: instantiated.workspace.links,
       nextZIndex: instantiated.workspace.nextZIndex,
       templateId: template.id,
+      chatDefaults: instantiated.workspace.chatDefaults,
+      exportSettings: instantiated.workspace.exportSettings,
       updatedAt: new Date().toISOString(),
     });
     setSelectedBlockIds([]);
@@ -650,6 +963,304 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     });
     setTemplatesOpen(true);
   }, [canvasWorkspace, createCanvasEvent, t, upsertCanvasWorkspaceTemplate, windowsById]);
+
+  const createConnectedNoteFromSelection = useCallback((content: string, label?: string) => {
+    if (!selectedBlocks.length) {
+      return;
+    }
+
+    const bounds = getCanvasBounds(selectedBlocks);
+    let createdNoteId: string | null = null;
+
+    persistWorkspace((current) => {
+      const noteId = createCanvasBlockId('note');
+      createdNoteId = noteId;
+      const nextBlock: CanvasNoteBlock = {
+        id: noteId,
+        type: 'note',
+        x: bounds.maxX + 60,
+        y: bounds.minY,
+        width: DEFAULT_NOTE_BLOCK_SIZE.width,
+        height: Math.max(DEFAULT_NOTE_BLOCK_SIZE.height, Math.min(420, 140 + content.length / 3)),
+        zIndex: current.nextZIndex,
+        label: label || t('canvas.defaultNoteTitle'),
+        content,
+      };
+      const nextLinks = [...(current.links ?? [])];
+      for (const sourceBlock of selectedBlocks) {
+        nextLinks.push({
+          id: createCanvasLinkId(),
+          fromBlockId: sourceBlock.id,
+          toBlockId: noteId,
+          kind: inferCanvasLinkKind(sourceBlock, nextBlock),
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      return {
+        blocks: [...current.blocks, nextBlock],
+        links: nextLinks,
+        nextZIndex: current.nextZIndex + 1,
+      };
+    });
+
+    if (createdNoteId) {
+      setSelectedBlockIds([createdNoteId]);
+      createCanvasEvent('evidence-captured', t('canvas.sendToNote'), t('canvas.evidenceCapturedMessage', {
+        count: selectedBlocks.length,
+      }), {
+        blockId: createdNoteId,
+        blockIds: selectedBlocks.map((block) => block.id),
+      });
+    }
+  }, [createCanvasEvent, persistWorkspace, selectedBlocks, t]);
+
+  const sendSelectionToNote = useCallback(() => {
+    if (!selectedBlocks.length) {
+      return;
+    }
+
+    const noteBody = [
+      `# ${canvasWorkspace.name}`,
+      '',
+      ...selectedBlocks.map((block) => serializeCanvasBlockEvidence(block, windowsById, t)),
+    ].join('\n\n');
+
+    createConnectedNoteFromSelection(noteBody, t('canvas.evidenceNoteTitle'));
+  }, [canvasWorkspace.name, createConnectedNoteFromSelection, selectedBlocks, t, windowsById]);
+
+  const toggleSelectedBlockLink = useCallback(() => {
+    if (selectedBlockIds.length !== 2) {
+      return;
+    }
+
+    const [fromBlockId, toBlockId] = selectedBlockIds;
+    const fromBlock = blockMap.get(fromBlockId);
+    const toBlock = blockMap.get(toBlockId);
+    if (!fromBlock || !toBlock) {
+      return;
+    }
+
+    let removed = false;
+    persistWorkspace((current) => {
+      const existingLink = (current.links ?? []).find((link) => (
+        (link.fromBlockId === fromBlockId && link.toBlockId === toBlockId)
+        || (link.fromBlockId === toBlockId && link.toBlockId === fromBlockId)
+      ));
+
+      if (existingLink) {
+        removed = true;
+        return {
+          links: (current.links ?? []).filter((link) => link.id !== existingLink.id),
+        };
+      }
+
+      const nextLink: CanvasBlockLink = {
+        id: createCanvasLinkId(),
+        fromBlockId,
+        toBlockId,
+        kind: inferCanvasLinkKind(fromBlock, toBlock),
+        createdAt: new Date().toISOString(),
+      };
+
+      return {
+        links: [...(current.links ?? []), nextLink],
+      };
+    });
+
+    if (!removed) {
+      createCanvasEvent('blocks-linked', t('canvas.linkSelection'), undefined, {
+        blockIds: [fromBlockId, toBlockId],
+      });
+    }
+  }, [blockMap, createCanvasEvent, persistWorkspace, selectedBlockIds, t]);
+
+  const exportCurrentReport = useCallback(async () => {
+    try {
+      const report = exportCanvasWorkspaceReport({
+        workspace: canvasWorkspace,
+        windowsById,
+        t,
+        activityItems: workspaceActivity.map((item) => ({
+          timestamp: item.timestamp,
+          title: item.title,
+          message: item.message,
+        })),
+      });
+      const filename = `${sanitizeFilename(report.title)}.md`;
+
+      if (window.electronAPI?.writeClipboardText) {
+        await window.electronAPI.writeClipboardText(report.markdown);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(report.markdown);
+      }
+
+      const blob = new Blob([report.markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+
+      createCanvasEvent('report-exported', t('canvas.exportReport'), filename);
+      dispatchAppSuccess(t('canvas.exportReportSuccess', { filename }));
+    } catch (error) {
+      dispatchAppError(error instanceof Error ? error.message : String(error));
+    }
+  }, [canvasWorkspace, createCanvasEvent, t, windowsById, workspaceActivity]);
+
+  const askAIForSelection = useCallback(async () => {
+    if (!selectedBlocks.length) {
+      return;
+    }
+
+    try {
+      const providers = chatSettings.providers ?? [];
+      const provider = providers.find((item) => item.id === chatSettings.activeProviderId) ?? providers[0];
+      const model = provider?.defaultModel ?? provider?.models?.[0];
+      if (!provider || !model) {
+        dispatchAppError(t('canvas.askAIMissingProvider'));
+        return;
+      }
+
+      const chatTarget = ensureCanvasChatTarget(selectedWindowBlocks[0] ?? null);
+      if (!chatTarget) {
+        dispatchAppError(t('canvas.askAIWindowInvalid'));
+        return;
+      }
+
+      const chatPane = chatTarget.pane;
+      const linkedPaneId = chatPane.chat?.linkedPaneId ?? selectPreferredChatLinkedPaneId(linkedTerminalPanes);
+      const linkedPaneEntry = linkedTerminalPaneEntries.find((entry) => entry.pane.id === linkedPaneId) ?? null;
+      const linkedPane = linkedPaneEntry?.pane ?? null;
+      const sshContext: ChatSshContext | undefined = linkedPane && getPaneBackend(linkedPane) === 'ssh' && linkedPane.ssh?.host && linkedPane.ssh?.user
+        ? {
+            host: linkedPane.ssh.host,
+            user: linkedPane.ssh.user,
+            cwd: linkedPane.cwd || linkedPane.ssh.remoteCwd,
+            windowId: linkedPaneEntry?.windowId ?? chatTarget.windowId,
+            paneId: linkedPane.id,
+          }
+        : undefined;
+      const prompt = [
+        t('canvas.askAIPromptLead', { count: selectedBlocks.length }),
+        '',
+        selectedCanvasContext.contextText,
+        '',
+        t('canvas.askAIPromptTail'),
+      ].join('\n');
+      const contextFragments = [
+        ...selectedCanvasContext.fragments,
+        ...await resolveChatContextFragments(chatSettings, prompt),
+      ];
+      const userMessage: ChatMessage = {
+        id: createMessageId('chat-user'),
+        role: 'user',
+        content: prompt,
+        timestamp: new Date().toISOString(),
+      };
+      const previousMessages = chatPane.chat?.messages ?? [];
+      const nextMessages = [...previousMessages, userMessage];
+      const optimisticAgent = createOptimisticAgentTask({
+        taskId: createMessageId('agent-task'),
+        paneId: chatTarget.paneId,
+        windowId: chatTarget.windowId,
+        providerId: provider.id,
+        model,
+        linkedPaneId,
+        sshContext,
+        messages: nextMessages,
+      });
+      const systemPrompt = buildChatSystemPrompt(chatSettings);
+
+      updateChatPaneState(chatTarget.windowId, chatTarget.paneId, (current) => ({
+        ...current,
+        conversationId: current.conversationId ?? createChatConversationHistoryId(),
+        messages: nextMessages,
+        agent: optimisticAgent,
+        activeProviderId: provider.id,
+        activeModel: model,
+        linkedPaneId,
+        contextFragments,
+        isStreaming: true,
+      }), true);
+
+      const response = await window.electronAPI.agentSend({
+        paneId: chatTarget.paneId,
+        windowId: chatTarget.windowId,
+        providerId: provider.id,
+        model,
+        text: prompt,
+        systemPrompt,
+        enableTools: Boolean(sshContext),
+        linkedPaneId,
+        sshContext,
+        contextFragments,
+        seedMessages: previousMessages,
+      });
+
+      if (!response.success) {
+        throw new Error(response.error || t('canvas.askAISendFailed'));
+      }
+
+      persistWorkspace((current) => {
+        const existingPairs = new Set((current.links ?? []).map((link) => `${link.fromBlockId}:${link.toBlockId}`));
+        const nextLinks = [...(current.links ?? [])];
+        const targetBlock = current.blocks.find((block) => block.id === chatTarget.blockId);
+        if (!targetBlock) {
+          return null;
+        }
+
+        for (const block of selectedBlocks) {
+          const pair = `${block.id}:${targetBlock.id}`;
+          if (existingPairs.has(pair)) {
+            continue;
+          }
+          nextLinks.push({
+            id: createCanvasLinkId(),
+            fromBlockId: block.id,
+            toBlockId: targetBlock.id,
+            kind: inferCanvasLinkKind(block, targetBlock),
+            label: 'ask-ai',
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        return {
+          links: nextLinks,
+        };
+      });
+
+      createCanvasEvent('selection-sent-to-chat', t('canvas.askAI'), t('canvas.selectionSentToChatMessage', {
+        count: selectedBlocks.length,
+      }), {
+        blockIds: selectedBlocks.map((block) => block.id),
+        paneId: chatTarget.paneId,
+      });
+      dispatchAppSuccess(t('canvas.selectionSentToChatMessage', { count: selectedBlocks.length }));
+    } catch (error) {
+      dispatchAppError(error instanceof Error ? error.message : String(error));
+    }
+  }, [
+    chatSettings.activeProviderId,
+    chatSettings.defaultSystemPrompt,
+    chatSettings.providers,
+    chatSettings.workspaceInstructions,
+    createCanvasEvent,
+    ensureCanvasChatTarget,
+    linkedTerminalPaneEntries,
+    linkedTerminalPanes,
+    selectedBlocks,
+    selectedCanvasContext.contextText,
+    selectedCanvasContext.fragments,
+    selectedWindowBlocks,
+    t,
+    updateChatPaneState,
+    chatSettings.contextFilePaths,
+  ]);
 
   const selectBlock = useCallback((blockId: string, additive: boolean) => {
     setSelectedBlockIds((previous) => {
@@ -782,6 +1393,74 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   }, [canvasWorkspace.blocks, canvasWorkspace.viewport, dragState, persistWorkspace, updateViewport]);
 
   useEffect(() => {
+    const chatPaneIds = new Set(
+      canvasWorkspace.blocks
+        .filter((block): block is CanvasWindowBlock => block.type === 'window')
+        .map((block) => windowsById.get(block.windowId))
+        .flatMap((windowItem) => windowItem ? getAllPanes(windowItem.layout) : [])
+        .filter((pane) => pane.kind === 'chat')
+        .map((pane) => pane.id),
+    );
+
+    const handleTaskState = (_event: unknown, payload: { paneId: string; task: AgentTaskSnapshot }) => {
+      if (!chatPaneIds.has(payload.paneId)) {
+        return;
+      }
+
+      const chatWindow = Array.from(windowsById.values()).find((windowItem) => (
+        getAllPanes(windowItem.layout).some((pane) => pane.kind === 'chat' && pane.id === payload.paneId)
+      ));
+      if (!chatWindow) {
+        return;
+      }
+
+      updateChatPaneState(chatWindow.id, payload.paneId, (current) => ({
+        ...current,
+        messages: payload.task.messages,
+        agent: payload.task,
+        activeProviderId: payload.task.providerId,
+        activeModel: payload.task.model,
+        linkedPaneId: payload.task.linkedPaneId ?? current.linkedPaneId,
+        isStreaming: payload.task.status === 'running',
+      }), payload.task.status === 'running');
+    };
+
+    const handleTaskError = (_event: unknown, payload: { paneId: string; error: string }) => {
+      if (!chatPaneIds.has(payload.paneId)) {
+        return;
+      }
+
+      const chatWindow = Array.from(windowsById.values()).find((windowItem) => (
+        getAllPanes(windowItem.layout).some((pane) => pane.kind === 'chat' && pane.id === payload.paneId)
+      ));
+      if (!chatWindow) {
+        return;
+      }
+
+      updateChatPaneState(chatWindow.id, payload.paneId, (current) => ({
+        ...current,
+        isStreaming: false,
+        agent: current.agent
+          ? {
+              ...current.agent,
+              status: 'failed',
+              error: payload.error,
+              updatedAt: new Date().toISOString(),
+            }
+          : current.agent,
+      }), true);
+    };
+
+    window.electronAPI.onAgentTaskState(handleTaskState);
+    window.electronAPI.onAgentTaskError(handleTaskError);
+
+    return () => {
+      window.electronAPI.offAgentTaskState(handleTaskState);
+      window.electronAPI.offAgentTaskError(handleTaskError);
+    };
+  }, [canvasWorkspace.blocks, updateChatPaneState, windowsById]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const tagName = target?.tagName;
@@ -847,6 +1526,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         zoom={canvasWorkspace.viewport.zoom}
         activeArrangeMode={lastArrangeMode}
         canAddWindow={availableWindows.length > 0}
+        canLinkSelection={selectedBlockIds.length === 2}
         onCreateBlock={() => setCreateDialogOpen(true)}
         onOpenTemplates={() => setTemplatesOpen(true)}
         onOpenActivity={() => setActivityOpen(true)}
@@ -858,6 +1538,14 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           }
 
           createNoteAtClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }}
+        onAskAI={() => {
+          void askAIForSelection();
+        }}
+        onSendToNote={sendSelectionToNote}
+        onLinkSelection={toggleSelectedBlockLink}
+        onExportReport={() => {
+          void exportCurrentReport();
         }}
         onArrange={arrangeCanvas}
         onResetZoom={() => updateViewport(canvasWorkspace.viewport.tx, canvasWorkspace.viewport.ty, 1)}
@@ -944,6 +1632,49 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         )}
 
         <div className="pointer-events-none absolute inset-0" style={worldStyle}>
+          {canvasLinks.length > 0 && (
+            <svg className="pointer-events-none absolute inset-0 overflow-visible">
+              {canvasLinks.map((link) => {
+                const fromBlock = blockMap.get(link.fromBlockId);
+                const toBlock = blockMap.get(link.toBlockId);
+                if (!fromBlock || !toBlock) {
+                  return null;
+                }
+
+                const midpoint = getCanvasLinkMidpoint(fromBlock, toBlock);
+                return (
+                  <g key={link.id}>
+                    <path
+                      d={buildCanvasLinkPath(fromBlock, toBlock)}
+                      fill="none"
+                      stroke={selectedBlockIds.includes(link.fromBlockId) || selectedBlockIds.includes(link.toBlockId)
+                        ? 'rgba(125,211,252,0.95)'
+                        : 'rgba(148,163,184,0.55)'}
+                      strokeWidth={selectedBlockIds.includes(link.fromBlockId) || selectedBlockIds.includes(link.toBlockId) ? 2.5 : 1.75}
+                      strokeDasharray={link.kind === 'depends-on' ? '8 6' : undefined}
+                    />
+                    <circle
+                      cx={midpoint.x}
+                      cy={midpoint.y}
+                      r={3}
+                      fill="rgba(125,211,252,0.95)"
+                    />
+                    {(link.label || link.kind !== 'related') ? (
+                      <text
+                        x={midpoint.x + 8}
+                        y={midpoint.y - 8}
+                        fill="rgba(226,232,240,0.9)"
+                        fontSize="11"
+                      >
+                        {link.label || link.kind}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              })}
+            </svg>
+          )}
+
           {selectionRect && (
             <div
               className="pointer-events-none absolute border border-sky-300/70 bg-sky-400/10"
@@ -980,6 +1711,8 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
               const linkedBlockCount = block.type === 'window'
                 ? countLinkedWindowBlocks(canvasWorkspace.blocks, block.windowId)
                 : 0;
+              const blockSummary = buildCanvasBlockSummary(block, windowsById, t);
+              const linkedRelationCount = linksByBlockId.get(block.id)?.length ?? 0;
               const isLiveBlockActive = selectedBlockIds[selectedBlockIds.length - 1] === block.id;
 
               return (
@@ -987,6 +1720,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                   key={block.id}
                   block={block}
                   title={title}
+                  summary={{
+                    ...blockSummary,
+                    metrics: [
+                      ...(blockSummary.metrics ?? []),
+                      ...(linkedRelationCount > 0 ? [{ label: 'Links', value: String(linkedRelationCount) }] : []),
+                    ],
+                  }}
                   selected={selected}
                   missing={block.type === 'window' && !linkedWindow}
                   editingTitle={editingBlockId === block.id}
@@ -1085,7 +1825,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         </div>
                       </div>
                     ) : (
-                    <div className="flex h-full flex-col justify-between p-4 text-sm text-white/70">
+                    <div className="flex h-full flex-col justify-between p-4 pb-16 text-sm text-white/70">
                       <div>
                         <div className="flex items-center gap-2 text-base font-medium text-white">
                           <MonitorSmartphone size={15} />
@@ -1098,6 +1838,9 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               {t('canvas.windowDirectory', { path: workingDirectory || 'N/A' })}
                             </div>
                             <div>{t('canvas.windowPaneCount', { count: panes.length })}</div>
+                            {blockSummary.bullets?.slice(0, 2).map((bullet) => (
+                              <div key={bullet} className="line-clamp-2">{bullet}</div>
+                            ))}
                             {outputPreview ? (
                               <div className="line-clamp-3">{outputPreview}</div>
                             ) : (
@@ -1162,6 +1905,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         <StickyNote size={12} className="mr-2 inline" />
                         {t('canvas.defaultNoteTitle')}
                       </div>
+                      {blockSummary.bullets?.length ? (
+                        <div className="px-4 pt-2 text-xs text-white/45">
+                          {blockSummary.bullets.slice(0, 2).map((bullet) => (
+                            <div key={bullet} className="line-clamp-1">{bullet}</div>
+                          ))}
+                        </div>
+                      ) : null}
                       <textarea
                         value={block.content}
                         onMouseDown={(event) => {

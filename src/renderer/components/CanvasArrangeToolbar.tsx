@@ -1,5 +1,20 @@
 import React, { useState } from 'react';
-import { Activity, Grid2X2, LayoutTemplate, Minus, MoveHorizontal, MoveVertical, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  Activity,
+  Bot,
+  FileOutput,
+  Grid2X2,
+  LayoutTemplate,
+  Link2,
+  Minus,
+  MoveHorizontal,
+  MoveVertical,
+  NotebookPen,
+  PencilLine,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import type { CanvasArrangeMode } from '../utils/canvasWorkspace';
 import { useI18n } from '../i18n';
 
@@ -9,11 +24,16 @@ interface CanvasArrangeToolbarProps {
   zoom: number;
   activeArrangeMode: CanvasArrangeMode | null;
   canAddWindow: boolean;
+  canLinkSelection?: boolean;
   onCreateBlock: () => void;
   onOpenTemplates: () => void;
   onOpenActivity: () => void;
   activityCount?: number;
   onAddNote: () => void;
+  onAskAI: () => void;
+  onSendToNote: () => void;
+  onLinkSelection: () => void;
+  onExportReport: () => void;
   onArrange: (mode: CanvasArrangeMode) => void;
   onResetZoom: () => void;
   onZoomIn: () => void;
@@ -93,11 +113,16 @@ export function CanvasArrangeToolbar({
   zoom,
   activeArrangeMode,
   canAddWindow,
+  canLinkSelection = false,
   onCreateBlock,
   onOpenTemplates,
   onOpenActivity,
   activityCount = 0,
   onAddNote,
+  onAskAI,
+  onSendToNote,
+  onLinkSelection,
+  onExportReport,
   onArrange,
   onResetZoom,
   onZoomIn,
@@ -157,6 +182,40 @@ export function CanvasArrangeToolbar({
         >
           <Activity size={14} />
           {activityCount > 0 ? t('canvas.activityWithCount', { count: activityCount }) : t('canvas.activity')}
+        </button>
+        <div className="mx-1 h-5 w-px bg-white/10" />
+        <button
+          type="button"
+          onClick={onAskAI}
+          disabled={selectedCount === 0}
+          className="inline-flex items-center gap-2 rounded-lg border border-sky-300/20 bg-sky-400/10 px-3 py-1.5 text-sm text-sky-50 transition hover:bg-sky-400/16 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <Bot size={14} />
+          {t('canvas.askAI')}
+        </button>
+        <button
+          type="button"
+          onClick={onSendToNote}
+          disabled={selectedCount === 0}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <NotebookPen size={14} />
+          {t('canvas.sendToNote')}
+        </button>
+        <IconButton
+          title={t('canvas.linkSelection')}
+          disabled={!canLinkSelection}
+          onClick={onLinkSelection}
+        >
+          <Link2 size={14} />
+        </IconButton>
+        <button
+          type="button"
+          onClick={onExportReport}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-1.5 text-sm text-white/85 transition hover:bg-white/[0.14] hover:text-white"
+        >
+          <FileOutput size={14} />
+          {t('canvas.exportReport')}
         </button>
         <div className="mx-1 h-5 w-px bg-white/10" />
         <IconButton

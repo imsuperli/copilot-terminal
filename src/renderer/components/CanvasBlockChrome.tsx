@@ -1,12 +1,13 @@
 import React from 'react';
 import { Edit3, MonitorSmartphone, StickyNote, Trash2 } from 'lucide-react';
-import type { CanvasBlock } from '../../shared/types/canvas';
+import type { CanvasBlock, CanvasBlockSummary } from '../../shared/types/canvas';
 import type { CanvasResizeDirection } from '../utils/canvasWorkspace';
 import { useI18n } from '../i18n';
 
 interface CanvasBlockChromeProps {
   block: CanvasBlock;
   title: string;
+  summary?: CanvasBlockSummary;
   selected: boolean;
   missing?: boolean;
   editingTitle?: boolean;
@@ -53,6 +54,7 @@ function ResizeHandle({
 export function CanvasBlockChrome({
   block,
   title,
+  summary,
   selected,
   missing = false,
   editingTitle = false,
@@ -137,6 +139,35 @@ export function CanvasBlockChrome({
       </div>
 
       <div className="h-[calc(100%-37px)]">{children}</div>
+
+      {!editingTitle && summary && (summary.metrics?.length || summary.tags?.length) ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] border-t border-white/8 bg-[linear-gradient(180deg,rgba(9,13,19,0.15),rgba(9,13,19,0.92))] px-3 py-2 backdrop-blur">
+          {summary.metrics?.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {summary.metrics.slice(0, 4).map((metric) => (
+                <span
+                  key={`${metric.label}-${metric.value}`}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/60"
+                >
+                  {metric.label}: {metric.value}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {summary.tags?.length ? (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {summary.tags.slice(0, 4).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-sky-300/15 bg-sky-400/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-sky-100/70"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {(['e', 's', 'se', 'w', 'n', 'nw', 'ne', 'sw'] as CanvasResizeDirection[]).map((direction) => (
         <ResizeHandle

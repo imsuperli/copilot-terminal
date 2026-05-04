@@ -13,6 +13,12 @@ import { getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapab
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
 import { selectPreferredChatLinkedPaneId } from '../utils/chatPane';
 import {
+  buildChatSystemPrompt,
+  mergeChatSettingsWithCanvasDefaults,
+  normalizeChatSettings,
+  resolveChatContextFragments,
+} from '../utils/chatContext';
+import {
   buildChatConversationTitle,
   createChatConversationHistoryId,
   getLatestChatConversationHistory,
@@ -64,37 +70,12 @@ const chatHeaderIconButtonClassName = [
 
 const CHAT_HEADER_ICON_SIZE = 18;
 
-function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings {
-  return {
-    providers: settings?.providers ?? [],
-    activeProviderId: settings?.activeProviderId,
-    defaultSystemPrompt: settings?.defaultSystemPrompt ?? '',
-    workspaceInstructions: settings?.workspaceInstructions ?? '',
-    contextFilePaths: settings?.contextFilePaths ?? [],
-    enableCommandSecurity: settings?.enableCommandSecurity ?? true,
-  };
-}
-
 function createCheckpointId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
 
   return `chat-checkpoint-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function getPathLabel(filePath: string): string {
-  const segments = filePath.split(/[\\/]/).filter(Boolean);
-  return segments[segments.length - 1] ?? filePath;
-}
-
-function extractFileMentions(text: string): string[] {
-  const matches = text.match(/(^|\s)@([^\s]+)/g) ?? [];
-  return Array.from(new Set(
-    matches
-      .map((match) => match.trim().slice(1))
-      .filter((value) => value.startsWith('/')),
-  ));
 }
 
 function encodeProviderModelSelection(providerId: string, model: string): string {
@@ -307,6 +288,21 @@ function resolveCanvasActivityTarget(windowId: string): { workspaceId: string; b
     return block ? [{ workspaceId: workspace.id, blockId: block.id }] : [];
   });
 
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function resolveCanvasWorkspaceForWindow(windowId: string): CanvasWorkspace | null {
+  const { activeCanvasWorkspaceId, canvasWorkspaces } = useWindowStore.getState();
+  const availableWorkspaces = canvasWorkspaces.filter((workspace) => !workspace.archived);
+
+  if (activeCanvasWorkspaceId) {
+    const activeWorkspace = availableWorkspaces.find((workspace) => workspace.id === activeCanvasWorkspaceId);
+    if (activeWorkspace && findCanvasWindowBlock(activeWorkspace, windowId)) {
+      return activeWorkspace;
+    }
+  }
+
+  const matches = availableWorkspaces.filter((workspace) => findCanvasWindowBlock(workspace, windowId));
   return matches.length === 1 ? matches[0] : null;
 }
 
@@ -802,6 +798,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   );
 
   const chatState = pane.chat ?? { messages: [] };
+  const canvasWorkspace = useMemo(
+    () => resolveCanvasWorkspaceForWindow(windowId),
+    [windowId, windows],
+  );
   const refreshHistoryEntries = useCallback(() => {
     setHistoryEntries(loadChatConversationHistory(windowId));
   }, [windowId]);
@@ -1089,14 +1089,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     try {
       const response = await window.electronAPI.getSettings();
       if (response.success && response.data) {
-        setSettings(normalizeChatSettings(response.data.chat));
+        const normalized = normalizeChatSettings(response.data.chat);
+        setSettings(mergeChatSettingsWithCanvasDefaults(normalized, canvasWorkspace));
       }
     } catch (error) {
       console.error('Failed to load chat settings:', error);
     } finally {
       setSettingsLoaded(true);
     }
-  }, []);
+  }, [canvasWorkspace?.chatDefaults?.contextFilePaths, canvasWorkspace?.chatDefaults?.workspaceInstructions]);
 
   useEffect(() => {
     void loadSettings();
@@ -1422,37 +1423,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
   }, [agentState, pane.id]);
 
-  const resolveContextFragments = useCallback(async (messageText: string): Promise<ChatContextFragment[]> => {
-    const configuredPaths = settings.contextFilePaths ?? [];
-    const paths = Array.from(new Set([
-      ...configuredPaths,
-      ...extractFileMentions(messageText),
-    ].map((value) => value.trim()).filter(Boolean)));
-
-    const fragments: ChatContextFragment[] = [];
-    for (const filePath of paths) {
-      try {
-        const response = await window.electronAPI.codePaneReadFile({
-          rootPath: filePath,
-          filePath,
-        });
-        if (!response.success || !response.data) {
-          continue;
-        }
-
-        fragments.push({
-          type: 'file',
-          path: filePath,
-          label: getPathLabel(filePath),
-          content: response.data.content,
-        });
-      } catch {
-        // Ignore invalid or inaccessible context files; the user can still send the message.
-      }
-    }
-
-    return fragments;
-  }, [settings.contextFilePaths]);
+  const resolveContextFragments = useCallback((messageText: string): Promise<ChatContextFragment[]> => (
+    resolveChatContextFragments(settings, messageText)
+  ), [settings]);
 
   const handleSaveCheckpoint = useCallback(() => {
     const snapshotMessages = chatState.messages.length > 0
@@ -1606,10 +1579,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     try {
       const contextFragments = await resolveContextFragments(trimmed);
       sshContext = await resolveSshContext();
-      const systemPrompt = [
-        settings.defaultSystemPrompt?.trim(),
-        settings.workspaceInstructions?.trim(),
-      ].filter(Boolean).join('\n\n');
+      const systemPrompt = buildChatSystemPrompt(settings);
 
       persistChatState((currentChat) => ({
         ...currentChat,

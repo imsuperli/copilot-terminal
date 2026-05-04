@@ -3183,6 +3183,164 @@ describe('ChatPane', () => {
     });
   });
 
+  it('merges canvas workspace chat defaults into agent requests', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          defaultSystemPrompt: '默认 system',
+          workspaceInstructions: '全局工作区指令',
+          contextFilePaths: ['/workspace/project/README.md'],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-canvas',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: '# Project README',
+          mtimeMs: Date.now(),
+          size: 16,
+          language: 'markdown',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: 'export const canvas = true;\n',
+          mtimeMs: Date.now(),
+          size: 28,
+          language: 'typescript',
+          isBinary: false,
+        },
+      });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Canvas Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Ops Canvas',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          blocks: [
+            {
+              id: 'window-1',
+              type: 'window',
+              windowId: 'win-1',
+              x: 0,
+              y: 0,
+              width: 320,
+              height: 220,
+              zIndex: 1,
+            },
+          ],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 2,
+          chatDefaults: {
+            workspaceInstructions: '画布级附加指令',
+            contextFilePaths: ['/workspace/project/canvas.md'],
+          },
+        },
+      ],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(
+      await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'),
+      '请结合当前画布背景给出建议',
+    );
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
+        systemPrompt: '默认 system\n\n全局工作区指令\n\n画布级附加指令',
+        contextFragments: [
+          {
+            type: 'file',
+            path: '/workspace/project/README.md',
+            label: 'README.md',
+            content: '# Project README',
+          },
+          {
+            type: 'file',
+            path: '/workspace/project/canvas.md',
+            label: 'canvas.md',
+            content: 'export const canvas = true;\n',
+          },
+        ],
+      }));
+    });
+  });
+
   it('shows checkpoints in the history menu and restores from there', async () => {
     const user = userEvent.setup();
 

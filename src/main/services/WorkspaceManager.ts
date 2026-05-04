@@ -6,6 +6,8 @@ import { Workspace, Settings } from '../types/workspace';
 import type {
   CanvasActivityEvent,
   CanvasBlock,
+  CanvasBlockLinkKind,
+  CanvasReportSectionKind,
   CanvasWorkspace,
   CanvasWorkspaceTemplate,
 } from '../../shared/types/canvas';
@@ -33,6 +35,9 @@ type PersistedWindow =
   & { layout: PersistedLayoutNode };
 
 type PersistedWorkspace = Omit<Workspace, 'windows'> & { windows: PersistedWindow[] };
+
+const CANVAS_BLOCK_LINK_KINDS: CanvasBlockLinkKind[] = ['context', 'depends-on', 'evidence', 'related'];
+const CANVAS_REPORT_SECTION_KINDS: CanvasReportSectionKind[] = ['overview', 'notes', 'blocks', 'links', 'activity'];
 
 /**
  * WorkspaceManager 接口
@@ -808,7 +813,29 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       return false;
     }
 
-    return canvasWorkspace.blocks.every((block) => this.validateCanvasBlock(block));
+    if (!canvasWorkspace.blocks.every((block) => this.validateCanvasBlock(block))) {
+      return false;
+    }
+
+    if (canvasWorkspace.links !== undefined) {
+      if (!Array.isArray(canvasWorkspace.links)) {
+        return false;
+      }
+
+      if (!canvasWorkspace.links.every((link) => this.validateCanvasBlockLink(link))) {
+        return false;
+      }
+    }
+
+    if (canvasWorkspace.chatDefaults !== undefined && !this.validateCanvasChatDefaults(canvasWorkspace.chatDefaults)) {
+      return false;
+    }
+
+    if (canvasWorkspace.exportSettings !== undefined && !this.validateCanvasExportSettings(canvasWorkspace.exportSettings)) {
+      return false;
+    }
+
+    return true;
   }
 
   private validateCanvasViewport(value: unknown): boolean {
@@ -836,6 +863,13 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       && typeof template.createdAt === 'string'
       && typeof template.updatedAt === 'string'
       && Array.isArray(template.blocks)
+      && template.blocks.every((block) => this.validateCanvasTemplateBlockDefinition(block))
+      && (template.links === undefined || (
+        Array.isArray(template.links)
+        && template.links.every((link) => this.validateCanvasTemplateLinkDefinition(link))
+      ))
+      && (template.chatDefaults === undefined || this.validateCanvasChatDefaults(template.chatDefaults))
+      && (template.exportSettings === undefined || this.validateCanvasExportSettings(template.exportSettings))
     );
   }
 
@@ -851,6 +885,95 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       && typeof event.timestamp === 'string'
       && typeof event.type === 'string'
       && typeof event.title === 'string'
+    );
+  }
+
+  private validateCanvasBlockLink(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const link = value as Record<string, unknown>;
+    return (
+      typeof link.id === 'string'
+      && typeof link.fromBlockId === 'string'
+      && typeof link.toBlockId === 'string'
+      && typeof link.kind === 'string'
+      && CANVAS_BLOCK_LINK_KINDS.includes(link.kind as CanvasBlockLinkKind)
+      && typeof link.createdAt === 'string'
+      && (link.label === undefined || typeof link.label === 'string')
+    );
+  }
+
+  private validateCanvasChatDefaults(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const defaults = value as Record<string, unknown>;
+    return (
+      (defaults.workspaceInstructions === undefined || typeof defaults.workspaceInstructions === 'string')
+      && (defaults.contextFilePaths === undefined || (
+        Array.isArray(defaults.contextFilePaths)
+        && defaults.contextFilePaths.every((item) => typeof item === 'string')
+      ))
+    );
+  }
+
+  private validateCanvasExportSettings(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const settings = value as Record<string, unknown>;
+    return (
+      (settings.title === undefined || typeof settings.title === 'string')
+      && (settings.includeActivity === undefined || typeof settings.includeActivity === 'boolean')
+      && (settings.includeLinks === undefined || typeof settings.includeLinks === 'boolean')
+      && (settings.includeBlockSummaries === undefined || typeof settings.includeBlockSummaries === 'boolean')
+      && (settings.sections === undefined || (
+        Array.isArray(settings.sections)
+        && settings.sections.every((item) => typeof item === 'string')
+      ))
+    );
+  }
+
+  private validateCanvasTemplateBlockDefinition(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const block = value as Record<string, unknown>;
+    return (
+      typeof block.id === 'string'
+      && typeof block.kind === 'string'
+      && typeof block.x === 'number'
+      && typeof block.y === 'number'
+      && typeof block.width === 'number'
+      && typeof block.height === 'number'
+      && (block.label === undefined || typeof block.label === 'string')
+      && (block.displayMode === undefined || typeof block.displayMode === 'string')
+      && (block.noteContent === undefined || typeof block.noteContent === 'string')
+      && (block.workingDirectory === undefined || typeof block.workingDirectory === 'string')
+      && (block.command === undefined || typeof block.command === 'string')
+      && (block.url === undefined || typeof block.url === 'string')
+      && (block.linkedPaneId === undefined || typeof block.linkedPaneId === 'string')
+    );
+  }
+
+  private validateCanvasTemplateLinkDefinition(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const link = value as Record<string, unknown>;
+    return (
+      typeof link.id === 'string'
+      && typeof link.fromBlockId === 'string'
+      && typeof link.toBlockId === 'string'
+      && typeof link.kind === 'string'
+      && CANVAS_BLOCK_LINK_KINDS.includes(link.kind as CanvasBlockLinkKind)
+      && (link.label === undefined || typeof link.label === 'string')
     );
   }
 
@@ -1010,7 +1133,33 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         zoom: canvasWorkspace.viewport?.zoom ?? 1,
       },
       blocks: Array.isArray(canvasWorkspace.blocks) ? canvasWorkspace.blocks : [],
+      links: Array.isArray(canvasWorkspace.links) ? canvasWorkspace.links : [],
       nextZIndex: Number.isFinite(canvasWorkspace.nextZIndex) ? canvasWorkspace.nextZIndex : 1,
+      chatDefaults: canvasWorkspace.chatDefaults
+        ? {
+            workspaceInstructions: typeof canvasWorkspace.chatDefaults.workspaceInstructions === 'string'
+              ? canvasWorkspace.chatDefaults.workspaceInstructions
+              : '',
+            contextFilePaths: Array.isArray(canvasWorkspace.chatDefaults.contextFilePaths)
+              ? canvasWorkspace.chatDefaults.contextFilePaths.map((item) => PathValidator.expandHomePath(item))
+              : [],
+          }
+        : undefined,
+      exportSettings: canvasWorkspace.exportSettings
+        ? {
+            title: typeof canvasWorkspace.exportSettings.title === 'string'
+              ? canvasWorkspace.exportSettings.title
+              : undefined,
+            includeActivity: canvasWorkspace.exportSettings.includeActivity ?? true,
+            includeLinks: canvasWorkspace.exportSettings.includeLinks ?? true,
+            includeBlockSummaries: canvasWorkspace.exportSettings.includeBlockSummaries ?? true,
+            sections: Array.isArray(canvasWorkspace.exportSettings.sections)
+              ? canvasWorkspace.exportSettings.sections.filter((item): item is CanvasReportSectionKind => (
+                CANVAS_REPORT_SECTION_KINDS.includes(item as CanvasReportSectionKind)
+              ))
+              : undefined,
+          }
+        : undefined,
     }));
   }
 

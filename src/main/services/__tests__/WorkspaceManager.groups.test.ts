@@ -169,4 +169,43 @@ describe('WorkspaceManager group and canvas normalization', () => {
       sizes: [0.5, 0.5],
     });
   });
+
+  it('normalizes canvas context file paths and filters invalid export sections', async () => {
+    await fs.writeJson(workspacePath, {
+      version: '3.0',
+      windows: [],
+      groups: [],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Canvas',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z',
+          blocks: [],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 1,
+          chatDefaults: {
+            workspaceInstructions: 'Investigate carefully',
+            contextFilePaths: ['~/docs/runbook.md'],
+          },
+          exportSettings: {
+            sections: ['overview', 'invalid-section'],
+          },
+        },
+      ],
+      settings: {
+        notificationsEnabled: true,
+        theme: 'dark',
+        autoSave: true,
+        autoSaveInterval: 5,
+      },
+      lastSavedAt: '2026-05-03T00:00:00.000Z',
+    }, { spaces: 2 });
+
+    const loaded = await workspaceManager.loadWorkspace();
+    expect(loaded.canvasWorkspaces[0]?.chatDefaults?.contextFilePaths).toEqual([
+      path.join(process.env.HOME || '', 'docs/runbook.md'),
+    ]);
+    expect(loaded.canvasWorkspaces[0]?.exportSettings?.sections).toEqual(['overview']);
+  });
 });
