@@ -6,6 +6,7 @@ import { useWindowStore } from '../../stores/windowStore';
 import { createSinglePaneWindow } from '../../utils/layoutHelpers';
 import { createGroup } from '../../utils/groupLayoutHelpers';
 import { WindowStatus, type Window } from '../../types/window';
+import type { CanvasWorkspace } from '../../../shared/types/canvas';
 
 const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'synapse:terminal-sidebar-preferences';
 const mockCreateWindowDialog = vi.fn();
@@ -59,6 +60,19 @@ function updateSinglePaneWindowStatus(window: Window, status: WindowStatus): Win
   };
 }
 
+function createCanvasWorkspace(overrides: Partial<CanvasWorkspace> = {}): CanvasWorkspace {
+  return {
+    id: 'canvas-1',
+    name: 'Incident Map',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    blocks: [],
+    viewport: { tx: 0, ty: 0, zoom: 1 },
+    nextZIndex: 1,
+    ...overrides,
+  };
+}
+
 describe('Terminal Sidebar', () => {
   beforeEach(() => {
     mockCreateWindowDialog.mockClear();
@@ -74,6 +88,7 @@ describe('Terminal Sidebar', () => {
       sidebarWidth: 200,
       terminalSidebarSections: {
         archived: false,
+        canvas: true,
         local: true,
         ssh: true,
       },
@@ -413,6 +428,35 @@ describe('Terminal Sidebar', () => {
     latestDialogProps.onLocalWindowCreated?.({ id: 'window-created-from-sidebar' });
 
     expect(onWindowSelect).toHaveBeenCalledWith('window-created-from-sidebar');
+  });
+
+  it('shows canvas workspaces in the dedicated terminal sidebar filter', async () => {
+    const user = userEvent.setup();
+    const onCanvasSelect = vi.fn();
+    const localWindow = createRunningWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      canvasWorkspaces: [createCanvasWorkspace()],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      terminalSidebarFilter: 'canvas',
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        activeCanvasWorkspaceId={null}
+        onWindowSelect={vi.fn()}
+        onCanvasSelect={onCanvasSelect}
+      />,
+    );
+
+    expect(screen.getByText('Incident Map')).toBeInTheDocument();
+    expect(screen.queryByText('Local Terminal')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Incident Map'));
+    expect(onCanvasSelect).toHaveBeenCalledWith('canvas-1');
   });
 
   it('renders the open code pane action above new terminal and triggers it', async () => {

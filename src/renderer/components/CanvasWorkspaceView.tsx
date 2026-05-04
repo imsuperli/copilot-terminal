@@ -66,11 +66,18 @@ import {
   idePopupInputClassName,
   idePopupSecondaryButtonClassName,
 } from './ui/ide-popup';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+
+const LazyQuickSwitcher = React.lazy(async () => ({
+  default: (await import('./QuickSwitcher')).QuickSwitcher,
+}));
 
 interface CanvasWorkspaceViewProps {
   canvasWorkspace: CanvasWorkspace;
   sshProfiles?: SSHProfile[];
   onOpenWindow?: (windowId: string) => void;
+  onOpenCanvasWorkspace?: (canvasWorkspaceId: string) => void;
+  onOpenGroup?: (groupId: string) => void;
   renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => React.ReactNode;
   onExitWorkspace?: () => void | Promise<void>;
 }
@@ -208,6 +215,8 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   canvasWorkspace,
   sshProfiles = [],
   onOpenWindow,
+  onOpenCanvasWorkspace,
+  onOpenGroup,
   renderLiveWindow,
   onExitWorkspace,
 }) => {
@@ -242,6 +251,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const [workspaceDeleteOpen, setWorkspaceDeleteOpen] = useState(false);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState(canvasWorkspace.name);
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
+  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [canvasSize, setCanvasSize] = useState({
     w: typeof window === 'undefined' ? 1280 : window.innerWidth,
     h: typeof window === 'undefined' ? 720 : window.innerHeight,
@@ -1479,6 +1489,9 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       }
 
       if (event.key === 'Escape') {
+        if (quickSwitcherOpen) {
+          return;
+        }
         setDragState(null);
         clearSelection();
       }
@@ -1486,7 +1499,21 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canvasWorkspace.blocks, clearSelection, deleteBlocks, selectedBlockIds]);
+  }, [canvasWorkspace.blocks, clearSelection, deleteBlocks, quickSwitcherOpen, selectedBlockIds]);
+
+  useKeyboardShortcuts({
+    onCtrlTab: () => {
+      setQuickSwitcherOpen(true);
+    },
+    onEscape: () => {
+      if (quickSwitcherOpen) {
+        setQuickSwitcherOpen(false);
+        return true;
+      }
+      return false;
+    },
+    enabled: true,
+  });
 
   const worldStyle = useMemo(() => ({
     transform: `translate(${canvasWorkspace.viewport.tx}px, ${canvasWorkspace.viewport.ty}px) scale(${canvasWorkspace.viewport.zoom})`,
@@ -2145,6 +2172,21 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           </button>
         </div>
       </Dialog>
+
+      {quickSwitcherOpen && (
+        <React.Suspense fallback={null}>
+          <LazyQuickSwitcher
+            isOpen={quickSwitcherOpen}
+            currentWindowId={null}
+            currentCanvasWorkspaceId={canvasWorkspace.id}
+            sshProfiles={sshProfiles}
+            onSelect={(windowId) => onOpenWindow?.(windowId)}
+            onSelectGroup={onOpenGroup}
+            onSelectCanvas={onOpenCanvasWorkspace}
+            onClose={() => setQuickSwitcherOpen(false)}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

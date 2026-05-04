@@ -1,4 +1,5 @@
 import { SSHProfile } from '../../shared/types/ssh';
+import { CanvasWorkspace } from '../../shared/types/canvas';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { WindowGroup } from '../../shared/types/window-group';
 import { Window, WindowStatus } from '../types/window';
@@ -110,6 +111,7 @@ export function getVisibleStandaloneWindows(
 export function getSidebarCardCounts(
   windows: Window[],
   groups: WindowGroup[],
+  canvasWorkspaces: CanvasWorkspace[],
   options: CardCollectionOptions = {},
 ) {
   const context = createCardCollectionContext(windows, groups, options);
@@ -118,6 +120,8 @@ export function getSidebarCardCounts(
   const archivedVisibleWindows = visibleStandaloneWindows.filter((window) => window.archived);
   const activeGroups = groups.filter((group) => !group.archived);
   const archivedGroups = groups.filter((group) => group.archived);
+  const activeCanvasWorkspaces = canvasWorkspaces.filter((canvasWorkspace) => !canvasWorkspace.archived);
+  const archivedCanvasWorkspaces = canvasWorkspaces.filter((canvasWorkspace) => canvasWorkspace.archived);
   const sshProfileCount = context.sshEnabled ? context.sshProfileIds.size : 0;
 
   const localGroupCount = activeGroups.filter((group) => (
@@ -128,9 +132,10 @@ export function getSidebarCardCounts(
   )).length;
 
   return {
-    all: activeGroups.length + activeVisibleWindows.length + sshProfileCount + archivedGroups.length + archivedVisibleWindows.length,
-    active: activeGroups.length + activeVisibleWindows.length + sshProfileCount,
-    archived: archivedGroups.length + archivedVisibleWindows.length,
+    all: activeCanvasWorkspaces.length + activeGroups.length + activeVisibleWindows.length + sshProfileCount + archivedCanvasWorkspaces.length + archivedGroups.length + archivedVisibleWindows.length,
+    active: activeCanvasWorkspaces.length + activeGroups.length + activeVisibleWindows.length + sshProfileCount,
+    archived: archivedCanvasWorkspaces.length + archivedGroups.length + archivedVisibleWindows.length,
+    canvas: activeCanvasWorkspaces.length,
     local: activeVisibleWindows.filter((window) => getWindowKind(window) !== 'ssh').length + localGroupCount,
     ssh: activeVisibleWindows.filter((window) => getWindowKind(window) === 'ssh').length + sshGroupCount + sshProfileCount,
   };

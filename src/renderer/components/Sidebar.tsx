@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { FileCode2, Plus, Settings } from 'lucide-react';
+import { FileCode2, Orbit, Plus, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
@@ -12,6 +12,7 @@ import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { StatusDot } from './StatusDot';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import type { WindowGroup } from '../../shared/types/window-group';
+import type { CanvasWorkspace } from '../../shared/types/canvas';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { SidebarToggleIcon } from './icons/SidebarToggleIcon';
 import { getPersistableWindows } from '../utils/sshWindowBindings';
@@ -19,8 +20,10 @@ import { getPersistableWindows } from '../utils/sshWindowBindings';
 interface SidebarProps {
   activeWindowId: string | null;
   activeGroupId?: string | null;
+  activeCanvasWorkspaceId?: string | null;
   onWindowSelect: (windowId: string) => void;
   onGroupSelect?: (groupId: string) => void;
+  onCanvasSelect?: (canvasWorkspaceId: string) => void;
   onWindowContextMenu?: (windowId: string, e: React.MouseEvent) => void;
   onSettingsClick?: () => void;
   onOpenCodePane?: () => void;
@@ -35,6 +38,8 @@ interface SidebarProps {
 type SidebarItem =
   | { kind: 'group'; id: string; status: WindowStatus; group: WindowGroup; archived: boolean }
   | { kind: 'window'; id: string; status: WindowStatus; window: Window; archived: boolean };
+
+type CanvasSidebarItem = { kind: 'canvas'; id: string; canvasWorkspace: CanvasWorkspace; archived: boolean };
 
 type SidebarWindowIndex = {
   groupWindowIdsByGroupId: Map<string, string[]>;
@@ -101,8 +106,10 @@ function getHighestStatus(statuses: WindowStatus[]): WindowStatus {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeWindowId,
   activeGroupId,
+  activeCanvasWorkspaceId,
   onWindowSelect,
   onGroupSelect,
+  onCanvasSelect,
   onWindowContextMenu,
   onSettingsClick,
   onOpenCodePane,
@@ -120,6 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const setSidebarWidth = useWindowStore((state) => state.setSidebarWidth);
   const windows = useWindowStore((state) => state.windows);
   const groups = useWindowStore((state) => state.groups);
+  const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
   const terminalSidebarFilter = useWindowStore((state) => state.terminalSidebarFilter);
   const setTerminalSidebarFilter = useWindowStore((state) => state.setTerminalSidebarFilter);
 
@@ -148,6 +156,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     () => groups.filter((group) => group.archived),
     [groups],
   );
+  const activeCanvasItems = useMemo<CanvasSidebarItem[]>(() => (
+    canvasWorkspaces
+      .filter((canvasWorkspace) => !canvasWorkspace.archived)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .map((canvasWorkspace) => ({
+        kind: 'canvas',
+        id: canvasWorkspace.id,
+        canvasWorkspace,
+        archived: false,
+      }))
+  ), [canvasWorkspaces]);
   const sidebarWindowIndex = useMemo<SidebarWindowIndex>(() => {
     const windowById = new Map(windows.map((window) => [window.id, window]));
     const windowKindById = new Map<string, NonNullable<Window['kind']>>();
@@ -294,8 +313,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [activeItems, sidebarWindowIndex]);
 
   const allItems = useMemo(
-    () => [...activeItems, ...archivedItems],
-    [activeItems, archivedItems],
+    () => [...activeCanvasItems, ...activeItems, ...archivedItems],
+    [activeCanvasItems, activeItems, archivedItems],
   );
 
   const visibleItems = useMemo(() => {
@@ -307,12 +326,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return sshWindows;
     }
 
+    if (terminalSidebarFilter === 'canvas') {
+      return activeCanvasItems;
+    }
+
     if (terminalSidebarFilter === 'archived') {
       return archivedItems;
     }
 
     return allItems;
-  }, [allItems, archivedItems, localWindows, sshWindows, terminalSidebarFilter]);
+  }, [activeCanvasItems, allItems, archivedItems, localWindows, sshWindows, terminalSidebarFilter]);
 
   const handleWindowContextMenu = (windowId: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -367,7 +390,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
     document.addEventListener('mouseup', handleMouseUp);
   }, [applySidebarWidthPreview, setSidebarWidth]);
 
-  const renderSidebarItem = (item: SidebarItem) => {
+  const renderSidebarItem = (item: SidebarItem | CanvasSidebarItem) => {
+    if (item.kind === 'canvas') {
+      return (
+        <SidebarCanvasItem
+          key={item.id}
+          canvasWorkspace={item.canvasWorkspace}
+          isActive={item.id === activeCanvasWorkspaceId}
+          isExpanded={sidebarExpanded}
+          onClick={() => onCanvasSelect?.(item.id)}
+        />
+      );
+    }
+
     if (item.kind === 'group') {
       return (
         <SidebarGroupItem
@@ -454,6 +489,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <option value="all">{t('sidebar.tab.all')}</option>
               <option value="local">{t('sidebar.tab.local')}</option>
               <option value="ssh">{t('sidebar.tab.ssh')}</option>
+              <option value="canvas">{t('sidebar.tab.canvas')}</option>
               <option value="archived">{t('sidebar.tab.archived')}</option>
             </select>
           </div>
@@ -769,6 +805,108 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
       <div className="flex-1 min-w-0">
         <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{group.name}</div>
         <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('quickSwitcher.windowCount', { count: windowCount })}</div>
+      </div>
+    </button>
+  );
+};
+
+interface SidebarCanvasItemProps {
+  canvasWorkspace: CanvasWorkspace;
+  isActive: boolean;
+  isExpanded: boolean;
+  onClick: () => void;
+}
+
+const SidebarCanvasItem: React.FC<SidebarCanvasItemProps> = ({
+  canvasWorkspace,
+  isActive,
+  isExpanded,
+  onClick,
+}) => {
+  const { t, language } = useI18n();
+  const itemSurfaceClassName = isActive
+    ? 'border-[rgb(var(--border))] bg-[rgb(var(--accent))]'
+    : sidebarCardSurfaceClassName;
+  const blockCount = canvasWorkspace.blocks.length;
+  const windowBlockCount = canvasWorkspace.blocks.filter((block) => block.type === 'window').length;
+  const relativeTime = useMemo(() => {
+    try {
+      return new Intl.RelativeTimeFormat(language, { numeric: 'auto' }).format(0, 'second');
+    } catch {
+      return '';
+    }
+  }, [language]);
+
+  const updatedAt = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat(language, {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(canvasWorkspace.updatedAt));
+    } catch {
+      return relativeTime;
+    }
+  }, [canvasWorkspace.updatedAt, language, relativeTime]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  }, [onClick]);
+
+  if (!isExpanded) {
+    return (
+      <Tooltip.Provider>
+        <Tooltip.Root delayDuration={300}>
+          <Tooltip.Trigger asChild>
+            <button
+              onClick={handleClick}
+              className={`flex h-10 w-full items-center justify-center border transition-colors ${itemSurfaceClassName}`}
+              aria-label={canvasWorkspace.name}
+            >
+              <div className="relative">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]">
+                  <Orbit size={14} />
+                </span>
+              </div>
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className={sidebarTooltipClassName}
+              side="right"
+              sideOffset={5}
+            >
+              {`${canvasWorkspace.name} (${t('quickSwitcher.canvasBlockCount', { count: blockCount })})`}
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      </Tooltip.Provider>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${itemSurfaceClassName}`}
+    >
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[rgb(var(--primary))]/22 bg-[linear-gradient(180deg,rgb(var(--primary))/0.14_0%,color-mix(in_srgb,rgb(var(--card))_72%,transparent)_100%)] text-[rgb(var(--foreground))]">
+        <Orbit size={15} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{canvasWorkspace.name}</div>
+        <div className="mt-0.5 truncate text-xs text-[rgb(var(--muted-foreground))]">
+          {canvasWorkspace.workingDirectory || t('canvas.cardSubtitle')}
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
+          <span>{t('canvas.windowBlocks', { count: windowBlockCount })}</span>
+          <span>·</span>
+          <span>{t('quickSwitcher.canvasBlockCount', { count: blockCount })}</span>
+          <span>·</span>
+          <span>{updatedAt}</span>
+        </div>
       </div>
     </button>
   );

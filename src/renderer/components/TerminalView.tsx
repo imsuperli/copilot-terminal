@@ -233,6 +233,7 @@ export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
   onWindowSwitch: (windowId: string) => void;
+  onCanvasSwitch?: (canvasWorkspaceId: string) => void;
   isActive: boolean;
   /** 嵌入模式：在 GroupView 中使用时隐藏侧边栏和返回按钮，但保留顶部工具栏 */
   embedded?: boolean;
@@ -259,6 +260,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   window: terminalWindow,
   onReturn,
   onWindowSwitch,
+  onCanvasSwitch,
   isActive,
   embedded = false,
   canvasEmbedded = false,
@@ -1219,6 +1221,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [onGroupSwitch]
   );
 
+  const handleQuickSwitcherSelectCanvas = useCallback(
+    (canvasWorkspaceId: string) => {
+      setQuickSwitcherOpen(false);
+      onCanvasSwitch?.(canvasWorkspaceId);
+    },
+    [onCanvasSwitch],
+  );
+
   // 处理拖拽窗口到终端区域创建或调整分组
   const handleWindowDrop = useCallback(
     async (dragItem: WindowCardDragItem, dropResult: DropResult) => {
@@ -1639,8 +1649,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {!embedded && (
         <Sidebar
           activeWindowId={sidebarActiveWindowId}
+          activeCanvasWorkspaceId={null}
           onWindowSelect={onWindowSwitch}
           onGroupSelect={onGroupSwitch}
+          onCanvasSelect={onCanvasSwitch}
           onSettingsClick={() => {
             setHasMountedSettingsPanel(true);
             setIsSettingsPanelOpen(true);
@@ -1747,6 +1759,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             sshProfiles={sshProfiles}
             onSelect={handleQuickSwitcherSelect}
             onSelectGroup={handleQuickSwitcherSelectGroup}
+            onSelectCanvas={handleQuickSwitcherSelectCanvas}
             onClose={() => setQuickSwitcherOpen(false)}
           />
         </Suspense>

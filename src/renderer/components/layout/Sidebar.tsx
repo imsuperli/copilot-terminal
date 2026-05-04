@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, Orbit, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
@@ -63,6 +63,7 @@ export function Sidebar({
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const groups = useWindowStore((state) => state.groups);
+  const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
   const addWindow = useWindowStore((state) => state.addWindow);
   const customCategories = useWindowStore((state) => state.customCategories);
   const syncCustomCategories = useWindowStore((state) => state.syncCustomCategories);
@@ -78,14 +79,15 @@ export function Sidebar({
     ? activeWindows.filter((window) => getWindowKind(window) === 'ssh')
     : [];
   const counts = useMemo(
-    () => getSidebarCardCounts(windows, groups, { sshEnabled, sshProfiles }),
-    [groups, sshEnabled, sshProfiles, windows],
+    () => getSidebarCardCounts(windows, groups, canvasWorkspaces, { sshEnabled, sshProfiles }),
+    [canvasWorkspaces, groups, sshEnabled, sshProfiles, windows],
   );
   const allCount = counts.all;
   const activeCount = counts.active;
   const archivedCount = counts.archived;
   const localCount = counts.local;
   const sshCount = counts.ssh;
+  const canvasCount = counts.canvas;
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -394,6 +396,21 @@ export function Sidebar({
               <span>{t('sidebar.tab.ssh')}</span>
               {sshCount > 0 && (
                 <span className="ml-auto text-xs">{sshCount}</span>
+              )}
+            </button>
+
+            <button
+              onClick={() => onTabChange?.('canvas')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                currentTab === 'canvas'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                  : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+              }`}
+            >
+              <Orbit className="h-4 w-4" />
+              <span>{t('sidebar.tab.canvas')}</span>
+              {canvasCount > 0 && (
+                <span className="ml-auto text-xs">{canvasCount}</span>
               )}
             </button>
 

@@ -392,6 +392,35 @@ describe('CanvasWorkspaceView', () => {
     });
   });
 
+  it('opens quick switcher from canvas mode and switches to another canvas', async () => {
+    const user = userEvent.setup();
+    const onOpenCanvasWorkspace = vi.fn();
+
+    useWindowStore.setState({
+      canvasWorkspaces: [
+        createCanvasWorkspace(),
+        {
+          ...createCanvasWorkspace(),
+          id: 'canvas-2',
+          name: 'Follow-up Board',
+        },
+      ],
+    });
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+        onOpenCanvasWorkspace={onOpenCanvasWorkspace}
+      />,
+    );
+
+    await user.keyboard('{Control>}{Tab}{/Control}');
+    await screen.findByText('Follow-up Board');
+    await user.click(screen.getByText('Follow-up Board'));
+
+    expect(onOpenCanvasWorkspace).toHaveBeenCalledWith('canvas-2');
+  });
+
   it('sends selected blocks to AI through a chat block', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({

@@ -48,7 +48,7 @@ type CardItem =
   | { type: 'sshProfile'; data: SSHProfile }
   | { type: 'canvasWorkspace'; data: CanvasWorkspace };
 
-const BUILTIN_TABS = new Set(['all', 'active', 'archived', 'local', 'ssh']);
+const BUILTIN_TABS = new Set(['all', 'active', 'archived', 'local', 'ssh', 'canvas']);
 
 function sortGroupsByCreatedAt(groups: WindowGroup[]): WindowGroup[] {
   return [...groups].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -363,6 +363,10 @@ export const CardGrid = React.memo<CardGridProps>(({
         ...sortWindows(sshWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
         ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
       ];
+    }
+
+    if (currentTab === 'canvas') {
+      return activeCanvasWorkspaceItems;
     }
 
     // 自定义分类标签
@@ -992,11 +996,21 @@ export const CardGrid = React.memo<CardGridProps>(({
   }
 
   // 归档标签空状态
-  if (currentTab === 'archived' && cardItems.length === 0) {
+  if ((currentTab === 'archived' || currentTab === 'canvas') && cardItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-zinc-500">
-        <Archive size={48} className="mb-4 opacity-50" />
-        <p className="text-lg">{t('archived.emptyTitle')}</p>
+        {currentTab === 'canvas' ? (
+          <>
+            <Folder size={48} className="mb-4 opacity-50" />
+            <p className="text-lg">{t('canvas.emptyTitle')}</p>
+            <p className="text-sm mt-2">{t('canvas.emptyDescription')}</p>
+          </>
+        ) : (
+          <>
+            <Archive size={48} className="mb-4 opacity-50" />
+            <p className="text-lg">{t('archived.emptyTitle')}</p>
+          </>
+        )}
       </div>
     );
   }

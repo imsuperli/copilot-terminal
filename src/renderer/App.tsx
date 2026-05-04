@@ -152,7 +152,9 @@ function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): s
 }
 
 const MountedTerminalSurface = React.memo(({
+  activeCanvasWorkspaceId,
   isVisible,
+  onCanvasSwitch,
   onGroupSwitch,
   onReturn,
   onSSHProfileSaved,
@@ -161,7 +163,9 @@ const MountedTerminalSurface = React.memo(({
   sshProfiles,
   windowId,
 }: {
+  activeCanvasWorkspaceId: string | null;
   isVisible: boolean;
+  onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
   onReturn: () => void;
   onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
@@ -211,6 +215,7 @@ const MountedTerminalSurface = React.memo(({
         window={terminalWindow}
         onReturn={onReturn}
         onWindowSwitch={onWindowSwitch}
+        onCanvasSwitch={onCanvasSwitch}
         onGroupSwitch={onGroupSwitch}
         isActive={isVisible}
         sshEnabled={sshEnabled}
@@ -225,12 +230,14 @@ MountedTerminalSurface.displayName = 'MountedTerminalSurface';
 
 const ActiveGroupSurface = React.memo(({
   activeGroupId,
+  onCanvasSwitch,
   onGroupSwitch,
   onReturn,
   onWindowSwitch,
   sshProfiles,
 }: {
   activeGroupId: string;
+  onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
   onReturn: () => void;
   onWindowSwitch: (windowId: string) => void;
@@ -260,6 +267,7 @@ const ActiveGroupSurface = React.memo(({
         onReturn={onReturn}
         onWindowSwitch={onWindowSwitch}
         onGroupSwitch={onGroupSwitch}
+        onCanvasSwitch={onCanvasSwitch}
         isActive={true}
         sshProfiles={sshProfiles}
       />
@@ -1157,10 +1165,47 @@ function AppContent() {
     switchToWindow(windowId);
   }, [switchToWindow]);
 
+  const handleWindowSwitchInCurrentContext = useCallback((windowId: string) => {
+    if (canvasTerminalReturnTargetId) {
+      switchToWindow(windowId);
+      return;
+    }
+
+    setCanvasTerminalReturnTargetId(null);
+    switchToWindow(windowId);
+  }, [canvasTerminalReturnTargetId, switchToWindow]);
+
+  const handleWindowSwitchFromCanvasContext = useCallback((windowId: string) => {
+    setCanvasTerminalReturnTargetId(activeCanvasWorkspaceId ?? currentActiveCanvasWorkspaceId ?? null);
+    switchToWindow(windowId);
+  }, [activeCanvasWorkspaceId, currentActiveCanvasWorkspaceId, switchToWindow]);
+
   const handleOpenWindowFromCanvas = useCallback((windowId: string) => {
     setCanvasTerminalReturnTargetId(activeCanvasWorkspaceId ?? currentActiveCanvasWorkspaceId ?? null);
     switchToWindow(windowId);
   }, [activeCanvasWorkspaceId, currentActiveCanvasWorkspaceId, switchToWindow]);
+
+  const handleCanvasSwitchFromTerminalContext = useCallback(async (canvasWorkspaceId: string) => {
+    setCanvasTerminalReturnTargetId(null);
+    await switchToCanvasView(canvasWorkspaceId);
+  }, [switchToCanvasView]);
+
+  const handleGroupSwitchFromCanvasContext = useCallback(async (groupId: string) => {
+    setCanvasTerminalReturnTargetId(activeCanvasWorkspaceId ?? currentActiveCanvasWorkspaceId ?? null);
+    setActiveGroup(groupId);
+
+    const targetGroup = useWindowStore.getState().groups.find((group) => group.id === groupId);
+    if (!targetGroup) {
+      console.error('Target group not found:', groupId);
+      return;
+    }
+
+    try {
+      await window.electronAPI.switchToTerminalView(targetGroup.activeWindowId);
+    } catch (error) {
+      console.error('Failed to notify main process of view change:', error);
+    }
+  }, [activeCanvasWorkspaceId, currentActiveCanvasWorkspaceId, setActiveGroup]);
 
   const handleCreateWindow = useCallback(() => {
     setCanvasCreateContextWorkspaceId(null);
@@ -1239,10 +1284,19 @@ function AppContent() {
   }, [setActiveGroup]);
 
   // 从组视图返回
-  const handleReturnFromGroup = useCallback(() => {
+  const handleReturnFromGroup = useCallback(async () => {
     setActiveGroup(null);
-    switchToUnifiedView();
-  }, [setActiveGroup, switchToUnifiedView]);
+
+    if (canvasTerminalReturnTargetId) {
+      const targetCanvas = useWindowStore.getState().getCanvasWorkspaceById(canvasTerminalReturnTargetId);
+      if (targetCanvas && !targetCanvas.archived) {
+        await switchToCanvasView(canvasTerminalReturnTargetId);
+        return;
+      }
+    }
+
+    await switchToUnifiedView();
+  }, [canvasTerminalReturnTargetId, setActiveGroup, switchToCanvasView, switchToUnifiedView]);
 
   // 切换到其他组
   const handleGroupSwitch = useCallback(async (groupId: string) => {
@@ -1263,6 +1317,27 @@ function AppContent() {
       console.error('Failed to notify main process of view change:', error);
     }
   }, [setActiveGroup]);
+
+  const handleGroupSwitchInCurrentContext = useCallback(async (groupId: string) => {
+    if (canvasTerminalReturnTargetId) {
+      setActiveGroup(groupId);
+
+      const targetGroup = useWindowStore.getState().groups.find((group) => group.id === groupId);
+      if (!targetGroup) {
+        console.error('Target group not found:', groupId);
+        return;
+      }
+
+      try {
+        await window.electronAPI.switchToTerminalView(targetGroup.activeWindowId);
+      } catch (error) {
+        console.error('Failed to notify main process of view change:', error);
+      }
+      return;
+    }
+
+    await handleGroupSwitch(groupId);
+  }, [canvasTerminalReturnTargetId, handleGroupSwitch, setActiveGroup]);
   const activeSSHHostKeyPrompt = sshHostKeyPromptQueue[0] ?? null;
 
   const mountedTerminalWindowIdSet = useMemo(() => {
@@ -1466,11 +1541,13 @@ function AppContent() {
         .map((windowId) => (
         <MountedTerminalSurface
           key={windowId}
+          activeCanvasWorkspaceId={currentActiveCanvasWorkspaceId}
           windowId={windowId}
           isVisible={currentView === 'terminal' && activeWindowId === windowId}
           onReturn={handleReturnFromTerminal}
-          onWindowSwitch={handleWindowSwitch}
-          onGroupSwitch={handleGroupSwitch}
+          onWindowSwitch={handleWindowSwitchInCurrentContext}
+          onCanvasSwitch={handleCanvasSwitchFromTerminalContext}
+          onGroupSwitch={handleGroupSwitchInCurrentContext}
           sshEnabled={sshEnabled}
           sshProfiles={sshProfiles}
           onSSHProfileSaved={handleSSHProfileSaved}
@@ -1496,6 +1573,8 @@ function AppContent() {
                 canvasWorkspace={canvasWorkspace}
                 sshProfiles={sshProfiles}
                 onOpenWindow={handleOpenWindowFromCanvas}
+                onOpenCanvasWorkspace={handleCanvasSwitchFromTerminalContext}
+                onOpenGroup={handleGroupSwitchFromCanvasContext}
                 renderLiveWindow={(windowId, options) => {
                   const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
                   if (!embeddedWindow) {
@@ -1507,7 +1586,8 @@ function AppContent() {
                       key={`canvas-embedded-${windowId}`}
                       window={embeddedWindow}
                       onReturn={handleReturnFromTerminal}
-                      onWindowSwitch={handleWindowSwitch}
+                      onWindowSwitch={handleWindowSwitchFromCanvasContext}
+                      onCanvasSwitch={handleCanvasSwitchFromTerminalContext}
                       isActive={options.isActive}
                       embedded
                       canvasEmbedded
@@ -1531,8 +1611,9 @@ function AppContent() {
         <ActiveGroupSurface
           activeGroupId={activeGroupId}
           onReturn={handleReturnFromGroup}
-          onWindowSwitch={handleWindowSwitch}
-          onGroupSwitch={handleGroupSwitch}
+          onWindowSwitch={handleWindowSwitchInCurrentContext}
+          onCanvasSwitch={handleCanvasSwitchFromTerminalContext}
+          onGroupSwitch={handleGroupSwitchInCurrentContext}
           sshProfiles={sshProfiles}
         />
       )}

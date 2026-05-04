@@ -39,6 +39,7 @@ export interface GroupViewProps {
   onReturn: () => void;
   onWindowSwitch: (windowId: string) => void;
   onGroupSwitch?: (groupId: string) => void;
+  onCanvasSwitch?: (canvasWorkspaceId: string) => void;
   isActive: boolean;
   sshProfiles?: SSHProfile[];
 }
@@ -52,6 +53,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
   onReturn,
   onWindowSwitch,
   onGroupSwitch,
+  onCanvasSwitch,
   isActive,
   sshProfiles = [],
 }) => {
@@ -208,6 +210,14 @@ export const GroupView: React.FC<GroupViewProps> = ({
       }
     },
     [group.id, onGroupSwitch]
+  );
+
+  const handleQuickSwitcherSelectCanvas = useCallback(
+    (canvasWorkspaceId: string) => {
+      setQuickSwitcherOpen(false);
+      onCanvasSwitch?.(canvasWorkspaceId);
+    },
+    [onCanvasSwitch],
   );
 
   // 处理归档组
@@ -466,6 +476,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         activeGroupId={group.id}
         onWindowSelect={handleSidebarWindowSelect}
         onGroupSelect={handleSidebarGroupSelect}
+        onCanvasSelect={onCanvasSwitch}
         onSettingsClick={handleSettingsClick}
       />
 
@@ -500,6 +511,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
             sshProfiles={sshProfiles}
             onSelect={handleQuickSwitcherSelect}
             onSelectGroup={handleQuickSwitcherSelectGroup}
+            onSelectCanvas={handleQuickSwitcherSelectCanvas}
             onClose={() => setQuickSwitcherOpen(false)}
           />
         </Suspense>

@@ -341,4 +341,17 @@ describe('CardGrid', () => {
       displayMode: 'summary',
     });
   });
+
+  it('renders only canvas workspaces in the dedicated canvas tab', () => {
+    const sourceWindow = makeWindow({ id: 'source', name: 'Source Window' });
+    useWindowStore.setState({
+      windows: [sourceWindow],
+      canvasWorkspaces: [makeCanvasWorkspace()],
+    });
+
+    renderCardGrid({ currentTab: 'canvas' });
+
+    expect(screen.getByText('Ops Board')).toBeInTheDocument();
+    expect(screen.queryByText('Source Window')).not.toBeInTheDocument();
+  });
 });

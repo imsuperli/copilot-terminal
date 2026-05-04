@@ -13,6 +13,7 @@ describe('windowStore terminal sidebar preferences', () => {
       filter: 'archived',
       sections: {
         archived: true,
+        canvas: true,
         local: false,
         ssh: false,
       },
@@ -23,6 +24,7 @@ describe('windowStore terminal sidebar preferences', () => {
     expect(useWindowStore.getState().terminalSidebarFilter).toBe('archived');
     expect(useWindowStore.getState().terminalSidebarSections).toEqual({
       archived: true,
+      canvas: true,
       local: false,
       ssh: false,
     });
@@ -39,6 +41,7 @@ describe('windowStore terminal sidebar preferences', () => {
       filter: 'archived',
       sections: {
         archived: false,
+        canvas: true,
         local: false,
         ssh: false,
       },

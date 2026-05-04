@@ -1,8 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuickSwitcher } from '../QuickSwitcher';
 import { useWindowStore } from '../../stores/windowStore';
+import type { CanvasWorkspace } from '../../../shared/types/canvas';
 import type { SSHProfile } from '../../../shared/types/ssh';
 import { Window, WindowStatus } from '../../types/window';
 
@@ -67,6 +69,20 @@ function createStandaloneSSHWindow(profile: SSHProfile, overrides: Partial<Windo
   };
 }
 
+function createCanvasWorkspace(overrides: Partial<CanvasWorkspace> = {}): CanvasWorkspace {
+  return {
+    id: 'canvas-1',
+    name: 'Incident Map',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    workingDirectory: '/srv/incidents',
+    blocks: [],
+    viewport: { tx: 0, ty: 0, zoom: 1 },
+    nextZIndex: 1,
+    ...overrides,
+  };
+}
+
 describe('QuickSwitcher SSH profile bindings', () => {
   beforeEach(() => {
     useWindowStore.setState({
@@ -79,6 +95,7 @@ describe('QuickSwitcher SSH profile bindings', () => {
       sidebarExpanded: false,
       sidebarWidth: 220,
       customCategories: [],
+      canvasWorkspaces: [],
       terminalSidebarFilter: 'all',
     });
     vi.clearAllMocks();
@@ -166,9 +183,36 @@ describe('QuickSwitcher SSH profile bindings', () => {
     await user.keyboard('{ArrowDown}{Enter}');
 
     expect(
-      screen.getByText(/No matching windows or groups found|没有找到匹配的窗口或窗口组/),
+      screen.getByText(/No matching windows, groups, or canvases found|没有找到匹配的窗口、窗口组或画布/),
     ).toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('includes canvas workspaces and selects them', async () => {
+    const user = userEvent.setup();
+    const onSelectCanvas = vi.fn();
+
+    useWindowStore.setState({
+      canvasWorkspaces: [createCanvasWorkspace()],
+    });
+
+    render(
+      <QuickSwitcher
+        isOpen
+        currentWindowId={null}
+        currentCanvasWorkspaceId={null}
+        onClose={() => {}}
+        onSelect={() => {}}
+        onSelectCanvas={onSelectCanvas}
+      />,
+    );
+
+    await user.type(screen.getByRole('textbox'), 'incident');
+    const canvasLabel = screen.getAllByText((_, element) => element?.textContent === 'Incident Map').at(-1);
+    expect(canvasLabel).toBeDefined();
+    fireEvent.click(canvasLabel!.closest('.cursor-pointer') ?? canvasLabel!);
+
+    expect(onSelectCanvas).toHaveBeenCalledWith('canvas-1');
   });
 });

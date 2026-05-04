@@ -437,14 +437,15 @@ function removePaneNotesForWindowSnapshot(windowId: string, paneIds: string[]): 
   }
 }
 
-export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
-export type TerminalSidebarFilter = 'all' | 'local' | 'ssh' | 'archived';
+export type TerminalSidebarSection = 'archived' | 'local' | 'ssh' | 'canvas';
+export type TerminalSidebarFilter = 'all' | 'local' | 'ssh' | 'canvas' | 'archived';
 
 export const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'synapse:terminal-sidebar-preferences';
 const LEGACY_TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
 
 const DEFAULT_TERMINAL_SIDEBAR_SECTIONS: Record<TerminalSidebarSection, boolean> = {
   archived: false,
+  canvas: true,
   local: true,
   ssh: true,
 };
@@ -469,6 +470,7 @@ function normalizeTerminalSidebarFilter(value: unknown): TerminalSidebarFilter {
     case 'all':
     case 'local':
     case 'ssh':
+    case 'canvas':
     case 'archived':
       return value;
     default:
@@ -509,6 +511,9 @@ function loadTerminalSidebarPreferences(): {
         archived: typeof parsed.sections?.archived === 'boolean'
           ? parsed.sections.archived
           : DEFAULT_TERMINAL_SIDEBAR_SECTIONS.archived,
+        canvas: typeof parsed.sections?.canvas === 'boolean'
+          ? parsed.sections.canvas
+          : DEFAULT_TERMINAL_SIDEBAR_SECTIONS.canvas,
         local: typeof parsed.sections?.local === 'boolean'
           ? parsed.sections.local
           : DEFAULT_TERMINAL_SIDEBAR_SECTIONS.local,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SSHProfile } from '../../../shared/types/ssh';
+import type { CanvasWorkspace } from '../../../shared/types/canvas';
 import { Window, WindowStatus, type Pane } from '../../types/window';
 import { createGroup } from '../groupLayoutHelpers';
 import { createSinglePaneWindow, splitPane } from '../layoutHelpers';
@@ -85,6 +86,19 @@ function makeStandaloneSSHWindow(profileId: string, status: WindowStatus, overri
   return window;
 }
 
+function makeCanvasWorkspace(overrides: Partial<CanvasWorkspace> = {}): CanvasWorkspace {
+  return {
+    id: 'canvas-1',
+    name: 'Incident Map',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    blocks: [],
+    viewport: { tx: 0, ty: 0, zoom: 1 },
+    nextZIndex: 1,
+    ...overrides,
+  };
+}
+
 describe('cardCollection', () => {
   it('matches builtin tab counts with CardGrid-style card visibility', () => {
     const profile = makeSSHProfile();
@@ -115,13 +129,18 @@ describe('cardCollection', () => {
         archivedGroupWindowB,
       ],
       [activeGroup, archivedGroup],
+      [
+        makeCanvasWorkspace({ id: 'canvas-active' }),
+        makeCanvasWorkspace({ id: 'canvas-archived', archived: true }),
+      ],
       { sshEnabled: true, sshProfiles: [profile] },
     );
 
     expect(counts).toEqual({
-      all: 5,
-      active: 3,
-      archived: 2,
+      all: 7,
+      active: 4,
+      archived: 3,
+      canvas: 1,
       local: 2,
       ssh: 2,
     });
@@ -151,7 +170,7 @@ describe('cardCollection', () => {
     expect(counts).toEqual({
       running: 1,
       waiting: 1,
-      paused: 1,
+      inactive: 1,
     });
   });
 });

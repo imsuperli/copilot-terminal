@@ -3,9 +3,11 @@ import { Search } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { QuickSwitcherItem } from './QuickSwitcherItem';
 import { QuickSwitcherGroupItem } from './QuickSwitcherGroupItem';
+import { QuickSwitcherCanvasItem } from './QuickSwitcherCanvasItem';
 import { fuzzyMatch } from '../utils/fuzzySearch';
 import { Pane, Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
+import { CanvasWorkspace } from '../../shared/types/canvas';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
@@ -31,8 +33,10 @@ interface QuickSwitcherProps {
   onClose: () => void;
   onSelect: (windowId: string) => void;
   onSelectGroup?: (groupId: string) => void;
+  onSelectCanvas?: (canvasWorkspaceId: string) => void;
   currentWindowId: string | null;
   currentGroupId?: string | null;
+  currentCanvasWorkspaceId?: string | null;
   sshProfiles?: SSHProfile[];
 }
 
@@ -59,6 +63,15 @@ type SwitcherItem =
       windowStatuses: Array<{ id: string; status: WindowStatus }>;
       priority: number;
       lastActiveAtTime: number;
+      searchTerms: string[];
+    }
+  | {
+      type: 'canvas';
+      data: CanvasWorkspace;
+      blockCount: number;
+      priority: number;
+      lastActiveAtTime: number;
+      searchTerms: string[];
     };
 
 function getWindowPriority(window: Window, status: WindowStatus): number {
@@ -80,6 +93,10 @@ function getGroupPriority(group: WindowGroup): number {
   return group.archived ? 4 : 0;
 }
 
+function getCanvasPriority(canvasWorkspace: CanvasWorkspace): number {
+  return canvasWorkspace.archived ? 4 : 0;
+}
+
 /**
  * 快速切换面板组件（Ctrl+Tab）
  * 支持搜索和键盘导航，同时显示窗口和窗口组
@@ -89,13 +106,16 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   onClose,
   onSelect,
   onSelectGroup,
+  onSelectCanvas,
   currentWindowId,
   currentGroupId,
+  currentCanvasWorkspaceId,
   sshProfiles = [],
 }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const groups = useWindowStore((state) => state.groups);
+  const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -181,26 +201,50 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
         windowStatuses,
         priority: getGroupPriority(group),
         lastActiveAtTime: new Date(group.lastActiveAt).getTime(),
+        searchTerms: [group.name],
       };
     });
   }, [groups, preparedWindows]);
+  const preparedCanvasWorkspaces = useMemo(() => (
+    canvasWorkspaces.map((canvasWorkspace) => ({
+      type: 'canvas' as const,
+      data: canvasWorkspace,
+      blockCount: canvasWorkspace.blocks.length,
+      priority: getCanvasPriority(canvasWorkspace),
+      lastActiveAtTime: new Date(canvasWorkspace.updatedAt).getTime(),
+      searchTerms: [
+        canvasWorkspace.name,
+        canvasWorkspace.workingDirectory ?? '',
+        ...canvasWorkspace.blocks.map((block) => block.label ?? ''),
+        ...canvasWorkspace.blocks.flatMap((block) => block.type === 'note' ? [block.content] : []),
+      ],
+    }))
+  ), [canvasWorkspaces]);
 
-  // 过滤并合并窗口和窗口组
+  // 过滤并合并窗口、窗口组和画布
   const filteredItems = useMemo(() => {
     const filteredWindows: SwitcherItem[] = preparedWindows.filter((item) => (
       item.searchTerms.some((value) => fuzzyMatch(query, value))
     ));
 
     const filteredGroups: SwitcherItem[] = preparedGroups.filter((item) => (
-      fuzzyMatch(query, item.data.name)
+      item.searchTerms.some((value) => fuzzyMatch(query, value))
     ));
 
-    return [...filteredGroups, ...filteredWindows].sort((a, b) => {
+    const filteredCanvasWorkspaces: SwitcherItem[] = preparedCanvasWorkspaces.filter((item) => (
+      item.searchTerms.some((value) => fuzzyMatch(query, value))
+    ));
+
+    return [...filteredCanvasWorkspaces, ...filteredGroups, ...filteredWindows].sort((a, b) => {
       if (a.type === 'window' && a.data.id === currentWindowId) return -1;
       if (b.type === 'window' && b.data.id === currentWindowId) return 1;
       if (a.type === 'group' && a.data.id === currentGroupId) return -1;
       if (b.type === 'group' && b.data.id === currentGroupId) return 1;
+      if (a.type === 'canvas' && a.data.id === currentCanvasWorkspaceId) return -1;
+      if (b.type === 'canvas' && b.data.id === currentCanvasWorkspaceId) return 1;
 
+      if (a.type === 'canvas' && b.type !== 'canvas') return -1;
+      if (b.type === 'canvas' && a.type !== 'canvas') return 1;
       if (a.type === 'group' && b.type === 'window') return -1;
       if (a.type === 'window' && b.type === 'group') return 1;
 
@@ -226,9 +270,20 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
         return b.lastActiveAtTime - a.lastActiveAtTime;
       }
 
+      if (a.type === 'canvas' && b.type === 'canvas') {
+        const priorityA = a.priority;
+        const priorityB = b.priority;
+
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+
+        return b.lastActiveAtTime - a.lastActiveAtTime;
+      }
+
       return 0;
     });
-  }, [preparedWindows, preparedGroups, query, currentWindowId, currentGroupId]);
+  }, [preparedWindows, preparedGroups, preparedCanvasWorkspaces, query, currentWindowId, currentGroupId, currentCanvasWorkspaceId]);
 
   useEffect(() => {
     if (!filteredItems.length) {
@@ -298,15 +353,17 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
         case 'Enter':
           e.preventDefault();
           e.stopPropagation();
-          if (filteredItems[selectedIndex]) {
-            const item = filteredItems[selectedIndex];
-            if (item.type === 'window') {
-              onSelect(item.data.id);
-            } else if (item.type === 'group' && onSelectGroup) {
-              onSelectGroup(item.data.id);
+            if (filteredItems[selectedIndex]) {
+              const item = filteredItems[selectedIndex];
+              if (item.type === 'window') {
+                onSelect(item.data.id);
+              } else if (item.type === 'group' && onSelectGroup) {
+                onSelectGroup(item.data.id);
+              } else if (item.type === 'canvas' && onSelectCanvas) {
+                onSelectCanvas(item.data.id);
+              }
+              onClose();
             }
-            onClose();
-          }
           break;
         case 'Escape':
           e.preventDefault();
@@ -324,7 +381,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredItems, selectedIndex, onSelect, onSelectGroup, onClose]);
+  }, [isOpen, filteredItems, selectedIndex, onSelect, onSelectGroup, onSelectCanvas, onClose]);
 
   useEffect(() => {
     if (!listRef.current || !filteredItems.length) {
@@ -402,12 +459,14 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
             ) : (
               filteredItems.map((item, index) => (
                 <div
-                  key={item.type === 'window' ? `window-${item.data.id}` : `group-${item.data.id}`}
+                  key={item.type === 'window' ? `window-${item.data.id}` : item.type === 'group' ? `group-${item.data.id}` : `canvas-${item.data.id}`}
                   onClick={() => {
                     if (item.type === 'window') {
                       onSelect(item.data.id);
-                    } else if (onSelectGroup) {
+                    } else if (item.type === 'group' && onSelectGroup) {
                       onSelectGroup(item.data.id);
+                    } else if (item.type === 'canvas' && onSelectCanvas) {
+                      onSelectCanvas(item.data.id);
                     }
                     onClose();
                   }}
@@ -425,11 +484,17 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                       isSelected={index === selectedIndex}
                       query={query}
                     />
-                  ) : (
+                  ) : item.type === 'group' ? (
                     <QuickSwitcherGroupItem
                       group={item.data}
                       windowCount={item.windowCount}
                       windowStatuses={item.windowStatuses}
+                      isSelected={index === selectedIndex}
+                      query={query}
+                    />
+                  ) : (
+                    <QuickSwitcherCanvasItem
+                      canvasWorkspace={item.data}
                       isSelected={index === selectedIndex}
                       query={query}
                     />
