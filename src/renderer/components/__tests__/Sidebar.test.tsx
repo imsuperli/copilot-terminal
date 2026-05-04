@@ -8,6 +8,7 @@ import { createGroup } from '../../utils/groupLayoutHelpers';
 import { WindowStatus, type Window } from '../../types/window';
 
 const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'synapse:terminal-sidebar-preferences';
+const mockCreateWindowDialog = vi.fn();
 
 vi.mock('../SidebarWindowItem', () => ({
   SidebarWindowItem: ({ window }: { window: { name: string } }) => <div>{window.name}</div>,
@@ -17,10 +18,16 @@ vi.mock('../CreateWindowDialog', () => ({
   CreateWindowDialog: ({
     open,
     sshEnabled,
+    onLocalWindowCreated,
   }: {
     open: boolean;
     sshEnabled?: boolean;
-  }) => (open ? <div data-testid="create-window-dialog">{sshEnabled ? 'ssh-enabled' : 'local-only'}</div> : null),
+    onLocalWindowCreated?: (window: { id: string }) => void;
+  }) => {
+    mockCreateWindowDialog({ open, sshEnabled, onLocalWindowCreated });
+
+    return open ? <div data-testid="create-window-dialog">{sshEnabled ? 'ssh-enabled' : 'local-only'}</div> : null;
+  },
 }));
 
 function createWindowWithStatus(name: string, cwd: string, command: string, status: WindowStatus): Window {
@@ -54,6 +61,7 @@ function updateSinglePaneWindowStatus(window: Window, status: WindowStatus): Win
 
 describe('Terminal Sidebar', () => {
   beforeEach(() => {
+    mockCreateWindowDialog.mockClear();
     window.localStorage.clear();
     useWindowStore.setState({
       windows: [],
@@ -373,6 +381,38 @@ describe('Terminal Sidebar', () => {
     expect(screen.getByRole('button', { name: '新建终端' }).className).toContain('justify-center');
     expect(screen.getByRole('button', { name: '设置' }).className).toContain('flex');
     expect(screen.getByRole('button', { name: '设置' }).className).toContain('justify-center');
+  });
+
+  it('enters the created terminal from the terminal sidebar flow', async () => {
+    const user = userEvent.setup();
+    const onWindowSelect = vi.fn();
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: true,
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        onWindowSelect={onWindowSelect}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '新建终端' }));
+
+    expect(screen.getByTestId('create-window-dialog')).toBeInTheDocument();
+
+    const latestDialogProps = mockCreateWindowDialog.mock.calls.at(-1)?.[0] as {
+      onLocalWindowCreated?: (window: { id: string }) => void;
+    };
+
+    latestDialogProps.onLocalWindowCreated?.({ id: 'window-created-from-sidebar' });
+
+    expect(onWindowSelect).toHaveBeenCalledWith('window-created-from-sidebar');
   });
 
   it('renders the open code pane action above new terminal and triggers it', async () => {

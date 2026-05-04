@@ -6,9 +6,9 @@ import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { useWindowStore } from '../stores/windowStore'
 import { useI18n } from '../i18n'
-import { CanvasWorkspace } from '../../shared/types/canvas'
+import type { Window } from '../types/window'
+import type { CanvasWorkspace } from '../../shared/types/canvas'
 import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh'
-import { Window } from '../types/window'
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo'
 import {
   idePopupActionButtonClassName,

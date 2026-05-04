@@ -684,6 +684,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         sshEnabled={sshEnabled}
         sshProfiles={sshProfiles}
         onSSHProfileSaved={onSSHProfileSaved}
+        onLocalWindowCreated={(window) => onWindowSelect(window.id)}
       />
     </div>
   );
