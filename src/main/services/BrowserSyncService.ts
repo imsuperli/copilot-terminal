@@ -152,13 +152,30 @@ export class BrowserSyncService {
     const profiles = await this.listProfiles();
     const profile = profiles.find((item) => item.id === profileId);
     if (!profile) {
-      throw new Error(`Chrome profile not found: ${profileId}`);
+      const failedState: BrowserSyncState = {
+        enabled: false,
+        profileId,
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: `Chrome profile not found: ${profileId}`,
+        platformSupported: true,
+      };
+      await this.persistState(failedState);
+      return failedState;
     }
 
     await fs.ensureDir(this.tempDir);
     const sourceDbPath = path.join(CHROME_BASE, profileId, 'Cookies');
     if (!await fs.pathExists(sourceDbPath)) {
-      throw new Error('Chrome Cookies database was not found');
+      const failedState: BrowserSyncState = {
+        enabled: false,
+        profileId: profile.id,
+        profileName: profile.name,
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: 'Chrome Cookies database was not found',
+        platformSupported: true,
+      };
+      await this.persistState(failedState);
+      return failedState;
     }
 
     const tempDbPath = path.join(this.tempDir, `cookies-${Date.now()}.sqlite`);
