@@ -6,6 +6,14 @@ import type {
 } from '../types/keyboard-shortcuts';
 
 const VALID_MODIFIERS: KeyboardShortcutModifier[] = ['ctrl', 'meta', 'alt', 'shift'];
+type KeyboardShortcutEventLike = {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+};
+
 const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcutSettings = {
   quickSwitcher: {
     key: 'Tab',
@@ -74,7 +82,7 @@ export function normalizeKeyboardShortcuts(
   };
 }
 
-function matchesModifiers(event: KeyboardEvent, modifiers?: KeyboardShortcutModifier[]): boolean {
+function matchesModifiers(event: KeyboardShortcutEventLike, modifiers?: KeyboardShortcutModifier[]): boolean {
   const expected = new Set(modifiers ?? []);
 
   return event.ctrlKey === expected.has('ctrl')
@@ -84,7 +92,7 @@ function matchesModifiers(event: KeyboardEvent, modifiers?: KeyboardShortcutModi
 }
 
 export function matchesKeyboardShortcut(
-  event: KeyboardEvent,
+  event: KeyboardShortcutEventLike,
   definition: KeyboardShortcutDefinition,
 ): boolean {
   if (definition.doubleTap) {
