@@ -56,7 +56,7 @@ export class SSHSftpSession {
     const resolvedRemotePath = await this.resolveExistingPath(wrapper, remotePath);
 
     for (const localPath of localPaths) {
-      const remoteFilePath = posixPath.join(resolvedRemotePath, basename(localPath));
+      const remoteFilePath = posixPath.join(resolvedRemotePath, normalizeRemoteEntryName(basename(localPath)));
       await new Promise<void>((resolve, reject) => {
         wrapper.fastPut(localPath, remoteFilePath, (error) => {
           if (error) {
@@ -88,7 +88,7 @@ export class SSHSftpSession {
   async createDirectory(parentPath: string, name: string): Promise<string> {
     const wrapper = await this.getWrapper();
     const resolvedParentPath = await this.resolveExistingPath(wrapper, parentPath);
-    const nextPath = posixPath.join(resolvedParentPath, name);
+    const nextPath = posixPath.join(resolvedParentPath, normalizeRemoteEntryName(name));
     await this.mkdir(wrapper, nextPath);
     return nextPath;
   }
@@ -288,7 +288,7 @@ export class SSHSftpSession {
 
     for (const entry of entries) {
       const localEntryPath = join(localDirectoryPath, entry.name);
-      const remoteEntryPath = posixPath.join(remoteDirectoryPath, entry.name);
+      const remoteEntryPath = posixPath.join(remoteDirectoryPath, normalizeRemoteEntryName(entry.name));
 
       if (entry.isDirectory()) {
         try {
@@ -388,6 +388,10 @@ export class SSHSftpSession {
 
 function normalizeTargetPath(value: string): string {
   return value.trim();
+}
+
+function normalizeRemoteEntryName(value: string): string {
+  return value.normalize('NFC');
 }
 
 function mapSftpEntry(parentPath: string, entry: FileEntryWithStats): SSHSftpEntry {

@@ -32,6 +32,8 @@ describe('SSHClientConnection', () => {
 
   it('opens shells with terminal environment hints for remote prompt compatibility', async () => {
     vi.stubEnv('LANG', 'zh_CN.UTF-8');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
 
     const stream = { id: 'shell-stream' };
     const shell = vi.fn((
@@ -64,7 +66,8 @@ describe('SSHClientConnection', () => {
           COLORTERM: 'truecolor',
           TERM_PROGRAM: 'Synapse',
           LANG: 'zh_CN.UTF-8',
-          LC_CTYPE: expect.any(String),
+          LC_CTYPE: 'zh_CN.UTF-8',
+          LC_ALL: 'zh_CN.UTF-8',
         }),
         x11: expect.objectContaining({
           protocol: 'MIT-MAGIC-COOKIE-1',
@@ -79,6 +82,80 @@ describe('SSHClientConnection', () => {
     expect(shellOptions?.env).not.toHaveProperty('GIT_CONFIG_COUNT');
     expect(shellOptions?.env).not.toHaveProperty('GIT_CONFIG_KEY_0');
     expect(shellOptions?.env).not.toHaveProperty('GIT_CONFIG_VALUE_0');
+  });
+
+  it('falls back to en_US.UTF-8 for ssh shells when no locale env is available', async () => {
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
+
+    const stream = { id: 'shell-stream' };
+    const shell = vi.fn((
+      _window: unknown,
+      _options: { env?: Record<string, string> },
+      callback: (error?: Error, stream?: unknown) => void,
+    ) => {
+      callback(undefined, stream as any);
+      return {};
+    });
+    const connection = new SSHClientConnection(createSSHConfig());
+
+    (connection as any).ready = true;
+    (connection as any).client = { shell };
+
+    await expect(connection.openShell({
+      cols: 100,
+      rows: 32,
+    })).resolves.toBe(stream);
+
+    expect(shell).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          LANG: 'en_US.UTF-8',
+          LC_CTYPE: 'en_US.UTF-8',
+          LC_ALL: 'en_US.UTF-8',
+        }),
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it('prefers LC_ALL when building shell locale hints', async () => {
+    vi.stubEnv('LANG', 'zh_CN.UTF-8');
+    vi.stubEnv('LC_CTYPE', 'zh_CN.GBK');
+    vi.stubEnv('LC_ALL', 'ja_JP.UTF-8');
+
+    const stream = { id: 'shell-stream' };
+    const shell = vi.fn((
+      _window: unknown,
+      _options: { env?: Record<string, string> },
+      callback: (error?: Error, stream?: unknown) => void,
+    ) => {
+      callback(undefined, stream as any);
+      return {};
+    });
+    const connection = new SSHClientConnection(createSSHConfig());
+
+    (connection as any).ready = true;
+    (connection as any).client = { shell };
+
+    await connection.openShell({
+      cols: 100,
+      rows: 32,
+    });
+
+    expect(shell).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          LANG: 'ja_JP.UTF-8',
+          LC_CTYPE: 'ja_JP.UTF-8',
+          LC_ALL: 'ja_JP.UTF-8',
+        }),
+      }),
+      expect.any(Function),
+    );
   });
 
   it('pauses the handshake timeout while waiting for host-key confirmation', async () => {
@@ -164,6 +241,10 @@ describe('SSHClientConnection', () => {
   });
 
   it('streams exec stdout and stderr before resolving the final result', async () => {
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
+
     const channel = new EventEmitter() as EventEmitter & {
       stderr?: EventEmitter;
       end: ReturnType<typeof vi.fn>;
@@ -176,7 +257,8 @@ describe('SSHClientConnection', () => {
     channel.close = vi.fn();
 
     const exec = vi.fn((command: string, callback: (error?: Error, channel?: unknown) => void) => {
-      expect(command).toBe('uname -a');
+      expect(command).toContain("LANG='\\''en_US.UTF-8'\\'' LC_CTYPE='\\''en_US.UTF-8'\\'' LC_ALL='\\''en_US.UTF-8'\\''");
+      expect(command).toContain('uname -a');
       callback(undefined, channel);
     });
     const connection = new SSHClientConnection(createSSHConfig());
@@ -202,6 +284,40 @@ describe('SSHClientConnection', () => {
     });
     expect(stdoutChunks).toEqual(['Linux']);
     expect(stderrChunks).toEqual([' warning']);
+  });
+
+  it('uses a custom remote locale when provided by the ssh config', async () => {
+    const channel = new EventEmitter() as EventEmitter & {
+      stderr?: EventEmitter;
+      end: ReturnType<typeof vi.fn>;
+      signal: ReturnType<typeof vi.fn>;
+      close?: ReturnType<typeof vi.fn>;
+    };
+    channel.stderr = new EventEmitter();
+    channel.end = vi.fn();
+    channel.signal = vi.fn();
+    channel.close = vi.fn();
+
+    const exec = vi.fn((command: string, callback: (error?: Error, channel?: unknown) => void) => {
+      expect(command).toContain("LANG='\\''zh_CN.UTF-8'\\'' LC_CTYPE='\\''zh_CN.UTF-8'\\'' LC_ALL='\\''zh_CN.UTF-8'\\''");
+      expect(command).toContain('printf test');
+      callback(undefined, channel);
+    });
+    const connection = new SSHClientConnection(createSSHConfig({
+      remoteLocaleMode: 'custom',
+      remoteLocale: 'zh_CN.UTF-8',
+    }));
+    (connection as any).ready = true;
+    (connection as any).client = { exec };
+
+    const handle = await connection.execCommandStream('printf test');
+    channel.emit('close');
+
+    await expect(handle.result).resolves.toEqual({
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+    });
   });
 });
 

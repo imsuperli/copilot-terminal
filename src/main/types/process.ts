@@ -3,6 +3,7 @@ import {
   ForwardedPortConfig,
   SSHAlgorithmPreferences,
   SSHAuthType,
+  SSHRemoteLocaleMode,
   SSHSftpDirectoryListing,
   SSHSessionMetrics,
 } from '../../shared/types/ssh';
@@ -67,6 +68,8 @@ export interface SSHSessionConfig {
   algorithms?: SSHAlgorithmPreferences;
   x11?: boolean;
   skipBanner?: boolean;
+  remoteLocaleMode?: SSHRemoteLocaleMode;
+  remoteLocale?: string;
   remoteCwd?: string;
   command?: string;
 }

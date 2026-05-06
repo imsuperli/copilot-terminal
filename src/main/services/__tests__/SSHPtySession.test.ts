@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SSHPtySession } from '../ssh/SSHPtySession';
 
 function createMockChannel() {
@@ -45,8 +45,16 @@ async function waitUntil(assertion: () => void, timeoutMs = 1000): Promise<void>
 }
 
 describe('SSHPtySession', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
   it('requests X11 forwarding when the SSH session config enables it', async () => {
     vi.useFakeTimers();
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
     const release = vi.fn().mockResolvedValue(undefined);
@@ -95,16 +103,18 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Last login\r\n');
     await vi.advanceTimersByTimeAsync(40);
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- '/srv/app'\r",
+      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rcd -- '/srv/app'\r",
     );
 
     session.kill();
     expect(release).toHaveBeenCalled();
-    vi.useRealTimers();
   });
 
   it('preserves tilde expansion when initializing the remote cwd', async () => {
     vi.useFakeTimers();
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
 
@@ -147,13 +157,15 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- ~/\"workspace with spaces\"\r",
+      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rcd -- ~/\"workspace with spaces\"\r",
     );
-    vi.useRealTimers();
   });
 
   it('skips an explicit cd when the configured remote cwd resolves to the SSH home directory', async () => {
     vi.useFakeTimers();
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
 
@@ -195,12 +207,16 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Welcome\r\n');
     await vi.advanceTimersByTimeAsync(40);
 
-    expect(channel.write).not.toHaveBeenCalled();
-    vi.useRealTimers();
+    expect(channel.write).toHaveBeenCalledWith(
+      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\r",
+    );
   });
 
   it('always applies configured remote cwd directly when initializing the shell', async () => {
     vi.useFakeTimers();
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
 
@@ -243,9 +259,59 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- ~/\"de/de/win/de/co/de/co\"\r",
+      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rcd -- ~/\"de/de/win/de/co/de/co\"\r",
     );
-    vi.useRealTimers();
+  });
+
+  it('injects locale exports before running a startup command without cwd', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
+    const channel = createMockChannel();
+    const openShell = vi.fn().mockResolvedValue(channel);
+
+    await SSHPtySession.create({
+      pid: 2209,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+        command: 'printf test',
+      },
+      connectionPool: {
+        acquire: vi.fn().mockResolvedValue({
+          connection: {
+            openShell,
+            listPortForwards: vi.fn().mockReturnValue([]),
+            addPortForward: vi.fn(),
+            removePortForward: vi.fn(),
+            listSftpDirectory: vi.fn(),
+            downloadSftpFile: vi.fn(),
+            uploadSftpFiles: vi.fn(),
+          },
+          release: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any,
+    });
+
+    channel.emit('data', 'Welcome\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(channel.write).toHaveBeenCalledWith(
+      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rprintf test\r",
+    );
   });
 
   it('decodes split utf8 chunks without garbling the terminal output', async () => {

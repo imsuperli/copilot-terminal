@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SSHSftpSession } from '../ssh/SSHSftpSession';
 
 function createSftpWrapper() {
@@ -16,6 +19,17 @@ function createSftpWrapper() {
 }
 
 describe('SSHSftpSession', () => {
+  const tempPaths: string[] = [];
+
+  afterEach(async () => {
+    while (tempPaths.length > 0) {
+      const tempPath = tempPaths.pop();
+      if (tempPath) {
+        await fs.remove(tempPath);
+      }
+    }
+  });
+
   it('expands the home directory for ~ without issuing realpath(~)', async () => {
     const wrapper = createSftpWrapper();
     wrapper.realpath.mockImplementation((targetPath: string, callback: (error: Error | null, absolutePath?: string) => void) => {
@@ -151,5 +165,59 @@ describe('SSHSftpSession', () => {
 
     expect(wrapper.realpath).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
     expect(wrapper.unlink).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
+  });
+
+  it('normalizes uploaded file names to NFC before sending them to the remote path', async () => {
+    const wrapper = createSftpWrapper();
+    wrapper.realpath.mockImplementation((targetPath: string, callback: (error: Error | null, absolutePath?: string) => void) => {
+      if (targetPath === '.') {
+        callback(null, '/srv/app');
+        return;
+      }
+
+      callback(null, targetPath);
+    });
+    wrapper.fastPut.mockImplementation((_localPath: string, _remotePath: string, callback: (error: Error | null) => void) => {
+      callback(null);
+    });
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'synapse-sftp-upload-'));
+    tempPaths.push(tempDir);
+    const localFilePath = path.join(tempDir, 'e\u0301-中文.txt');
+    await fs.writeFile(localFilePath, 'test');
+
+    const session = new SSHSftpSession({
+      getWrapper: async () => wrapper as any,
+    });
+
+    await session.uploadFiles('/srv/app', [localFilePath]);
+
+    expect(wrapper.fastPut).toHaveBeenCalledWith(
+      localFilePath,
+      '/srv/app/é-中文.txt',
+      expect.any(Function),
+    );
+  });
+
+  it('normalizes newly created remote directory names to NFC', async () => {
+    const wrapper = createSftpWrapper();
+    wrapper.realpath.mockImplementation((targetPath: string, callback: (error: Error | null, absolutePath?: string) => void) => {
+      if (targetPath === '.') {
+        callback(null, '/srv/app');
+        return;
+      }
+
+      callback(null, targetPath);
+    });
+    wrapper.mkdir.mockImplementation((_targetPath: string, callback: (error: Error | null) => void) => {
+      callback(null);
+    });
+
+    const session = new SSHSftpSession({
+      getWrapper: async () => wrapper as any,
+    });
+
+    await expect(session.createDirectory('/srv/app', 'e\u0301-资料')).resolves.toBe('/srv/app/é-资料');
+    expect(wrapper.mkdir).toHaveBeenCalledWith('/srv/app/é-资料', expect.any(Function));
   });
 });

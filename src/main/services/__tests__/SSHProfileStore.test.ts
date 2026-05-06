@@ -52,6 +52,8 @@ describe('SSHProfileStore', () => {
     expect(profile.verifyHostKeys).toBe(true);
     expect(profile.warnOnClose).toBe(true);
     expect(profile.reuseSession).toBe(true);
+    expect(profile.remoteLocaleMode).toBeUndefined();
+    expect(profile.remoteLocale).toBeUndefined();
     expect(profile.algorithms?.kex.length).toBeGreaterThan(0);
     expect(profile.algorithms?.hostKey.length).toBeGreaterThan(0);
     expect(profile.tags).toEqual(['prod', 'cn-shanghai']);
@@ -98,6 +100,8 @@ describe('SSHProfileStore', () => {
       notes: '  rotated keys  ',
       privateKeys: ['/keys/id_ed25519', '/keys/id_rsa'],
       proxyCommand: '  ssh -W %h:%p jump ',
+      remoteLocaleMode: 'custom',
+      remoteLocale: ' zh_CN.UTF-8 ',
       algorithms: {
         kex: ['diffie-hellman-group14-sha256'],
         hostKey: ['ssh-ed25519'],
@@ -112,6 +116,8 @@ describe('SSHProfileStore', () => {
     expect(updated.privateKeys).toEqual(['/keys/id_ed25519', '/keys/id_rsa']);
     expect(updated.notes).toBe('rotated keys');
     expect(updated.proxyCommand).toBe('ssh -W %h:%p jump');
+    expect(updated.remoteLocaleMode).toBe('custom');
+    expect(updated.remoteLocale).toBe('zh_CN.UTF-8');
     expect(updated.algorithms).toEqual({
       kex: ['diffie-hellman-group14-sha256'],
       hostKey: ['ssh-ed25519'],
