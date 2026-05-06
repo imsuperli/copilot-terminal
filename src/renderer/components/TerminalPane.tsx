@@ -347,7 +347,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
   const onActivateRef = useRef(onActivate);
   const suppressNativePasteUntilRef = useRef(0); // 短时间屏蔽原生 paste，避免与手动 Ctrl+V 粘贴重复
-  const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
   const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
   const lastSessionRef = useRef({ pid: pane.pid, status: pane.status });
   const lastLayoutPaneCountRef = useRef(layoutPaneCount);
@@ -836,6 +835,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     if (!terminalContainerRef.current) return;
 
+    const platform = window.electronAPI?.platform;
+    const isMac = platform === 'darwin';
+    const isWindows = platform === 'win32';
     const terminalLinkHandler = createTerminalLinkHandler(openExternalUrl, {
       onHover: handleTerminalLinkHover,
       onLeave: handleTerminalLinkLeave,
@@ -859,6 +861,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       scrollOnUserInput: true,
       smoothScrollDuration: 0, // 禁用平滑滚动，减少晃动
       linkHandler: terminalLinkHandler,
+      // 让终端程序自行协商增强键盘协议，避免宿主层硬编码 CLI 快捷键语义。
+      vtExtensions: {
+        kittyKeyboard: true,
+        ...(isWindows ? { win32InputMode: true } : {}),
+      },
+      ...(isWindows ? { windowsPty: { backend: 'conpty' as const } } : {}),
     });
 
     // 异步加载并应用字体设置
@@ -1171,7 +1179,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminalContainer?.addEventListener('contextmenu', handleNativeContextMenu, true);
 
     // 告诉 xterm.js 忽略应用级快捷键
-    const isMac = window.electronAPI?.platform === 'darwin';
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       const isImagePasteShortcut = pane.backend === 'ssh'
         && matchesSSHClipboardImageShortcut(e, sshClipboardImageShortcutRef.current, isMac);
@@ -1215,35 +1222,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return false; // 阻止 xterm.js 处理粘贴键
       }
 
-      // Ctrl+Enter / ⌘+Enter：发送换行符到 PTY（用于多行输入）
-      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
-      if (isCtrlOrCmd && e.key === 'Enter' && !e.shiftKey) {
-        // 忽略键盘重复触发
-        if (e.repeat) {
-          return false;
-        }
-
-        // 防抖：200ms 内的重复事件直接忽略
-        const now = Date.now();
-        if (now - lastCtrlEnterTimeRef.current < 200) {
-          return false;
-        }
-        lastCtrlEnterTimeRef.current = now;
-
-        // 只发送到 PTY，让应用程序自己处理显示
-        if (window.electronAPI && isActiveRef.current) {
-          window.electronAPI.ptyWrite(windowId, pane.id, '\n', { source: 'ctrl-enter' });
-        }
-        return false; // 阻止 xterm.js 处理
-      }
-
-      if (e.ctrlKey) {
-        // 应用级快捷键：不让 xterm 处理
-        if (e.key === 'Tab') {
-          return false; // xterm 不处理，让事件正常传播
-        }
-      }
-      // 其他按键（包括普通 Enter、Shift+Enter、@ 等）让 xterm.js 正常处理
+      // 其他按键（包括 Ctrl+Enter、Ctrl+Tab、Shift+Enter、Ctrl+J 等）交给终端程序自行处理
       return true;
     });
 

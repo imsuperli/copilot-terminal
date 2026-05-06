@@ -169,6 +169,71 @@ describe('TerminalPane history replay', () => {
     expect((terminalInstances[0].options.theme as { background?: string }).background).toBe('transparent');
   });
 
+  it('enables enhanced keyboard reporting for Windows PTYs', async () => {
+    render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    expect(terminalInstances[0].options.vtExtensions).toMatchObject({
+      kittyKeyboard: true,
+      win32InputMode: true,
+    });
+    expect(terminalInstances[0].options.windowsPty).toEqual({
+      backend: 'conpty',
+    });
+  });
+
+  it('avoids applying Windows-specific PTY hints on macOS', async () => {
+    const originalPlatform = window.electronAPI.platform;
+    (window.electronAPI as { platform: string }).platform = 'darwin';
+
+    try {
+      render(
+        <TerminalPane
+          windowId="win-mac"
+          pane={{
+            id: 'pane-mac',
+            cwd: '/tmp',
+            command: 'zsh',
+            status: WindowStatus.Running,
+            pid: 4321,
+          }}
+          isActive
+          isWindowActive
+          onActivate={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(terminalInstances).toHaveLength(1);
+      });
+
+      expect(terminalInstances[0].options.vtExtensions).toMatchObject({
+        kittyKeyboard: true,
+      });
+      expect((terminalInstances[0].options.vtExtensions as { win32InputMode?: boolean }).win32InputMode).toBeUndefined();
+      expect(terminalInstances[0].options.windowsPty).toBeUndefined();
+    } finally {
+      (window.electronAPI as { platform: string }).platform = originalPlatform;
+    }
+  });
+
   it('replays history on mount and subscribes without buffered replay', async () => {
     render(
       <TerminalPane
@@ -844,6 +909,67 @@ describe('TerminalPane history replay', () => {
         { source: 'clipboard-shortcut' },
       );
     });
+  });
+
+  it('lets Ctrl+Enter and Ctrl+Tab pass through to the terminal without synthetic PTY writes', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    vi.mocked(window.electronAPI.ptyWrite).mockClear();
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+
+    const ctrlEnterHandledByXterm = keyHandler({
+      type: 'keydown',
+      key: 'Enter',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      repeat: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+    const ctrlTabHandledByXterm = keyHandler({
+      type: 'keydown',
+      key: 'Tab',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    expect(ctrlEnterHandledByXterm).toBe(true);
+    expect(ctrlTabHandledByXterm).toBe(true);
+    expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '\n',
+      { source: 'ctrl-enter' },
+    );
   });
 
   it('does not text-paste when ssh image upload already handled the clipboard', async () => {

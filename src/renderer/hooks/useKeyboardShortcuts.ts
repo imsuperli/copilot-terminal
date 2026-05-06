@@ -25,19 +25,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
       if (!enabled) return;
 
-      // 如果事件来自 xterm.js 的 textarea，只处理明确的快捷键
       const target = e.target as HTMLElement;
       const isXtermTextarea = target?.classList?.contains('xterm-helper-textarea');
 
       if (isXtermTextarea) {
-        // 在 xterm textarea 中，只处理明确的快捷键，其他一律放行
-        const isShortcut =
-          (e.ctrlKey && e.key === 'Tab') ||
-          (e.ctrlKey && e.key === 'b') ||
-          (e.ctrlKey && e.key >= '1' && e.key <= '9');
-
-        if (!isShortcut) {
-          return; // 不是快捷键，直接放行
+        // 终端输入焦点下优先透传给 CLI，只保留已经打开的应用面板所需的 Escape。
+        if (e.key !== 'Escape') {
+          return;
         }
       }
 
