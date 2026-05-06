@@ -1637,7 +1637,7 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'appearance' | 'tmux' | 'features' | 'sshClipboardImage' | 'customCategories' | 'chat' | 'plugins'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'appearance' | 'tmux' | 'features' | 'sshClipboardImage' | 'customCategories' | 'chat' | 'plugins' | 'keyboardShortcuts'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
@@ -1650,6 +1650,7 @@ export type SettingsPatch =
     customCategories?: CustomCategory[];
     chat?: Partial<ChatSettings>;
     plugins?: Partial<WorkspacePluginSettings>;
+    keyboardShortcuts?: Partial<NonNullable<Settings['keyboardShortcuts']>>;
   };
 
 export interface ElectronAPI {

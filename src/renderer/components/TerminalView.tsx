@@ -12,6 +12,7 @@ import { SplitLayout } from './SplitLayout';
 import { RemoteWindowTabs } from './RemoteWindowTabs';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useKeyboardShortcutSettings } from '../hooks/useKeyboardShortcutSettings';
 import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
@@ -366,6 +367,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => Boolean(activePane && !isChatPane(activePane) && !isCodePane(activePane)),
     [activePane],
   );
+  const keyboardShortcuts = useKeyboardShortcutSettings();
 
   // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
@@ -481,6 +483,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // 蹇嵎閿鐞?
   useKeyboardShortcuts({
+    quickSwitcherShortcut: keyboardShortcuts.quickSwitcher,
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
     },

@@ -12,6 +12,11 @@ import { QuickNavItem } from '../../shared/types/quick-nav';
 import { FeatureSettings, IDEConfig, SSHClipboardImageSettings, StatusLineConfig } from '../../shared/types/workspace';
 import { KnownHostEntry } from '../../shared/types/ssh';
 import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceSkinMotionMode } from '../../shared/types/appearance';
+import type {
+  KeyboardShortcutAction,
+  KeyboardShortcutDefinition,
+  KeyboardShortcutSettings,
+} from '../../shared/types/keyboard-shortcuts';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 import type { BrowserSyncProfile, BrowserSyncState } from '../../shared/types/task';
 import { useI18n } from '../i18n';
@@ -21,6 +26,12 @@ import { ChatSettingsTab } from './ChatSettingsTab';
 import { PluginCenter } from './settings/PluginCenter';
 import { CompactSettingRow, CompactSettingsSection } from './settings/CompactSettings';
 import { applyAppearanceToDocument, getAppearanceBackdropDescriptor, getAppearanceSkinStyle } from '../utils/appearance';
+import {
+  formatKeyboardShortcut,
+  getDefaultKeyboardShortcuts,
+  KEYBOARD_SHORTCUT_ACTIONS,
+  normalizeKeyboardShortcuts,
+} from '../../shared/utils/keyboardShortcuts';
 import {
   idePopupActionButtonClassName,
   idePopupEmptyStateClassName,
@@ -44,7 +55,7 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-type SettingsTab = 'general' | 'appearance' | 'quicknav' | 'chat' | 'plugins' | 'advanced';
+type SettingsTab = 'general' | 'appearance' | 'shortcuts' | 'quicknav' | 'chat' | 'plugins' | 'advanced';
 type QuickNavSubTab = 'ide' | 'custom';
 const AUTO_SHELL_OPTION_VALUE = '__auto__';
 const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
@@ -211,6 +222,72 @@ function formatSettingsTimestamp(timestamp: string): string {
   });
 }
 
+function keyboardShortcutToInputValue(definition: KeyboardShortcutDefinition): string {
+  if (definition.doubleTap) {
+    return `Double ${definition.key}`;
+  }
+
+  const parts = [...(definition.modifiers ?? []), definition.key];
+  return parts.join('+');
+}
+
+function parseKeyboardShortcutInput(value: string): KeyboardShortcutDefinition | null {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  const normalizedParts = trimmedValue
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.toLowerCase());
+
+  if (normalizedParts.length === 2 && normalizedParts[0] === 'double' && normalizedParts[1] === 'shift') {
+    return {
+      key: 'Shift',
+      doubleTap: true,
+    };
+  }
+
+  const keyPart = normalizedParts[normalizedParts.length - 1];
+  if (!keyPart) {
+    return null;
+  }
+  const key = keyPart.length === 1
+    ? keyPart.toUpperCase()
+    : keyPart === 'tab'
+      ? 'Tab'
+      : keyPart === 'shift'
+        ? 'Shift'
+        : keyPart === 'escape' || keyPart === 'esc'
+          ? 'Escape'
+          : keyPart === 'enter' || keyPart === 'return'
+            ? 'Enter'
+            : keyPart.startsWith('arrow')
+              ? `Arrow${keyPart.slice(5, 6).toUpperCase()}${keyPart.slice(6)}`
+              : keyPart;
+
+  const modifiers = normalizedParts.slice(0, -1)
+    .map((modifier) => {
+      if (modifier === 'cmd' || modifier === 'command' || modifier === 'meta') return 'meta';
+      if (modifier === 'ctrl' || modifier === 'control') return 'ctrl';
+      if (modifier === 'alt' || modifier === 'option') return 'alt';
+      if (modifier === 'shift') return 'shift';
+      return null;
+    })
+    .filter((modifier): modifier is NonNullable<KeyboardShortcutDefinition['modifiers']>[number] => Boolean(modifier));
+
+  if (normalizedParts.length > 1 && modifiers.length !== normalizedParts.length - 1) {
+    return null;
+  }
+
+  return {
+    key,
+    modifiers: modifiers.length > 0 ? modifiers : undefined,
+  };
+}
+
 function AppearanceSkinPreview({ appearance }: { appearance: AppearanceSettings }) {
   const descriptor = getAppearanceBackdropDescriptor(appearance);
 
@@ -270,6 +347,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   });
   const [browserSyncLoading, setBrowserSyncLoading] = useState(false);
   const [browserSyncSyncing, setBrowserSyncSyncing] = useState(false);
+  const [keyboardShortcutSettings, setKeyboardShortcutSettings] = useState<KeyboardShortcutSettings>(getDefaultKeyboardShortcuts());
+  const [keyboardShortcutDrafts, setKeyboardShortcutDrafts] = useState<Record<KeyboardShortcutAction, string>>({
+    quickSwitcher: keyboardShortcutToInputValue(getDefaultKeyboardShortcuts().quickSwitcher),
+    quickNav: keyboardShortcutToInputValue(getDefaultKeyboardShortcuts().quickNav),
+  });
 
   // tmux 兼容模式配置状态
   const [tmuxSettings, setTmuxSettings] = useState({
@@ -337,6 +419,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
           ...DEFAULT_SSH_CLIPBOARD_IMAGE_SETTINGS,
           shortcut: getDefaultSSHClipboardImageShortcut(window.electronAPI?.platform),
           ...settings.sshClipboardImage,
+        });
+        const normalizedKeyboardShortcuts = normalizeKeyboardShortcuts(settings.keyboardShortcuts);
+        setKeyboardShortcutSettings(normalizedKeyboardShortcuts);
+        setKeyboardShortcutDrafts({
+          quickSwitcher: keyboardShortcutToInputValue(normalizedKeyboardShortcuts.quickSwitcher),
+          quickNav: keyboardShortcutToInputValue(normalizedKeyboardShortcuts.quickNav),
         });
         setTmuxSettings({
           enabled: settings.tmux?.enabled ?? true,
@@ -848,6 +936,56 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
   };
 
+  const handleKeyboardShortcutChange = async (action: KeyboardShortcutAction, definition: KeyboardShortcutDefinition) => {
+    const previousConfig = keyboardShortcutSettings;
+    const nextConfig = normalizeKeyboardShortcuts({
+      ...previousConfig,
+      [action]: definition,
+    });
+    setKeyboardShortcutSettings(nextConfig);
+    setKeyboardShortcutDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [action]: keyboardShortcutToInputValue(nextConfig[action]),
+    }));
+
+    try {
+      await window.electronAPI.updateSettings({ keyboardShortcuts: nextConfig });
+      notifyWorkspaceSettingsUpdated({ keyboardShortcuts: nextConfig });
+    } catch (error) {
+      console.error('Failed to update keyboard shortcuts:', error);
+      setKeyboardShortcutSettings(previousConfig);
+      setKeyboardShortcutDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [action]: keyboardShortcutToInputValue(previousConfig[action]),
+      }));
+    }
+  };
+
+  const handleResetKeyboardShortcut = async (action: KeyboardShortcutAction) => {
+    const defaults = getDefaultKeyboardShortcuts();
+    await handleKeyboardShortcutChange(action, defaults[action]);
+  };
+
+  const handleShortcutDraftChange = (action: KeyboardShortcutAction, value: string) => {
+    setKeyboardShortcutDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [action]: value,
+    }));
+  };
+
+  const handleShortcutDraftCommit = async (action: KeyboardShortcutAction) => {
+    const parsedShortcut = parseKeyboardShortcutInput(keyboardShortcutDrafts[action]);
+    if (!parsedShortcut) {
+      setKeyboardShortcutDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [action]: keyboardShortcutToInputValue(keyboardShortcutSettings[action]),
+      }));
+      return;
+    }
+
+    await handleKeyboardShortcutChange(action, parsedShortcut);
+  };
+
   const handleRemoveKnownHost = async (entryId: string) => {
     setRemovingKnownHostId(entryId);
     setKnownHostsError(null);
@@ -965,6 +1103,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       icon: Palette,
     },
     {
+      value: 'shortcuts' as SettingsTab,
+      label: t('settings.tab.shortcuts'),
+      icon: Command,
+    },
+    {
       value: 'quicknav' as SettingsTab,
       label: t('settings.tab.quickNav'),
       icon: Compass,
@@ -977,7 +1120,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     {
       value: 'chat' as SettingsTab,
       label: t('settings.tab.chat'),
-      icon: Command,
+      icon: Monitor,
     },
     {
       value: 'advanced' as SettingsTab,
@@ -1672,6 +1815,75 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
                       </Switch.Root>
                     </CompactSettingRow>
+                  </CompactSettingsSection>
+                </div>
+              </Tabs.Content>
+
+              <Tabs.Content value="shortcuts" className="h-full overflow-y-auto px-6 py-6 data-[state=inactive]:hidden">
+                <div className="mx-auto max-w-4xl space-y-4">
+                  <CompactSettingsSection
+                    title={t('settings.shortcuts.title')}
+                    help={t('settings.shortcuts.pageDescription')}
+                    icon={<Command size={15} />}
+                  >
+                    {KEYBOARD_SHORTCUT_ACTIONS.map((action) => {
+                      const shortcut = keyboardShortcutSettings[action];
+                      const inputId = `keyboard-shortcut-${action}`;
+                      const titleKey = action === 'quickSwitcher'
+                        ? 'settings.shortcuts.quickSwitcherTitle'
+                        : 'settings.shortcuts.quickNavTitle';
+                      const descriptionKey = action === 'quickSwitcher'
+                        ? 'settings.shortcuts.quickSwitcherDescription'
+                        : 'settings.shortcuts.quickNavDescription';
+
+                      return (
+                        <CompactSettingRow
+                          key={action}
+                          label={t(titleKey as TranslationKey)}
+                          htmlFor={inputId}
+                          help={t(descriptionKey as TranslationKey)}
+                          controlClassName="flex-wrap justify-end"
+                        >
+                          <div className="flex min-w-[220px] items-center justify-end">
+                            <span className={settingsPanelBadgeClassName}>
+                              {formatKeyboardShortcut(shortcut, window.electronAPI.platform)}
+                            </span>
+                          </div>
+                          <input
+                            id={inputId}
+                            value={keyboardShortcutDrafts[action]}
+                            onBlur={() => {
+                              void handleShortcutDraftCommit(action);
+                            }}
+                            onChange={(event) => handleShortcutDraftChange(action, event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                (event.currentTarget as HTMLInputElement).blur();
+                              }
+
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                handleShortcutDraftChange(action, keyboardShortcutToInputValue(keyboardShortcutSettings[action]));
+                                (event.currentTarget as HTMLInputElement).blur();
+                              }
+                            }}
+                            className={`w-full max-w-[260px] ${settingsPanelInputClassName}`}
+                            placeholder={t('settings.shortcuts.inputPlaceholder')}
+                            aria-label={t(titleKey as TranslationKey)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleResetKeyboardShortcut(action);
+                            }}
+                            className={settingsPanelCompactSecondaryButtonClassName}
+                          >
+                            {t('settings.shortcuts.reset')}
+                          </button>
+                        </CompactSettingRow>
+                      );
+                    })}
                   </CompactSettingsSection>
                 </div>
               </Tabs.Content>

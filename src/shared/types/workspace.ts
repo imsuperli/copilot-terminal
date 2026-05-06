@@ -9,6 +9,7 @@ import type { ChatSettings } from './chat';
 import type { WorkspacePluginSettings } from './plugin';
 import type { AppearanceSettings } from './appearance';
 import type { BrowserSyncSettings } from './browser-sync';
+import type { KeyboardShortcutSettings } from './keyboard-shortcuts';
 
 export interface IDEConfig {
   id: string;
@@ -96,6 +97,7 @@ export interface Settings {
   chat?: ChatSettings;
   plugins?: WorkspacePluginSettings;
   browserSync?: BrowserSyncSettings;
+  keyboardShortcuts?: KeyboardShortcutSettings;
 }
 
 export interface Workspace {

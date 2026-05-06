@@ -94,6 +94,20 @@ describe('App quick navigation shortcut', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-26T00:00:00.000Z'));
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: { useBundledConptyDll: false, defaultShellProgram: '' },
+        features: { sshEnabled: true },
+        keyboardShortcuts: {
+          quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
+          quickNav: { key: 'Shift', doubleTap: true },
+        },
+      } as any,
+    });
 
     useWindowStore.setState({
       windows: [],

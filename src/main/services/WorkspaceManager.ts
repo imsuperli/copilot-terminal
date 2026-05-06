@@ -20,6 +20,7 @@ import { normalizeShellProgram } from '../utils/shell';
 import { getSupportedIDEIds } from '../utils/ideScanner';
 import { isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
+import { getDefaultKeyboardShortcuts, normalizeKeyboardShortcuts } from '../../shared/utils/keyboardShortcuts';
 
 type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
   status?: PaneNode['pane']['status'];
@@ -1286,6 +1287,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         enableCommandSecurity: settings?.chat?.enableCommandSecurity ?? defaults.chat?.enableCommandSecurity ?? true,
       },
       plugins: normalizeWorkspacePluginSettings(settings?.plugins),
+      keyboardShortcuts: normalizeKeyboardShortcuts(settings?.keyboardShortcuts ?? defaults.keyboardShortcuts),
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
     };
@@ -1337,6 +1339,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         contextFilePaths: [],
         enableCommandSecurity: true,
       },
+      keyboardShortcuts: getDefaultKeyboardShortcuts(),
       customCategories: [],
       defaultSidebarTab: 'active',
     };

@@ -2,6 +2,7 @@ import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useKeyboardShortcuts } from '../useKeyboardShortcuts';
+import { getDefaultKeyboardShortcuts } from '../../../shared/utils/keyboardShortcuts';
 
 interface TestHarnessProps {
   onCtrlTab?: () => void;
@@ -12,7 +13,10 @@ interface TestHarnessProps {
 }
 
 function TestHarness(props: TestHarnessProps) {
-  useKeyboardShortcuts(props);
+  useKeyboardShortcuts({
+    quickSwitcherShortcut: getDefaultKeyboardShortcuts().quickSwitcher,
+    ...props,
+  });
 
   return (
     <div>

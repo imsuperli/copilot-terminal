@@ -67,6 +67,7 @@ import {
   idePopupSecondaryButtonClassName,
 } from './ui/ide-popup';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useKeyboardShortcutSettings } from '../hooks/useKeyboardShortcutSettings';
 
 const LazyQuickSwitcher = React.lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -220,6 +221,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   renderLiveWindow,
   onExitWorkspace,
 }) => {
+  const keyboardShortcuts = useKeyboardShortcutSettings();
   const { t, language } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const updateCanvasWorkspace = useWindowStore((state) => state.updateCanvasWorkspace);
@@ -1502,6 +1504,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   }, [canvasWorkspace.blocks, clearSelection, deleteBlocks, quickSwitcherOpen, selectedBlockIds]);
 
   useKeyboardShortcuts({
+    quickSwitcherShortcut: keyboardShortcuts.quickSwitcher,
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
     },

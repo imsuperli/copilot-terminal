@@ -63,6 +63,8 @@ import {
 import { notifyTerminalSettingsUpdated } from './utils/terminalSettingsEvents';
 import { useShallow } from 'zustand/react/shallow';
 import { canStartPaneSession, hasLiveTerminalSession, isInactiveTerminalPaneStatus } from './utils/windowLifecycle';
+import { useKeyboardShortcutSettings } from './hooks/useKeyboardShortcutSettings';
+import { matchesKeyboardShortcut } from '../shared/utils/keyboardShortcuts';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
 const STARTUP_MASK_HOLD_MS = 40;
@@ -348,6 +350,7 @@ function AppContent() {
     version: '1.0.0',
   });
   const [appearance, setAppearance] = useState<AppearanceSettings>(() => getAppearanceFromSettings());
+  const keyboardShortcuts = useKeyboardShortcutSettings();
   const [isStartupMaskVisible, setIsStartupMaskVisible] = useState(true);
   const [isStartupMaskHiding, setIsStartupMaskHiding] = useState(false);
   const [canvasTerminalReturnTargetId, setCanvasTerminalReturnTargetId] = useState<string | null>(null);
@@ -647,7 +650,7 @@ function AppContent() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
+      if (matchesKeyboardShortcut(e, keyboardShortcuts.quickNav)) {
         // 忽略长按产生的重复事件
         if (e.repeat) return;
         shiftPressedDown.current = true;
@@ -655,7 +658,7 @@ function AppContent() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift' && shiftPressedDown.current) {
+      if (matchesKeyboardShortcut(e, keyboardShortcuts.quickNav) && shiftPressedDown.current) {
         shiftPressedDown.current = false;
         const now = Date.now();
         const timeSinceLastUp = now - lastShiftUpTime.current;
@@ -676,7 +679,7 @@ function AppContent() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [keyboardShortcuts.quickNav]);
 
   const {
     currentView,

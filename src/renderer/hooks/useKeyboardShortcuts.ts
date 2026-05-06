@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
+import type { KeyboardShortcutDefinition } from '../../shared/types/keyboard-shortcuts';
+import { isKeyboardShortcutReservedInTerminal, matchesKeyboardShortcut } from '../../shared/utils/keyboardShortcuts';
 
 interface KeyboardShortcutsOptions {
+  quickSwitcherShortcut: KeyboardShortcutDefinition;
   onCtrlTab?: () => void;
   onCtrlB?: () => void;
   onCtrlNumber?: (num: number) => void;
@@ -29,17 +32,17 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       const isXtermTextarea = target?.classList?.contains('xterm-helper-textarea');
 
       if (isXtermTextarea) {
-        // 终端输入焦点下默认透传给 CLI，但保留 Ctrl+Tab 和 Escape 这类明确的应用级导航。
+        // 终端输入焦点下默认透传给 CLI，但保留明确的应用级导航。
         const isAppLevelShortcut =
-          (e.ctrlKey && e.key === 'Tab')
+          isKeyboardShortcutReservedInTerminal(opts.quickSwitcherShortcut)
+          && matchesKeyboardShortcut(e, opts.quickSwitcherShortcut)
           || e.key === 'Escape';
         if (!isAppLevelShortcut) {
           return;
         }
       }
 
-      // Ctrl+Tab: 打开快速切换面板
-      if (e.ctrlKey && e.key === 'Tab') {
+      if (matchesKeyboardShortcut(e, opts.quickSwitcherShortcut)) {
         e.preventDefault();
         opts.onCtrlTab?.();
         return;

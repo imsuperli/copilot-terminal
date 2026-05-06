@@ -87,6 +87,51 @@ describe('SettingsPanel', () => {
     expect(screen.getByText('使用随应用附带的 ConPTY 组件')).toBeInTheDocument();
   });
 
+  it('shows and updates app keyboard shortcuts from the shortcuts tab', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        keyboardShortcuts: {
+          quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
+          quickNav: { key: 'Shift', doubleTap: true },
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '快捷键' }));
+
+    expect(await screen.findByText('应用快捷键')).toBeInTheDocument();
+    const quickSwitcherInput = screen.getByLabelText('快速切换面板');
+    expect(quickSwitcherInput).toHaveValue('ctrl+Tab');
+
+    await user.clear(quickSwitcherInput);
+    await user.type(quickSwitcherInput, 'Ctrl+P');
+    fireEvent.blur(quickSwitcherInput);
+
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+        keyboardShortcuts: {
+          quickSwitcher: { key: 'P', modifiers: ['ctrl'] },
+          quickNav: { key: 'Shift', doubleTap: true },
+        },
+      });
+    });
+  });
+
   it('loads and updates appearance settings from the appearance tab', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({

@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useKeyboardShortcutSettings } from '../hooks/useKeyboardShortcutSettings';
 import { GroupSplitLayout } from './GroupSplitLayout';
 import { Sidebar } from './Sidebar';
 import { WindowGroup } from '../../shared/types/window-group';
@@ -57,6 +58,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
   isActive,
   sshProfiles = [],
 }) => {
+  const keyboardShortcuts = useKeyboardShortcutSettings();
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
@@ -147,6 +149,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
 
   // 快捷键
   useKeyboardShortcuts({
+    quickSwitcherShortcut: keyboardShortcuts.quickSwitcher,
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
     },
