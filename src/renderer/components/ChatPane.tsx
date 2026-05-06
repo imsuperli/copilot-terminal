@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, BookmarkPlus, Check, ChevronDown, ChevronRight, Copy, FolderOpen, History, ListTodo, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
+import { Archive, Bookmark, BookmarkCheck, Check, ChevronDown, ChevronRight, Copy, FolderOpen, History, ListTodo, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../shared/types/agent';
 import type { AgentTimelineEvent } from '../../shared/types/agentTimeline';
 import type { CanvasActivityEvent, CanvasWorkspace } from '../../shared/types/canvas';
@@ -41,6 +41,7 @@ import {
   idePopupSelectContentClassName,
   idePopupSubtlePanelClassName,
 } from './ui/ide-popup';
+import { AppTooltip } from './ui/AppTooltip';
 
 export interface ChatPaneProps {
   windowId: string;
@@ -766,6 +767,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const historyMenuRef = useRef<HTMLDivElement | null>(null);
   const historyButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
+  const checkpointSavedResetTimerRef = useRef<number | null>(null);
   const lastCanvasErrorSignatureRef = useRef<string | null>(null);
   const [composerValue, setComposerValue] = useState('');
   const [settings, setSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
@@ -779,6 +781,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [manualActivity, setManualActivity] = useState<TaskActivityEvent[]>([]);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [checkpointSaved, setCheckpointSaved] = useState(false);
   const [planPaneOpen, setPlanPaneOpen] = useState(false);
   const [artifactSaving, setArtifactSaving] = useState(false);
   const [enhancementSummaryOpen, setEnhancementSummaryOpen] = useState(false);
@@ -797,6 +800,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     hasAttemptedHistoryHydrationRef.current = false;
     setHistoryMenuOpen(false);
     setCopiedMessageId(null);
+    setCheckpointSaved(false);
     setPlanPaneOpen(false);
     setEnhancementSummaryOpen(false);
   }, [pane.id]);
@@ -1284,6 +1288,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       window.clearTimeout(copyResetTimerRef.current);
       copyResetTimerRef.current = null;
     }
+    if (checkpointSavedResetTimerRef.current !== null) {
+      window.clearTimeout(checkpointSavedResetTimerRef.current);
+      checkpointSavedResetTimerRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -1621,6 +1629,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       ...currentChat,
       checkpoints: [checkpoint, ...(currentChat.checkpoints ?? [])].slice(0, 20),
     }));
+    setCheckpointSaved(true);
+    if (checkpointSavedResetTimerRef.current !== null) {
+      window.clearTimeout(checkpointSavedResetTimerRef.current);
+    }
+    checkpointSavedResetTimerRef.current = window.setTimeout(() => {
+      setCheckpointSaved(false);
+      checkpointSavedResetTimerRef.current = null;
+    }, 1200);
     appendCanvasActivityEvent('checkpoint-saved', t('chatPane.activityCheckpointSaved'), checkpoint.title, {
       paneId: pane.id,
     });
@@ -1992,6 +2008,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const assistantLabel = t('chatPane.agentName');
   const copyMessageLabel = t('chatPane.copyMessage');
   const copiedMessageLabel = t('chatPane.copied');
+  const canSaveCheckpoint = !isBusy && (chatState.messages.length > 0 || Boolean(agentState?.messages.length));
+  const canSaveArtifact = !artifactSaving && (chatState.messages.length > 0 || Boolean(agentState?.messages.length));
+  const checkpointButtonLabel = !canSaveCheckpoint
+    ? t('chatPane.saveCheckpointDisabled')
+    : checkpointSaved
+      ? t('chatPane.checkpointSaved')
+      : t('chatPane.saveCheckpoint');
+  const artifactButtonLabel = canSaveArtifact
+    ? t('chatPane.saveArtifact')
+    : t('chatPane.saveArtifactDisabled');
   const sshConnected = hasExecutableLinkedSsh;
   const sshSignalTitle = sshConnected ? t('chatPane.sshConnected') : t('chatPane.sshDisconnected');
   const planStatusLabels: Record<NonNullable<typeof extractedPlan.items[number]>['status'], string> = {
@@ -2040,17 +2066,21 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
           <div className="flex items-center gap-1.5">
             <div className="relative">
-              <button
-                ref={historyButtonRef}
-                type="button"
-                tabIndex={-1}
-                aria-label={t('chatPane.history')}
-                onMouseDown={preventMouseButtonFocus}
-                onClick={() => setHistoryMenuOpen((open) => !open)}
-                className={chatHeaderIconButtonClassName}
-              >
-                <History size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
-              </button>
+              <AppTooltip content={t('chatPane.history')} placement="pane-corner">
+                <span className="inline-flex">
+                  <button
+                    ref={historyButtonRef}
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={t('chatPane.history')}
+                    onMouseDown={preventMouseButtonFocus}
+                    onClick={() => setHistoryMenuOpen((open) => !open)}
+                    className={chatHeaderIconButtonClassName}
+                  >
+                    <History size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                  </button>
+                </span>
+              </AppTooltip>
 
               {historyMenuOpen ? (
                 <div
@@ -2159,66 +2189,90 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               ) : null}
             </div>
 
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('chatPane.newConversation')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={handleNewConversation}
-              disabled={isBusy}
-              className={chatHeaderIconButtonClassName}
-            >
-              <MessageSquarePlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
-            </button>
+            <AppTooltip content={t('chatPane.newConversation')} placement="pane-corner">
+              <span className="inline-flex">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={t('chatPane.newConversation')}
+                  onMouseDown={preventMouseButtonFocus}
+                  onClick={handleNewConversation}
+                  disabled={isBusy}
+                  className={`${chatHeaderIconButtonClassName} ${isBusy ? 'pointer-events-none' : ''}`}
+                >
+                  <MessageSquarePlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                </button>
+              </span>
+            </AppTooltip>
 
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('chatPane.saveCheckpoint')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={handleSaveCheckpoint}
-              disabled={isBusy || (!chatState.messages.length && !agentState?.messages.length)}
-              className={chatHeaderIconButtonClassName}
-            >
-              <BookmarkPlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
-            </button>
+            <AppTooltip content={checkpointButtonLabel} placement="pane-corner">
+              <span className="inline-flex">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={checkpointButtonLabel}
+                  onMouseDown={preventMouseButtonFocus}
+                  onClick={handleSaveCheckpoint}
+                  disabled={!canSaveCheckpoint}
+                  className={`${chatHeaderIconButtonClassName} ${!canSaveCheckpoint ? 'pointer-events-none' : ''}`}
+                >
+                  {checkpointSaved ? (
+                    <BookmarkCheck size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                  ) : (
+                    <Bookmark size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                  )}
+                </button>
+              </span>
+            </AppTooltip>
 
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('chatPane.saveArtifact')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void handleSaveArtifact();
-              }}
-              disabled={artifactSaving || (!chatState.messages.length && !agentState?.messages.length)}
-              className={chatHeaderIconButtonClassName}
-            >
-              <Archive size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
-            </button>
+            <AppTooltip content={artifactButtonLabel} placement="pane-corner">
+              <span className="inline-flex">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={artifactButtonLabel}
+                  onMouseDown={preventMouseButtonFocus}
+                  onClick={() => {
+                    void handleSaveArtifact();
+                  }}
+                  disabled={!canSaveArtifact}
+                  className={`${chatHeaderIconButtonClassName} ${!canSaveArtifact ? 'pointer-events-none' : ''}`}
+                >
+                  <Archive size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                </button>
+              </span>
+            </AppTooltip>
 
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('chatPane.plan')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => setPlanPaneOpen((open) => !open)}
-              className={chatHeaderIconButtonClassName}
-            >
-              <ListTodo size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
-            </button>
+            <AppTooltip content={t('chatPane.plan')} placement="pane-corner">
+              <span className="inline-flex">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={t('chatPane.plan')}
+                  onMouseDown={preventMouseButtonFocus}
+                  onClick={() => setPlanPaneOpen((open) => !open)}
+                  className={chatHeaderIconButtonClassName}
+                >
+                  <ListTodo size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                </button>
+              </span>
+            </AppTooltip>
 
             {onClose && (
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={t('common.close')}
-                onMouseDown={preventMouseButtonFocus}
-                onClick={onClose}
-                className={chatHeaderIconButtonClassName}
-              >
-                <X size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
-              </button>
+              <AppTooltip content={t('common.close')} placement="pane-corner">
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={t('common.close')}
+                    onMouseDown={preventMouseButtonFocus}
+                    onClick={onClose}
+                    className={chatHeaderIconButtonClassName}
+                  >
+                    <X size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
+                  </button>
+                </span>
+              </AppTooltip>
             )}
           </div>
         </div>
