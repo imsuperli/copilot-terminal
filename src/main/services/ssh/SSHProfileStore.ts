@@ -182,6 +182,8 @@ function normalizeProfile(input: Partial<SSHProfile> & Pick<SSHProfile, 'id' | '
   const reuseSession = normalizeBoolean(input.reuseSession, true);
   const algorithms = resolveSSHAlgorithmPreferences(input.algorithms);
   const forwardedPorts = normalizeForwardedPorts(input.forwardedPorts);
+  const remoteLocaleMode = normalizeRemoteLocaleMode(input.remoteLocaleMode);
+  const remoteLocale = normalizeOptionalString(input.remoteLocale);
   const remoteCommand = normalizeOptionalString(input.remoteCommand);
   const defaultRemoteCwd = normalizeOptionalRemoteCwd(input.defaultRemoteCwd);
   const tags = uniqueStrings(Array.isArray(input.tags) ? input.tags : []);
@@ -232,6 +234,8 @@ function normalizeProfile(input: Partial<SSHProfile> & Pick<SSHProfile, 'id' | '
     reuseSession,
     algorithms,
     forwardedPorts,
+    ...(remoteLocaleMode !== 'auto' ? { remoteLocaleMode } : {}),
+    ...(remoteLocale ? { remoteLocale } : {}),
     ...(remoteCommand ? { remoteCommand } : {}),
     ...(defaultRemoteCwd ? { defaultRemoteCwd } : {}),
     tags,
@@ -256,6 +260,10 @@ function normalizeOptionalRemoteCwd(value: unknown): string | undefined {
   }
 
   return normalized;
+}
+
+function normalizeRemoteLocaleMode(value: unknown): 'auto' | 'custom' {
+  return value === 'custom' ? 'custom' : 'auto';
 }
 
 function normalizeForwardedPorts(value: unknown): ForwardedPortConfig[] {

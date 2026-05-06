@@ -32,6 +32,10 @@ import {
   createSocksProxySocket,
 } from './SSHTransportSockets';
 import { resolveSSHAlgorithmPreferences } from './SSHAlgorithmCatalog';
+import {
+  buildSSHLocaleEnvironment,
+  wrapExecCommandWithSSHLocale,
+} from './SSHLocale';
 import { SSHSftpSession } from './SSHSftpSession';
 import { connectToX11Display, describeX11DisplaySpec } from './X11Socket';
 
@@ -176,7 +180,7 @@ export class SSHClientConnection implements ISSHConnection {
   async openShell(options: SSHShellOpenOptions): Promise<ClientChannel> {
     await this.connect();
 
-    const shellEnv = buildRemoteShellEnv();
+    const shellEnv = buildRemoteShellEnv(this.ssh);
 
     return new Promise<ClientChannel>((resolve, reject) => {
       this.client.shell(
@@ -634,9 +638,10 @@ export class SSHClientConnection implements ISSHConnection {
     callbacks?: SSHExecCommandCallbacks,
   ): Promise<SSHExecCommandHandle> {
     await this.connect();
+    const wrappedCommand = wrapExecCommandWithSSHLocale(command, this.ssh);
 
     return new Promise<SSHExecCommandHandle>((resolve, reject) => {
-      this.client.exec(command, (error, channel) => {
+      this.client.exec(wrappedCommand, (error, channel) => {
         if (error) {
           reject(error);
           return;
@@ -1112,13 +1117,11 @@ function formatForwardedPort(forward: ForwardedPortConfig): string {
   return `(local) ${forward.host}:${forward.port} -> (remote) ${forward.targetAddress}:${forward.targetPort}`;
 }
 
-function buildRemoteShellEnv(): Record<string, string> {
-  const utf8Locale = resolvePreferredUtf8Locale();
+function buildRemoteShellEnv(ssh: SSHSessionConfig): Record<string, string> {
   const env: Record<string, string> = {
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Synapse',
-    LANG: process.env.LANG || utf8Locale,
-    LC_CTYPE: process.env.LC_CTYPE || process.env.LANG || utf8Locale,
+    ...buildSSHLocaleEnvironment(ssh),
   };
 
   if (process.env.TERM_PROGRAM_VERSION) {
@@ -1126,14 +1129,6 @@ function buildRemoteShellEnv(): Record<string, string> {
   }
 
   return env;
-}
-
-function resolvePreferredUtf8Locale(): string {
-  if (process.platform === 'win32') {
-    return 'en_US.UTF-8';
-  }
-
-  return 'C.UTF-8';
 }
 
 function createConnectTimeoutController(

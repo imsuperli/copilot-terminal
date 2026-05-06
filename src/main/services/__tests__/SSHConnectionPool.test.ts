@@ -90,6 +90,10 @@ describe('SSHConnectionPool', () => {
     const jumpKey = buildSSHConnectionKey(createSSHConfig({ jumpHostProfileId: 'jump-1' }));
     const proxyKey = buildSSHConnectionKey(createSSHConfig({ proxyCommand: 'nc %h %p' }));
     const relaxedVerifyKey = buildSSHConnectionKey(createSSHConfig({ verifyHostKeys: false }));
+    const customLocaleKey = buildSSHConnectionKey(createSSHConfig({
+      remoteLocaleMode: 'custom',
+      remoteLocale: 'zh_CN.UTF-8',
+    }));
     const algorithmKey = buildSSHConnectionKey(createSSHConfig({
       algorithms: {
         kex: ['diffie-hellman-group14-sha256'],
@@ -103,6 +107,7 @@ describe('SSHConnectionPool', () => {
     expect(jumpKey).not.toBe(baseKey);
     expect(proxyKey).not.toBe(baseKey);
     expect(relaxedVerifyKey).not.toBe(baseKey);
+    expect(customLocaleKey).not.toBe(baseKey);
     expect(algorithmKey).not.toBe(baseKey);
   });
 });

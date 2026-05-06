@@ -200,5 +200,7 @@ export function buildSSHConnectionKey(config: SSHSessionConfig): string {
       targetPort: forward.targetPort,
       description: forward.description ?? null,
     })),
+    remoteLocaleMode: config.remoteLocaleMode ?? 'auto',
+    remoteLocale: config.remoteLocale ?? null,
   });
 }

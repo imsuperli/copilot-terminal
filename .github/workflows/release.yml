@@ -9,7 +9,30 @@ permissions:
   contents: write
 
 jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Validate tag matches package version
+        shell: bash
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          EXPECTED_TAG="v${PKG_VERSION}"
+
+          if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
+            echo "::error title=Version mismatch::Git tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}"
+            exit 1
+          fi
+
   build-windows:
+    needs: validate-version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -38,6 +61,7 @@ jobs:
           retention-days: 1
 
   build-mac:
+    needs: validate-version
     runs-on: macos-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false

@@ -4,6 +4,8 @@ export type SSHAuthType =
   | 'agent'
   | 'keyboardInteractive';
 
+export type SSHRemoteLocaleMode = 'auto' | 'custom';
+
 export type SSHAlgorithmType =
   | 'kex'
   | 'hostKey'
@@ -113,6 +115,8 @@ export interface SSHProfile {
   reuseSession: boolean;
   algorithms?: SSHAlgorithmPreferences;
   forwardedPorts: ForwardedPortConfig[];
+  remoteLocaleMode?: SSHRemoteLocaleMode;
+  remoteLocale?: string;
   remoteCommand?: string;
   defaultRemoteCwd?: string;
   tags: string[];

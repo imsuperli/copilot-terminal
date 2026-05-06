@@ -10,6 +10,7 @@ import {
 } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
+import { buildSSHLocaleExportCommand } from './SSHLocale';
 import { SSHZmodemController, type ZmodemSentry, type ZmodemSentryOptions } from './SSHZmodemController';
 
 export interface SSHPtySessionOptions {
@@ -476,13 +477,22 @@ function decodeChunk(value: Buffer | string, decoder: StringDecoder): string {
 }
 
 function hasShellInitialization(ssh: SSHSessionConfig): boolean {
-  return Boolean(ssh.remoteCwd?.trim() || ssh.command?.trim());
+  return Boolean(
+    buildSSHLocaleExportCommand(ssh)
+    || ssh.remoteCwd?.trim()
+    || ssh.command?.trim(),
+  );
 }
 
 function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   const commands: string[] = [];
+  const localeExportCommand = buildSSHLocaleExportCommand(ssh);
   const remoteCwd = normalizeRemoteCwdForShellInitialization(ssh.remoteCwd);
   const startupCommand = ssh.command?.trim();
+
+  if (localeExportCommand) {
+    commands.push(localeExportCommand);
+  }
 
   if (remoteCwd) {
     commands.push(buildRemoteCdCommand(remoteCwd));

@@ -522,6 +522,8 @@ async function buildSSHSessionConfig(
       ...(profile.algorithms ? { algorithms: profile.algorithms } : {}),
       x11: profile.x11,
       skipBanner: profile.skipBanner,
+      ...(profile.remoteLocaleMode ? { remoteLocaleMode: profile.remoteLocaleMode } : {}),
+      ...(profile.remoteLocale ? { remoteLocale: profile.remoteLocale } : {}),
       ...(remoteCwd ? { remoteCwd } : {}),
       ...(options.command || profile.remoteCommand ? { command: options.command || profile.remoteCommand } : {}),
     };
