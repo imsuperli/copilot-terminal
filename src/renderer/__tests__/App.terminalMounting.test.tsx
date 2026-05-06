@@ -355,4 +355,50 @@ describe('App terminal mounting', () => {
       expect(switchToUnifiedView).toHaveBeenCalledTimes(2);
     });
   });
+
+  it('returns directly to unified view from terminal title bar home even when opened from canvas context', async () => {
+    const switchToUnifiedView = vi.fn().mockResolvedValue(undefined);
+    const switchToCanvasView = vi.fn().mockResolvedValue(undefined);
+    const terminalWindow = createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe');
+
+    mockUseViewSwitcher.mockReturnValue({
+      currentView: 'terminal',
+      activeWindowId: terminalWindow.id,
+      activeCanvasWorkspaceId: null,
+      switchToTerminalView: vi.fn(),
+      switchToCanvasView,
+      switchToUnifiedView,
+      error: null,
+    });
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Ops Board',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z',
+          blocks: [],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 1,
+        },
+      ],
+      activeWindowId: terminalWindow.id,
+      activeCanvasWorkspaceId: null,
+      activeGroupId: null,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText('Home'));
+
+    await waitFor(() => {
+      expect(switchToUnifiedView).toHaveBeenCalledTimes(1);
+      expect(switchToCanvasView).not.toHaveBeenCalled();
+    });
+  });
 });

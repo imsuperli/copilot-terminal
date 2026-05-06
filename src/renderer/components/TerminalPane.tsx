@@ -1222,7 +1222,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return false; // 阻止 xterm.js 处理粘贴键
       }
 
-      // 其他按键（包括 Ctrl+Enter、Ctrl+Tab、Shift+Enter、Ctrl+J 等）交给终端程序自行处理
+      // 其他按键（包括 Ctrl+Enter、Shift+Enter、Ctrl+J 等）继续走 xterm 的默认处理；
+      // 像 Ctrl+Tab 这样的组合如果被上层应用快捷键消费，也不会在这里合成额外 PTY 输入。
       return true;
     });
 

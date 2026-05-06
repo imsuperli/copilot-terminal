@@ -50,6 +50,19 @@ describe('useKeyboardShortcuts', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it('still handles Ctrl+Tab from the xterm helper textarea', () => {
+    const onCtrlTab = vi.fn();
+    render(<TestHarness onCtrlTab={onCtrlTab} />);
+
+    const event = dispatchKeyDown(screen.getByTestId('xterm-helper'), {
+      key: 'Tab',
+      ctrlKey: true,
+    });
+
+    expect(onCtrlTab).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('still handles Escape from the xterm helper textarea when the UI consumes it', () => {
     const onEscape = vi.fn(() => true);
     render(<TestHarness onEscape={onEscape} />);

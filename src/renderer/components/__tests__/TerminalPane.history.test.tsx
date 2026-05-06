@@ -911,7 +911,7 @@ describe('TerminalPane history replay', () => {
     });
   });
 
-  it('lets Ctrl+Enter and Ctrl+Tab pass through to the terminal without synthetic PTY writes', async () => {
+  it('does not synthesize PTY writes for Ctrl+Enter or Ctrl+Tab key presses', async () => {
     vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
       success: true,
       data: { chunks: [], lastSeq: 0 },

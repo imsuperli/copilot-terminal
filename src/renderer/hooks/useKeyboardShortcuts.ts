@@ -29,8 +29,11 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       const isXtermTextarea = target?.classList?.contains('xterm-helper-textarea');
 
       if (isXtermTextarea) {
-        // 终端输入焦点下优先透传给 CLI，只保留已经打开的应用面板所需的 Escape。
-        if (e.key !== 'Escape') {
+        // 终端输入焦点下默认透传给 CLI，但保留 Ctrl+Tab 和 Escape 这类明确的应用级导航。
+        const isAppLevelShortcut =
+          (e.ctrlKey && e.key === 'Tab')
+          || e.key === 'Escape';
+        if (!isAppLevelShortcut) {
           return;
         }
       }

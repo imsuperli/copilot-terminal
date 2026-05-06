@@ -10,6 +10,7 @@ import {
   IdeMenuItemContent,
 } from './ui/ide-menu';
 import {
+  idePopupActionButtonClassName,
   idePopupInteractiveListCardClassName,
   idePopupListCardFooterClassName,
   idePopupPillClassName,
@@ -35,6 +36,7 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
 }) => {
   const { language, t } = useI18n();
   const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
+  const primaryCardActionClassName = `${idePopupActionButtonClassName('primary')} min-w-0 px-3 py-1.5 text-xs`;
 
   const blockSummary = useMemo(() => {
     const noteCount = canvasWorkspace.blocks.filter((block) => block.type === 'note').length;
@@ -165,8 +167,27 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
         </div>
       </div>
 
-      <div className={`${idePopupListCardFooterClassName} border-t border-[rgb(var(--border))]`}>
-        <span>{canvasWorkspace.archived ? t('status.archived') : t('canvas.openWorkspace')}</span>
+      <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 items-center justify-between gap-3 px-4 py-2`}>
+        <span className="text-xs text-[rgb(var(--muted-foreground))]">
+          {canvasWorkspace.archived ? t('status.archived') : t('canvas.updatedAt', { time: updatedAt })}
+        </span>
+        {!canvasWorkspace.archived ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onClick?.(canvasWorkspace.id);
+            }}
+            className={primaryCardActionClassName}
+            aria-label={t('canvas.openWorkspace')}
+          >
+            {t('canvas.openWorkspace')}
+          </button>
+        ) : (
+          <span className="text-xs font-medium text-[rgb(var(--muted-foreground))]">
+            {t('status.archived')}
+          </span>
+        )}
       </div>
     </div>
   );

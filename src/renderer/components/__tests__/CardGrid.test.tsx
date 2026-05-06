@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -353,5 +353,20 @@ describe('CardGrid', () => {
 
     expect(screen.getByText('Ops Board')).toBeInTheDocument();
     expect(screen.queryByText('Source Window')).not.toBeInTheDocument();
+  });
+
+  it('renders a styled action button for opening canvas workspaces', () => {
+    useWindowStore.setState({
+      canvasWorkspaces: [makeCanvasWorkspace()],
+    });
+
+    renderCardGrid({ currentTab: 'canvas' });
+
+    const canvasCard = screen.getByRole('button', { name: /Ops Board/ });
+    const openButton = within(canvasCard).getByRole('button', { name: '打开画布' });
+
+    expect(openButton.className).toContain('inline-flex');
+    expect(openButton.className).toContain('border-[rgb(var(--primary))]/72');
+    expect(openButton.className).toContain('bg-[rgb(var(--primary))]');
   });
 });
