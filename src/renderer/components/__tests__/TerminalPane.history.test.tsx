@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetTerminalPaneReplaySessionCacheForTests, TerminalPane } from '../TerminalPane';
 import { WindowStatus } from '../../types/window';
@@ -970,6 +970,43 @@ describe('TerminalPane history replay', () => {
       '\n',
       { source: 'ctrl-enter' },
     );
+  });
+
+  it('re-focuses xterm when clicking an already active pane', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+
+    const { container } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    const terminal = terminalInstances[0];
+    terminal.focus.mockClear();
+
+    const paneRoot = container.firstElementChild as HTMLElement | null;
+    expect(paneRoot).not.toBeNull();
+
+    fireEvent.click(paneRoot!);
+
+    expect(terminal.focus).toHaveBeenCalledTimes(1);
   });
 
   it('does not text-paste when ssh image upload already handled the clipboard', async () => {

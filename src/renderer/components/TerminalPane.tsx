@@ -383,6 +383,41 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const showPaneHeader = !!(pane.title || pane.agentName);
   const showCloseButton = Boolean(onClose && isHovered);
 
+  const focusTerminalInput = useCallback((options?: { defer?: boolean; onlyWhenOutsidePane?: boolean }) => {
+    const runFocus = () => {
+      const currentTerminal = terminalRef.current;
+      if (!currentTerminal) {
+        return;
+      }
+
+      if (options?.onlyWhenOutsidePane) {
+        const paneRoot = paneRootRef.current;
+        const activeElement = document.activeElement;
+        if (paneRoot && activeElement instanceof Node && paneRoot.contains(activeElement)) {
+          return;
+        }
+      }
+
+      try {
+        currentTerminal.focus();
+
+        const textarea = terminalContainerRef.current?.querySelector('textarea');
+        if (textarea instanceof HTMLElement && typeof textarea.focus === 'function') {
+          textarea.focus();
+        }
+      } catch (error) {
+        console.error(`[TerminalPane] Error focusing pane ${pane.id}:`, error);
+      }
+    };
+
+    if (options?.defer) {
+      requestAnimationFrame(runFocus);
+      return;
+    }
+
+    runFocus();
+  }, [pane.id]);
+
   const syncPtySize = useCallback((terminal: Terminal, options?: { force?: boolean }) => {
     if (!window.electronAPI) {
       return;
@@ -702,20 +737,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     if (!terminalRef.current) return;
 
     if (shouldFocus) {
-      requestAnimationFrame(() => {
-        if (!terminalRef.current) return;
-
-        try {
-          terminalRef.current.focus();
-
-          const textarea = terminalContainerRef.current?.querySelector('textarea');
-          if (textarea) {
-            textarea.focus();
-          }
-        } catch (error) {
-          console.error(`[TerminalPane] Error focusing pane ${pane.id}:`, error);
-        }
-      });
+      focusTerminalInput({ defer: true });
     } else {
       // 非激活窗格：失焦并隐藏光标
       try {
@@ -728,7 +750,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         console.error(`[TerminalPane] Error blurring pane ${pane.id}:`, error);
       }
     }
-  }, [isActive, isWindowActive, pane.id]);
+  }, [focusTerminalInput, isActive, isWindowActive]);
 
   useEffect(() => {
     if (!isWindowActive) {
@@ -753,14 +775,20 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     lastLayoutPaneCountRef.current = layoutPaneCount;
 
     forceResizeToContainer();
+    if (isActive && isWindowActive) {
+      focusTerminalInput({ onlyWhenOutsidePane: true });
+    }
     const delayedResizeTimer = window.setTimeout(() => {
       forceResizeToContainer();
+      if (isActive && isWindowActive) {
+        focusTerminalInput({ onlyWhenOutsidePane: true });
+      }
     }, 120);
 
     return () => {
       window.clearTimeout(delayedResizeTimer);
     };
-  }, [forceResizeToContainer, layoutPaneCount]);
+  }, [focusTerminalInput, forceResizeToContainer, isActive, isWindowActive, layoutPaneCount]);
 
   // 监听字体设置更新
   useEffect(() => {
@@ -1364,8 +1392,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const handleClick = useCallback(() => {
     if (!isActive) {
       onActivate();
+      return;
     }
-  }, [isActive, onActivate]);
+
+    // 已处于 active 状态时，点击窗格也要把真实键盘焦点抢回给 xterm。
+    focusTerminalInput();
+  }, [focusTerminalInput, isActive, onActivate]);
 
   return (
     <div

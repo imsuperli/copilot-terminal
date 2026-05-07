@@ -4,31 +4,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalPane } from '../TerminalPane';
 import { WindowStatus } from '../../types/window';
 
-const { fitAddonInstances } = vi.hoisted(() => ({
+const { fitAddonInstances, terminalInstances } = vi.hoisted(() => ({
   fitAddonInstances: [] as Array<{
     fit: ReturnType<typeof vi.fn>;
+  }>,
+  terminalInstances: [] as Array<{
+    focus: ReturnType<typeof vi.fn>;
   }>,
 }));
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: vi.fn(function MockTerminal() {
-    return {
+    const instance = {
       loadAddon: vi.fn(),
       registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
       open: vi.fn(),
       focus: vi.fn(),
       blur: vi.fn(),
-    dispose: vi.fn(),
-    write: vi.fn(),
-    paste: vi.fn(),
-    getSelection: vi.fn().mockReturnValue(''),
-    onData: vi.fn(() => ({ dispose: vi.fn() })),
-    onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
+      dispose: vi.fn(),
+      write: vi.fn(),
+      paste: vi.fn(),
+      getSelection: vi.fn().mockReturnValue(''),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
+      onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
       attachCustomKeyEventHandler: vi.fn(),
       options: {},
       cols: 120,
       rows: 40,
     };
+    terminalInstances.push(instance);
+    return instance;
   }),
 }));
 
@@ -57,6 +62,7 @@ describe('TerminalPane resize on resume', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fitAddonInstances.length = 0;
+    terminalInstances.length = 0;
 
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,
@@ -182,6 +188,60 @@ describe('TerminalPane resize on resume', () => {
       expect(fitAddonInstances[0]?.fit).toHaveBeenCalled();
       expect(window.electronAPI.ptyResize).toHaveBeenCalledWith('win-1', 'pane-1', 120, 40);
     });
+  });
+
+  it('re-focuses the active pane when pane count changes and focus drifted outside', async () => {
+    const { rerender } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        layoutPaneCount={1}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.ptyResize).toHaveBeenCalled();
+    });
+
+    const outsideButton = document.createElement('button');
+    document.body.appendChild(outsideButton);
+    outsideButton.focus();
+
+    const terminal = terminalInstances[0];
+    expect(terminal).toBeDefined();
+    terminal?.focus.mockClear();
+
+    rerender(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        layoutPaneCount={2}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(terminal?.focus).toHaveBeenCalled();
+    });
+
+    outsideButton.remove();
   });
 
   it('shows the tmux close button only on hover', () => {
