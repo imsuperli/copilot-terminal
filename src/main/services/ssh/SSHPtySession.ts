@@ -10,7 +10,6 @@ import {
 } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
-import { buildSSHLocaleExportCommand } from './SSHLocale';
 import { SSHZmodemController, type ZmodemSentry, type ZmodemSentryOptions } from './SSHZmodemController';
 
 export interface SSHPtySessionOptions {
@@ -310,6 +309,7 @@ export class SSHPtySession implements IPty {
       cols: this.cols,
       rows: this.rows,
       x11: this.ssh.x11,
+      echo: !hasShellInitialization(this.ssh),
     });
 
     this.attachChannel(stream);
@@ -428,7 +428,7 @@ export class SSHPtySession implements IPty {
 
     if (commands.length > 0) {
       this.shellInitialized = true;
-      this.channel.write(`${commands.join('\r')}\r`);
+      this.channel.write(`${commands.join('\r')}\rstty echo\r`);
     }
   }
 
@@ -478,21 +478,15 @@ function decodeChunk(value: Buffer | string, decoder: StringDecoder): string {
 
 function hasShellInitialization(ssh: SSHSessionConfig): boolean {
   return Boolean(
-    buildSSHLocaleExportCommand(ssh)
-    || ssh.remoteCwd?.trim()
+    normalizeRemoteCwdForShellInitialization(ssh.remoteCwd)
     || ssh.command?.trim(),
   );
 }
 
 function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   const commands: string[] = [];
-  const localeExportCommand = buildSSHLocaleExportCommand(ssh);
   const remoteCwd = normalizeRemoteCwdForShellInitialization(ssh.remoteCwd);
   const startupCommand = ssh.command?.trim();
-
-  if (localeExportCommand) {
-    commands.push(localeExportCommand);
-  }
 
   if (remoteCwd) {
     commands.push(buildRemoteCdCommand(remoteCwd));

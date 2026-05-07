@@ -99,11 +99,12 @@ describe('SSHPtySession', () => {
       x11: true,
       cols: 120,
       rows: 30,
+      echo: false,
     }));
     channel.emit('data', 'Last login\r\n');
     await vi.advanceTimersByTimeAsync(40);
     expect(channel.write).toHaveBeenCalledWith(
-      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rcd -- '/srv/app'\r",
+      "cd -- '/srv/app'\rstty echo\r",
     );
 
     session.kill();
@@ -157,7 +158,7 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rcd -- ~/\"workspace with spaces\"\r",
+      "cd -- ~/\"workspace with spaces\"\rstty echo\r",
     );
   });
 
@@ -207,9 +208,10 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Welcome\r\n');
     await vi.advanceTimersByTimeAsync(40);
 
-    expect(channel.write).toHaveBeenCalledWith(
-      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\r",
-    );
+    expect(openShell).toHaveBeenCalledWith(expect.objectContaining({
+      echo: true,
+    }));
+    expect(channel.write).not.toHaveBeenCalled();
   });
 
   it('always applies configured remote cwd directly when initializing the shell', async () => {
@@ -259,11 +261,11 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rcd -- ~/\"de/de/win/de/co/de/co\"\r",
+      "cd -- ~/\"de/de/win/de/co/de/co\"\rstty echo\r",
     );
   });
 
-  it('injects locale exports before running a startup command without cwd', async () => {
+  it('runs a startup command silently before restoring shell echo', async () => {
     vi.useFakeTimers();
     vi.stubEnv('LANG', '');
     vi.stubEnv('LC_CTYPE', '');
@@ -309,8 +311,11 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Welcome\r\n');
     await vi.advanceTimersByTimeAsync(40);
 
+    expect(openShell).toHaveBeenCalledWith(expect.objectContaining({
+      echo: false,
+    }));
     expect(channel.write).toHaveBeenCalledWith(
-      "export LANG='en_US.UTF-8' LC_CTYPE='en_US.UTF-8' LC_ALL='en_US.UTF-8'\rprintf test\r",
+      "printf test\rstty echo\r",
     );
   });
 

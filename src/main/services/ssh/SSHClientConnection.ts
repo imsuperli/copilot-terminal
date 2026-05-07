@@ -43,6 +43,7 @@ export interface SSHShellOpenOptions {
   cols: number;
   rows: number;
   x11?: boolean;
+  echo?: boolean;
 }
 
 export interface SSHForwardOutOptions {
@@ -188,6 +189,9 @@ export class SSHClientConnection implements ISSHConnection {
           term: 'xterm-256color',
           cols: Math.max(options.cols, 1),
           rows: Math.max(options.rows, 1),
+          modes: {
+            ECHO: options.echo === false ? 0 : 1,
+          },
         },
         {
           ...(Object.keys(shellEnv).length > 0 ? { env: shellEnv } : {}),

@@ -60,6 +60,9 @@ describe('SSHClientConnection', () => {
         term: 'xterm-256color',
         cols: 140,
         rows: 40,
+        modes: {
+          ECHO: 1,
+        },
       }),
       expect.objectContaining({
         env: expect.objectContaining({
@@ -109,7 +112,11 @@ describe('SSHClientConnection', () => {
     })).resolves.toBe(stream);
 
     expect(shell).toHaveBeenCalledWith(
-      expect.any(Object),
+      expect.objectContaining({
+        modes: {
+          ECHO: 1,
+        },
+      }),
       expect.objectContaining({
         env: expect.objectContaining({
           LANG: 'en_US.UTF-8',
@@ -146,7 +153,11 @@ describe('SSHClientConnection', () => {
     });
 
     expect(shell).toHaveBeenCalledWith(
-      expect.any(Object),
+      expect.objectContaining({
+        modes: {
+          ECHO: 1,
+        },
+      }),
       expect.objectContaining({
         env: expect.objectContaining({
           LANG: 'ja_JP.UTF-8',
@@ -199,6 +210,38 @@ describe('SSHClientConnection', () => {
 
     await expect(connectPromise).resolves.toBeUndefined();
     expect(verifierCallback).toHaveBeenCalledWith(true);
+  });
+
+  it('can disable shell echo during remote initialization', async () => {
+    const stream = { id: 'shell-stream' };
+    const shell = vi.fn((
+      _window: unknown,
+      _options: { env?: Record<string, string> },
+      callback: (error?: Error, stream?: unknown) => void,
+    ) => {
+      callback(undefined, stream as any);
+      return {};
+    });
+    const connection = new SSHClientConnection(createSSHConfig());
+
+    (connection as any).ready = true;
+    (connection as any).client = { shell };
+
+    await expect(connection.openShell({
+      cols: 80,
+      rows: 24,
+      echo: false,
+    })).resolves.toBe(stream);
+
+    expect(shell).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modes: {
+          ECHO: 0,
+        },
+      }),
+      expect.any(Object),
+      expect.any(Function),
+    );
   });
 
   it('rejects when the SSH handshake exceeds the configured timeout', async () => {
