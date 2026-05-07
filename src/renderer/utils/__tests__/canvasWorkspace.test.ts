@@ -97,6 +97,33 @@ describe('canvasWorkspace utils', () => {
     expect(size.height).toBeGreaterThan(220);
   });
 
+  it('uses a taller default size for standard terminal window blocks', () => {
+    const terminalWindow = {
+      id: 'terminal-window-1',
+      name: 'Terminal',
+      activePaneId: 'terminal-pane-1',
+      createdAt: '2026-05-07T00:00:00.000Z',
+      lastActiveAt: '2026-05-07T00:00:00.000Z',
+      kind: 'local' as const,
+      layout: {
+        type: 'pane' as const,
+        id: 'terminal-pane-1',
+        pane: {
+          id: 'terminal-pane-1',
+          cwd: '/workspace',
+          command: 'bash',
+          status: WindowStatus.Completed,
+          pid: null,
+          backend: 'local' as const,
+        },
+      },
+    };
+
+    const size = getCanvasWindowBlockSize(terminalWindow);
+    expect(size.width).toBe(360);
+    expect(size.height).toBeGreaterThan(220);
+  });
+
   it('finds a non-overlapping insert rect beyond reserved top-left space', () => {
     const rect = findCanvasWindowInsertRect(sampleBlocks, { width: 360, height: 220 });
     expect(rect.x).toBeGreaterThanOrEqual(112);

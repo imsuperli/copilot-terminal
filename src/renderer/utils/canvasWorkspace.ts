@@ -39,7 +39,7 @@ export const CANVAS_BOUNDS_PADDING = 48;
 export const CANVAS_MIN_ZOOM = 0.3;
 export const CANVAS_MAX_ZOOM = 2.5;
 export const DEFAULT_NOTE_BLOCK_SIZE = { width: 320, height: 200 };
-export const DEFAULT_WINDOW_BLOCK_SIZE = { width: 360, height: 220 };
+export const DEFAULT_WINDOW_BLOCK_SIZE = { width: 360, height: 252 };
 export const DEFAULT_CHAT_WINDOW_BLOCK_SIZE = { width: 440, height: 320 };
 export const DEFAULT_BROWSER_WINDOW_BLOCK_SIZE = { width: 420, height: 300 };
 export const DEFAULT_CODE_WINDOW_BLOCK_SIZE = { width: 460, height: 320 };
@@ -49,7 +49,7 @@ export const DEFAULT_CANVAS_INSERT_SEARCH_PADDING = 24;
 
 const MIN_BLOCK_SIZE: Record<CanvasBlockType, { width: number; height: number }> = {
   note: { width: 220, height: 140 },
-  window: { width: 280, height: 180 },
+  window: { width: 320, height: 232 },
 };
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -456,6 +456,15 @@ export function doesCanvasRectIntersectBlock(rect: CanvasRect, block: CanvasBloc
     || rect.x > block.x + block.width
     || rect.y + rect.height < block.y
     || rect.y > block.y + block.height
+  );
+}
+
+export function doCanvasRectsIntersect(left: CanvasRect, right: CanvasRect): boolean {
+  return !(
+    left.x + left.width < right.x
+    || left.x > right.x + right.width
+    || left.y + left.height < right.y
+    || left.y > right.y + right.height
   );
 }
 

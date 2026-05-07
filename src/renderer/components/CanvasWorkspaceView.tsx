@@ -39,8 +39,10 @@ import {
 import {
   createTemplateFromWorkspace,
   createDefaultCanvasTemplates,
+  findCanvasTemplateInsertOffset,
   instantiateCanvasWorkspaceFromTemplate,
   mergeCanvasWorkspaceContents,
+  reconcileCanvasWorkspaceTemplates,
 } from '../utils/canvasTemplates';
 import { createCanvasWindowDraft } from '../utils/canvasWindowFactory';
 import { buildCanvasBlockSummary, buildSelectedCanvasContext, exportCanvasWorkspaceReport, serializeCanvasBlockEvidence } from '../utils/canvasInsights';
@@ -276,7 +278,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     [canvasWorkspace.blocks],
   );
   const resolvedTemplates = useMemo(
-    () => canvasWorkspaceTemplates.length > 0 ? canvasWorkspaceTemplates : createDefaultCanvasTemplates(),
+    () => (
+      canvasWorkspaceTemplates.length > 0
+        ? reconcileCanvasWorkspaceTemplates(canvasWorkspaceTemplates)
+        : createDefaultCanvasTemplates()
+    ),
     [canvasWorkspaceTemplates],
   );
   const linkedTerminalPaneEntries = useMemo(() => (
@@ -350,8 +356,14 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   useEffect(() => {
     if (canvasWorkspaceTemplates.length === 0) {
       setCanvasWorkspaceTemplates(createDefaultCanvasTemplates());
+      return;
     }
-  }, [canvasWorkspaceTemplates.length, setCanvasWorkspaceTemplates]);
+
+    const reconciledTemplates = reconcileCanvasWorkspaceTemplates(canvasWorkspaceTemplates);
+    if (JSON.stringify(reconciledTemplates) !== JSON.stringify(canvasWorkspaceTemplates)) {
+      setCanvasWorkspaceTemplates(reconciledTemplates);
+    }
+  }, [canvasWorkspaceTemplates, setCanvasWorkspaceTemplates]);
 
   useEffect(() => {
     let cancelled = false;
@@ -932,6 +944,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       addWindow(windowItem);
     }
 
+    const templateOffset = findCanvasTemplateInsertOffset(
+      canvasWorkspace.blocks,
+      instantiated.workspace.blocks,
+    );
+
     const mergedWorkspace = mergeCanvasWorkspaceContents(
       {
         blocks: canvasWorkspace.blocks,
@@ -943,10 +960,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         links: instantiated.workspace.links ?? [],
         nextZIndex: instantiated.workspace.nextZIndex,
       },
-      {
-        x: 80,
-        y: 60,
-      },
+      templateOffset,
     );
 
     updateCanvasWorkspace(canvasWorkspace.id, {
@@ -1868,17 +1882,17 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                       </div>
                     ) : (
                     <div className="flex h-full min-h-0 flex-col p-4 text-sm text-[rgb(var(--muted-foreground))]">
-                      <div className="min-h-0 flex-1">
+                      <div className="min-h-0 flex-1 overflow-hidden">
                         {linkedWindow ? (
                           isChatWindow ? (
-                            <div className="mt-3 flex h-full min-h-0 flex-col">
-                              <div className="space-y-2 text-[rgb(var(--muted-foreground))]">
+                            <div className="mt-3 flex h-full min-h-0 flex-col overflow-hidden">
+                              <div className="shrink-0 space-y-2 text-[rgb(var(--muted-foreground))]">
                                 <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
                                 <div>{t('canvas.chatMessageCount', { count: chatMessageCount })}</div>
                               </div>
-                              <div className="mt-3 min-h-0 flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_44%,transparent)] p-3">
+                              <div className="mt-3 min-h-0 flex-1 overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_44%,transparent)] p-3">
                                 {chatPreview ? (
-                                  <div className="line-clamp-6 whitespace-pre-wrap text-[rgb(var(--foreground))]">
+                                  <div className="line-clamp-6 break-words whitespace-pre-wrap text-[rgb(var(--foreground))]">
                                     {chatPreview}
                                   </div>
                                 ) : (
@@ -1899,12 +1913,12 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                           ) : isCodeWindow ? (
                             <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
                               <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
-                              <div className="line-clamp-2">
+                              <div className="line-clamp-2 break-all">
                                 {t('canvas.windowDirectory', {
                                   path: activePane?.code?.rootPath || workingDirectory || 'N/A',
                                 })}
                               </div>
-                              <div className="line-clamp-3">
+                              <div className="line-clamp-3 break-all">
                                 {activePane?.code?.activeFilePath
                                   ? t('canvas.codeOpenHintWithFile', { path: activePane.code.activeFilePath })
                                   : t('canvas.codeOpenHint')}
@@ -1913,11 +1927,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                           ) : (
                             <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
                               <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
-                              <div className="line-clamp-2">
+                              <div className="line-clamp-2 break-all">
                                 {t('canvas.windowDirectory', { path: workingDirectory || 'N/A' })}
                               </div>
                               {outputPreview ? (
-                                <div className="line-clamp-3">{outputPreview}</div>
+                                <div className="line-clamp-3 break-words whitespace-pre-wrap">{outputPreview}</div>
                               ) : (
                                 <div className="line-clamp-3">{t('canvas.windowOpenHint')}</div>
                               )}
@@ -1947,12 +1961,12 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                           className="mt-4 flex shrink-0 flex-col gap-3 border-t border-[rgb(var(--border))] pt-3"
                         >
                           {!isChatWindow && !isBrowserWindow && !isCodeWindow && workingDirectory ? (
-                            <div className="line-clamp-1 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)] px-3 py-1 text-[11px] text-[rgb(var(--muted-foreground))]">
+                            <div className="max-w-full truncate rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)] px-3 py-1 text-[11px] text-[rgb(var(--muted-foreground))]">
                               {`Dir: ${workingDirectory}`}
                             </div>
                           ) : null}
 
-                          <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
                               <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-2.5 py-1 text-xs text-[rgb(var(--muted-foreground))]">
                                 {getWindowKind(linkedWindow)}
@@ -1963,12 +1977,12 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                                 </span>
                               )}
                             </div>
-                            <div className="flex flex-wrap items-center justify-end gap-2">
+                            <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
                               <button
                                 type="button"
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onOpenWindow?.(linkedWindow.id)}
-                                className="inline-flex min-w-[104px] items-center justify-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+                                className="inline-flex min-w-[104px] flex-1 items-center justify-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] sm:flex-none"
                               >
                                 <MonitorSmartphone size={13} />
                                 {isChatWindow
@@ -1983,7 +1997,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                                 type="button"
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => toggleWindowDisplayMode(block.id, 'live')}
-                                className="inline-flex min-w-[104px] items-center justify-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary))] transition hover:bg-[rgb(var(--primary))]/16"
+                                className="inline-flex min-w-[104px] flex-1 items-center justify-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary))] transition hover:bg-[rgb(var(--primary))]/16 sm:flex-none"
                               >
                                 <MonitorSmartphone size={13} />
                                 {isChatWindow

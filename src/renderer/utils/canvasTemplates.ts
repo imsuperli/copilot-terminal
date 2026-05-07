@@ -8,11 +8,16 @@ import type {
 import type { Window } from '../types/window';
 import {
   createCanvasWindowBlock,
+  DEFAULT_CANVAS_INSERT_ORIGIN,
+  DEFAULT_CANVAS_INSERT_SEARCH_PADDING,
+  DEFAULT_CANVAS_INSERT_STEP,
   DEFAULT_BROWSER_WINDOW_BLOCK_SIZE,
   DEFAULT_CHAT_WINDOW_BLOCK_SIZE,
   DEFAULT_CODE_WINDOW_BLOCK_SIZE,
   DEFAULT_NOTE_BLOCK_SIZE,
   DEFAULT_WINDOW_BLOCK_SIZE,
+  doCanvasRectsIntersect,
+  getCanvasBounds,
 } from './canvasWorkspace';
 import { createCanvasTemplateWindowFromDefinition, inferCanvasWindowDraftKind } from './canvasWindowFactory';
 import type { SSHProfile } from '../../shared/types/ssh';
@@ -20,6 +25,8 @@ import type { SSHProfile } from '../../shared/types/ssh';
 function nowIso(): string {
   return new Date().toISOString();
 }
+
+const SYSTEM_TEMPLATE_TIMESTAMP = '2026-05-07T00:00:00.000Z';
 
 function createTemplateBlock(
   kind: CanvasTemplateBlockDefinition['kind'],
@@ -47,8 +54,127 @@ function createTemplateBlock(
   };
 }
 
+function getTemplateBlockBounds(blocks: Array<Pick<CanvasTemplateBlockDefinition, 'x' | 'y' | 'width' | 'height'>>): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+} {
+  if (blocks.length === 0) {
+    return {
+      minX: 0,
+      minY: 0,
+      maxX: 0,
+      maxY: 0,
+      width: 0,
+      height: 0,
+    };
+  }
+
+  const minX = Math.min(...blocks.map((block) => block.x));
+  const minY = Math.min(...blocks.map((block) => block.y));
+  const maxX = Math.max(...blocks.map((block) => block.x + block.width));
+  const maxY = Math.max(...blocks.map((block) => block.y + block.height));
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+function normalizeSystemTemplate(template: CanvasWorkspaceTemplate): CanvasWorkspaceTemplate {
+  if (!template.system) {
+    return template;
+  }
+
+  const defaultTemplate = createDefaultCanvasTemplates().find((item) => item.id === template.id);
+  if (!defaultTemplate) {
+    return template;
+  }
+
+  return {
+    ...defaultTemplate,
+    createdAt: template.createdAt || defaultTemplate.createdAt,
+    updatedAt: template.updatedAt || defaultTemplate.updatedAt,
+  };
+}
+
+export function reconcileCanvasWorkspaceTemplates(
+  templates: CanvasWorkspaceTemplate[],
+): CanvasWorkspaceTemplate[] {
+  const systemTemplates = createDefaultCanvasTemplates();
+  const customTemplates = templates.filter((template) => !template.system);
+  const existingTemplates = new Map(templates.map((template) => [template.id, template] as const));
+  const reconciledSystemTemplates = systemTemplates.map((template) => {
+    const existing = existingTemplates.get(template.id);
+    return existing ? normalizeSystemTemplate(existing) : template;
+  });
+
+  return [...reconciledSystemTemplates, ...customTemplates];
+}
+
+export function findCanvasTemplateInsertOffset(
+  existingBlocks: CanvasWorkspace['blocks'],
+  incomingBlocks: CanvasWorkspace['blocks'],
+): { x: number; y: number } {
+  if (incomingBlocks.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const incomingBounds = getTemplateBlockBounds(incomingBlocks);
+  const origin = DEFAULT_CANVAS_INSERT_ORIGIN;
+  const step = DEFAULT_CANVAS_INSERT_STEP;
+  const searchPadding = DEFAULT_CANVAS_INSERT_SEARCH_PADDING;
+  const maxAttempts = 240;
+
+  let candidateX = origin.x;
+  let candidateY = origin.y;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const offset = {
+      x: candidateX - incomingBounds.minX,
+      y: candidateY - incomingBounds.minY,
+    };
+
+    const intersects = incomingBlocks.some((block) => {
+      const shiftedRect = {
+        x: block.x + offset.x - searchPadding,
+        y: block.y + offset.y - searchPadding,
+        width: block.width + searchPadding * 2,
+        height: block.height + searchPadding * 2,
+      };
+
+      return existingBlocks.some((existingBlock) => doCanvasRectsIntersect(shiftedRect, existingBlock));
+    });
+
+    if (!intersects) {
+      return offset;
+    }
+
+    candidateX += step.x;
+    candidateY += step.y;
+
+    if ((attempt + 1) % 8 === 0) {
+      candidateX = origin.x;
+      candidateY += incomingBounds.height + 40;
+    }
+  }
+
+  const existingBounds = getCanvasBounds(existingBlocks, 0);
+  return {
+    x: origin.x - incomingBounds.minX,
+    y: Math.max(origin.y, existingBounds.maxY + 40) - incomingBounds.minY,
+  };
+}
+
 export function createDefaultCanvasTemplates(): CanvasWorkspaceTemplate[] {
-  const createdAt = nowIso();
+  const createdAt = SYSTEM_TEMPLATE_TIMESTAMP;
 
   return [
     {
@@ -75,8 +201,8 @@ export function createDefaultCanvasTemplates(): CanvasWorkspaceTemplate[] {
         createTemplateBlock('note', 60, 360, { id: 'runbook-note', label: 'Runbook', noteContent: '- Hypothesis\n- Evidence\n- Next step' }),
       ],
       links: [
-        { id: uuidv4(), fromBlockId: 'repro-terminal', toBlockId: 'diagnosis-chat', kind: 'evidence', label: 'inspect' },
-        { id: uuidv4(), fromBlockId: 'docs-browser', toBlockId: 'diagnosis-chat', kind: 'context', label: 'reference' },
+        { id: 'troubleshooting-link-inspect', fromBlockId: 'repro-terminal', toBlockId: 'diagnosis-chat', kind: 'evidence', label: 'inspect' },
+        { id: 'troubleshooting-link-reference', fromBlockId: 'docs-browser', toBlockId: 'diagnosis-chat', kind: 'context', label: 'reference' },
       ],
     },
     {
@@ -103,9 +229,9 @@ export function createDefaultCanvasTemplates(): CanvasWorkspaceTemplate[] {
         createTemplateBlock('chat', 940, 360, { id: 'implementation-chat', label: 'Implementation chat' }),
       ],
       links: [
-        { id: uuidv4(), fromBlockId: 'code-workspace', toBlockId: 'implementation-chat', kind: 'context', label: 'design' },
-        { id: uuidv4(), fromBlockId: 'dev-terminal', toBlockId: 'implementation-chat', kind: 'evidence', label: 'runtime' },
-        { id: uuidv4(), fromBlockId: 'preview-browser', toBlockId: 'implementation-chat', kind: 'evidence', label: 'ui result' },
+        { id: 'coding-link-design', fromBlockId: 'code-workspace', toBlockId: 'implementation-chat', kind: 'context', label: 'design' },
+        { id: 'coding-link-runtime', fromBlockId: 'dev-terminal', toBlockId: 'implementation-chat', kind: 'evidence', label: 'runtime' },
+        { id: 'coding-link-ui-result', fromBlockId: 'preview-browser', toBlockId: 'implementation-chat', kind: 'evidence', label: 'ui result' },
       ],
     },
     {
@@ -132,9 +258,9 @@ export function createDefaultCanvasTemplates(): CanvasWorkspaceTemplate[] {
         createTemplateBlock('browser', 560, 360, { id: 'pr-browser', label: 'PR / issue', url: 'https://github.com/' }),
       ],
       links: [
-        { id: uuidv4(), fromBlockId: 'repo-review', toBlockId: 'review-chat', kind: 'context', label: 'diff' },
-        { id: uuidv4(), fromBlockId: 'pr-browser', toBlockId: 'review-chat', kind: 'context', label: 'discussion' },
-        { id: uuidv4(), fromBlockId: 'review-chat', toBlockId: 'findings-note', kind: 'depends-on', label: 'summarize' },
+        { id: 'review-link-diff', fromBlockId: 'repo-review', toBlockId: 'review-chat', kind: 'context', label: 'diff' },
+        { id: 'review-link-discussion', fromBlockId: 'pr-browser', toBlockId: 'review-chat', kind: 'context', label: 'discussion' },
+        { id: 'review-link-summarize', fromBlockId: 'review-chat', toBlockId: 'findings-note', kind: 'depends-on', label: 'summarize' },
       ],
     },
   ];

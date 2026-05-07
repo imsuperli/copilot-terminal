@@ -74,7 +74,7 @@ export function CanvasBlockChrome({
   return (
     <div
       className={[
-        'pointer-events-auto absolute overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--appearance-card-surface-top)_100%,transparent)_0%,color-mix(in_srgb,var(--appearance-card-surface-bottom)_100%,transparent)_100%)] shadow-[0_24px_80px_rgba(0,0,0,0.28)] transition-shadow',
+        'pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--appearance-card-surface-top)_100%,transparent)_0%,color-mix(in_srgb,var(--appearance-card-surface-bottom)_100%,transparent)_100%)] shadow-[0_24px_80px_rgba(0,0,0,0.28)] transition-shadow',
         selected ? 'border-[rgb(var(--primary))]/60 shadow-[0_24px_80px_rgba(14,165,233,0.10)]' : 'border-[rgb(var(--border))]',
         missing ? 'border-[rgb(var(--warning))/0.40]' : '',
       ].join(' ')}
@@ -140,7 +140,7 @@ export function CanvasBlockChrome({
         )}
       </div>
 
-      <div className="relative h-[calc(100%-37px)] overflow-hidden">{children}</div>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
 
       {!editingTitle && showSummaryOverlay && summary && (summary.metrics?.length || summary.tags?.length) ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[4] border-t border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_8%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_72%,transparent)_100%)] px-3 py-2 backdrop-blur">

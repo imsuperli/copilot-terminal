@@ -396,6 +396,25 @@ describe('CanvasWorkspaceView', () => {
       expect(updated?.blocks.some((block) => block.id === 'note-1')).toBe(true);
       expect((updated?.blocks.length ?? 0)).toBeGreaterThan(3);
     });
+
+    const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+    const originalBlockIds = new Set(['note-1', 'window-1', 'window-missing']);
+    const originalBlocks = updated?.blocks.filter((block) => originalBlockIds.has(block.id)) ?? [];
+    const newBlocks = updated?.blocks.filter((block) => !originalBlockIds.has(block.id)) ?? [];
+
+    expect(newBlocks.length).toBeGreaterThan(0);
+
+    for (const newBlock of newBlocks) {
+      for (const originalBlock of originalBlocks) {
+        const overlaps = !(
+          newBlock.x + newBlock.width <= originalBlock.x
+          || originalBlock.x + originalBlock.width <= newBlock.x
+          || newBlock.y + newBlock.height <= originalBlock.y
+          || originalBlock.y + originalBlock.height <= newBlock.y
+        );
+        expect(overlaps).toBe(false);
+      }
+    }
   });
 
   it('sends selected evidence into a new note block with links', async () => {
