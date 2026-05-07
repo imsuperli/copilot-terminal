@@ -16,6 +16,7 @@ import { AppearanceBackdrop } from './components/AppearanceBackdrop';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
 import { SSHPasswordPromptDialog } from './components/SSHPasswordPromptDialog';
 import { CustomTitleBar } from './components/CustomTitleBar';
+import { Sidebar as TerminalSidebar } from './components/Sidebar';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -71,6 +72,9 @@ const STARTUP_MASK_HOLD_MS = 40;
 const STARTUP_MASK_FADE_MS = 140;
 const LazyQuickNavPanel = lazy(async () => ({
   default: (await import('./components/QuickNavPanel')).QuickNavPanel,
+}));
+const LazySettingsPanel = lazy(async () => ({
+  default: (await import('./components/SettingsPanel')).SettingsPanel,
 }));
 const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
   WindowStatus.Completed,
@@ -278,6 +282,113 @@ const ActiveGroupSurface = React.memo(({
 });
 
 ActiveGroupSurface.displayName = 'ActiveGroupSurface';
+
+const ActiveCanvasSurface = React.memo(({
+  activeCanvasWorkspaceId,
+  onCanvasSwitch,
+  onExitWorkspace,
+  onGroupSwitch,
+  onWindowSwitch,
+  onSSHProfileSaved,
+  sshEnabled,
+  sshProfiles,
+}: {
+  activeCanvasWorkspaceId: string;
+  onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
+  onExitWorkspace: () => void | Promise<void>;
+  onGroupSwitch: (groupId: string) => void | Promise<void>;
+  onWindowSwitch: (windowId: string) => void;
+  onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
+  sshEnabled: boolean;
+  sshProfiles: SSHProfile[];
+}) => {
+  const canvasWorkspace = useWindowStore((state) => (
+    state.canvasWorkspaces.find((workspace) => workspace.id === activeCanvasWorkspaceId) ?? null
+  ));
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
+
+  const handleSettingsClick = useCallback(() => {
+    setHasMountedSettingsPanel(true);
+    setIsSettingsPanelOpen(true);
+  }, []);
+
+  if (!canvasWorkspace) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: window.electronAPI?.platform === 'darwin' ? 36 : 32,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+      }}
+    >
+      <div className="flex h-full bg-transparent">
+        <TerminalSidebar
+          activeWindowId={null}
+          activeCanvasWorkspaceId={canvasWorkspace.id}
+          onWindowSelect={onWindowSwitch}
+          onGroupSelect={onGroupSwitch}
+          onCanvasSelect={onCanvasSwitch}
+          onSettingsClick={handleSettingsClick}
+          sshEnabled={sshEnabled}
+          sshProfiles={sshProfiles}
+          onSSHProfileSaved={onSSHProfileSaved}
+        />
+
+        <div className="relative min-w-0 flex-1 overflow-hidden">
+          <CanvasWorkspaceView
+            key={canvasWorkspace.id}
+            canvasWorkspace={canvasWorkspace}
+            sshProfiles={sshProfiles}
+            onOpenWindow={onWindowSwitch}
+            onOpenCanvasWorkspace={onCanvasSwitch}
+            onOpenGroup={onGroupSwitch}
+            renderLiveWindow={(windowId, options) => {
+              const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
+              if (!embeddedWindow) {
+                return null;
+              }
+
+              return (
+                <TerminalView
+                  key={`canvas-embedded-${windowId}`}
+                  window={embeddedWindow}
+                  onReturn={onExitWorkspace}
+                  onWindowSwitch={onWindowSwitch}
+                  onCanvasSwitch={onCanvasSwitch}
+                  isActive={options.isActive}
+                  embedded
+                  canvasEmbedded
+                  sshEnabled={sshEnabled}
+                  sshProfiles={sshProfiles}
+                  onSSHProfileSaved={onSSHProfileSaved}
+                />
+              );
+            }}
+            onExitWorkspace={onExitWorkspace}
+          />
+        </div>
+
+        {hasMountedSettingsPanel && (
+          <Suspense fallback={null}>
+            <LazySettingsPanel
+              open={isSettingsPanelOpen}
+              onClose={() => setIsSettingsPanelOpen(false)}
+            />
+          </Suspense>
+        )}
+      </div>
+    </div>
+  );
+});
+
+ActiveCanvasSurface.displayName = 'ActiveCanvasSurface';
 
 function AppContent() {
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -1559,52 +1670,16 @@ function AppContent() {
       ))}
 
       {currentView === 'canvas' && currentActiveCanvasWorkspaceId && (
-        <div
-          style={{
-            position: 'fixed',
-            top: window.electronAPI?.platform === 'darwin' ? 36 : 32,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 1000,
-          }}
-        >
-          {canvasWorkspaces
-            .filter((canvasWorkspace) => canvasWorkspace.id === currentActiveCanvasWorkspaceId)
-            .map((canvasWorkspace) => (
-              <CanvasWorkspaceView
-                key={canvasWorkspace.id}
-                canvasWorkspace={canvasWorkspace}
-                sshProfiles={sshProfiles}
-                onOpenWindow={handleOpenWindowFromCanvas}
-                onOpenCanvasWorkspace={handleCanvasSwitchFromTerminalContext}
-                onOpenGroup={handleGroupSwitchFromCanvasContext}
-                renderLiveWindow={(windowId, options) => {
-                  const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
-                  if (!embeddedWindow) {
-                    return null;
-                  }
-
-                  return (
-                    <TerminalView
-                      key={`canvas-embedded-${windowId}`}
-                      window={embeddedWindow}
-                      onReturn={handleReturnFromTerminal}
-                      onWindowSwitch={handleWindowSwitchFromCanvasContext}
-                      onCanvasSwitch={handleCanvasSwitchFromTerminalContext}
-                      isActive={options.isActive}
-                      embedded
-                      canvasEmbedded
-                      sshEnabled={sshEnabled}
-                      sshProfiles={sshProfiles}
-                      onSSHProfileSaved={handleSSHProfileSaved}
-                    />
-                  );
-                }}
-                onExitWorkspace={handleReturnFromCanvas}
-              />
-            ))}
-        </div>
+        <ActiveCanvasSurface
+          activeCanvasWorkspaceId={currentActiveCanvasWorkspaceId}
+          onWindowSwitch={handleOpenWindowFromCanvas}
+          onCanvasSwitch={handleCanvasSwitchFromTerminalContext}
+          onGroupSwitch={handleGroupSwitchFromCanvasContext}
+          onExitWorkspace={handleReturnFromCanvas}
+          sshEnabled={sshEnabled}
+          sshProfiles={sshProfiles}
+          onSSHProfileSaved={handleSSHProfileSaved}
+        />
       )}
 
       {error && <AppNotice message={error} />}

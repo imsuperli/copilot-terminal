@@ -25,6 +25,12 @@ vi.mock('../components/layout/Sidebar', () => ({
   Sidebar: () => null,
 }));
 
+vi.mock('../components/Sidebar', () => ({
+  Sidebar: ({ activeCanvasWorkspaceId }: { activeCanvasWorkspaceId?: string | null }) => (
+    <div data-testid="terminal-sidebar" data-active-canvas-id={activeCanvasWorkspaceId ?? ''} />
+  ),
+}));
+
 vi.mock('../components/EmptyState', () => ({
   EmptyState: () => null,
 }));
@@ -343,6 +349,7 @@ describe('App terminal mounting', () => {
 
     render(<App />);
 
+    expect(screen.getByTestId('terminal-sidebar')).toHaveAttribute('data-active-canvas-id', 'canvas-1');
     expect(screen.getByTestId('canvas-workspace-view')).toHaveTextContent('Ops Board');
 
     fireEvent.click(screen.getByLabelText('Home'));
