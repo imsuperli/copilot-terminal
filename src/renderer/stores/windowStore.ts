@@ -565,6 +565,7 @@ interface WindowStore {
   canvasWorkspaceTemplates: CanvasWorkspaceTemplate[];
   canvasActivity: CanvasActivityEvent[];
   activeCanvasWorkspaceId: string | null;
+  startedCanvasWorkspaceIds: string[];
   mruList: string[]; // 最近使用列表（窗口 ID）
   sidebarExpanded: boolean; // 侧边栏是否展开
   sidebarWidth: number; // 侧边栏宽度
@@ -599,6 +600,8 @@ interface WindowStore {
   updateCanvasWorkspace: (id: string, updates: Partial<CanvasWorkspace>) => void;
   removeCanvasWorkspace: (id: string) => void;
   setActiveCanvasWorkspace: (id: string | null) => void;
+  setCanvasWorkspaceStarted: (id: string, started: boolean) => void;
+  isCanvasWorkspaceStarted: (id: string) => boolean;
   getCanvasWorkspaceById: (id: string) => CanvasWorkspace | undefined;
   setCanvasWorkspaceTemplates: (templates: CanvasWorkspaceTemplate[]) => void;
   upsertCanvasWorkspaceTemplate: (template: CanvasWorkspaceTemplate) => void;
@@ -712,6 +715,7 @@ export const useWindowStore = create<WindowStore>()(
     canvasWorkspaceTemplates: [],
     canvasActivity: [],
     activeCanvasWorkspaceId: null,
+    startedCanvasWorkspaceIds: [],
     mruList: [],
     sidebarExpanded: false, // 默认折叠
     sidebarWidth: 200, // 默认宽度
@@ -777,6 +781,7 @@ export const useWindowStore = create<WindowStore>()(
       let shouldPersistChange = false;
       let removedWindowNoteWindowId: string | null = null;
       let removedWindowNotePaneIds: string[] = [];
+      let removedCanvasOwnerWorkspaceId: string | null = null;
       set((state) => {
         const existingWindow = state.windows.find((window) => window.id === id);
         if (!existingWindow) {
@@ -787,6 +792,9 @@ export const useWindowStore = create<WindowStore>()(
         shouldPersistChange = !existingWindow.ephemeral;
         removedWindowNoteWindowId = existingWindow.id;
         removedWindowNotePaneIds = getAllPanes(existingWindow.layout).map((pane) => pane.id);
+        removedCanvasOwnerWorkspaceId = existingWindow.ownerType === 'canvas-owned'
+          ? existingWindow.ownerCanvasWorkspaceId?.trim() || null
+          : null;
         state.windows = state.windows.filter(w => w.id !== id);
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
@@ -849,6 +857,34 @@ export const useWindowStore = create<WindowStore>()(
 
       if (removedWindowNoteWindowId !== null) {
         removePaneNotesForWindowSnapshot(removedWindowNoteWindowId, removedWindowNotePaneIds);
+      }
+
+      if (removedCanvasOwnerWorkspaceId) {
+        set((state) => {
+          const owningWorkspace = state.canvasWorkspaces.find((workspace) => workspace.id === removedCanvasOwnerWorkspaceId);
+          if (!owningWorkspace) {
+            return;
+          }
+
+          const previousBlockCount = owningWorkspace.blocks.length;
+          const nextBlocks = owningWorkspace.blocks.filter((block) => (
+            block.type !== 'window' || block.windowId !== id
+          ));
+          if (nextBlocks.length === previousBlockCount) {
+            return;
+          }
+
+          const removedBlockIds = new Set(
+            owningWorkspace.blocks
+              .filter((block) => block.type === 'window' && block.windowId === id)
+              .map((block) => block.id),
+          );
+          owningWorkspace.blocks = nextBlocks;
+          owningWorkspace.links = (owningWorkspace.links ?? []).filter((link) => (
+            !removedBlockIds.has(link.fromBlockId) && !removedBlockIds.has(link.toBlockId)
+          ));
+          owningWorkspace.updatedAt = new Date().toISOString();
+        });
       }
 
       if (didChange && shouldPersistChange) {
@@ -1326,6 +1362,7 @@ export const useWindowStore = create<WindowStore>()(
         state.canvasWorkspaceTemplates = [];
         state.canvasActivity = [];
         state.activeCanvasWorkspaceId = null;
+        state.startedCanvasWorkspaceIds = [];
         state.mruList = [];
         state.groups = [];
         state.activeGroupId = null;
@@ -1385,6 +1422,8 @@ export const useWindowStore = create<WindowStore>()(
         const previousLength = state.canvasWorkspaces.length;
         state.canvasWorkspaces = state.canvasWorkspaces.filter((item) => item.id !== id);
         state.canvasActivity = state.canvasActivity.filter((item) => item.workspaceId !== id);
+        state.windows = state.windows.filter((window) => window.ownerCanvasWorkspaceId !== id);
+        state.startedCanvasWorkspaceIds = state.startedCanvasWorkspaceIds.filter((workspaceId) => workspaceId !== id);
         didChange = previousLength !== state.canvasWorkspaces.length;
         if (state.activeCanvasWorkspaceId === id) {
           state.activeCanvasWorkspaceId = null;
@@ -1406,6 +1445,24 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
     },
+
+    setCanvasWorkspaceStarted: (id, started) => {
+      set((state) => {
+        const isStarted = state.startedCanvasWorkspaceIds.includes(id);
+        if (started) {
+          if (!isStarted) {
+            state.startedCanvasWorkspaceIds.push(id);
+          }
+          return;
+        }
+
+        if (isStarted) {
+          state.startedCanvasWorkspaceIds = state.startedCanvasWorkspaceIds.filter((workspaceId) => workspaceId !== id);
+        }
+      });
+    },
+
+    isCanvasWorkspaceStarted: (id) => get().startedCanvasWorkspaceIds.includes(id),
 
     getCanvasWorkspaceById: (id) => get().canvasWorkspaces.find((item) => item.id === id),
 

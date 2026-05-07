@@ -44,6 +44,8 @@ interface CanvasArrangeToolbarProps {
   onFitToContent: () => void;
   onDeleteSelected: () => void;
   onRenameWorkspace: () => void;
+  onStopWorkspace: () => void;
+  canStopWorkspace?: boolean;
   onDeleteWorkspace: () => void;
 }
 
@@ -132,6 +134,8 @@ export function CanvasArrangeToolbar({
   onFitToContent,
   onDeleteSelected,
   onRenameWorkspace,
+  onStopWorkspace,
+  canStopWorkspace = false,
   onDeleteWorkspace,
 }: CanvasArrangeToolbarProps) {
   const { t } = useI18n();
@@ -250,6 +254,13 @@ export function CanvasArrangeToolbar({
         </IconButton>
         <IconButton title={t('canvas.renameWorkspace')} onClick={onRenameWorkspace}>
           <PencilLine size={14} />
+        </IconButton>
+        <IconButton
+          title={t('terminalView.stop')}
+          disabled={!canStopWorkspace}
+          onClick={onStopWorkspace}
+        >
+          <Trash2 size={14} />
         </IconButton>
         <button
           type="button"

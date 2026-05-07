@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, ArchiveRestore, Edit2, MoreHorizontal, Orbit, StickyNote, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Edit2, MoreHorizontal, Orbit, Square, StickyNote, Trash2 } from 'lucide-react';
 import { CanvasWorkspace } from '../../shared/types/canvas';
 import { formatRelativeTime, useI18n } from '../i18n';
 import {
@@ -19,7 +19,9 @@ import {
 
 interface CanvasWorkspaceCardProps {
   canvasWorkspace: CanvasWorkspace;
+  isStarted?: boolean;
   onClick?: (canvasWorkspaceId: string) => void;
+  onStop?: (canvasWorkspaceId: string) => void | Promise<void>;
   onRename?: (canvasWorkspace: CanvasWorkspace) => void;
   onArchive?: (canvasWorkspace: CanvasWorkspace) => void;
   onUnarchive?: (canvasWorkspace: CanvasWorkspace) => void;
@@ -28,7 +30,9 @@ interface CanvasWorkspaceCardProps {
 
 export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
   canvasWorkspace,
+  isStarted = false,
   onClick,
+  onStop,
   onRename,
   onArchive,
   onUnarchive,
@@ -172,17 +176,33 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
           {canvasWorkspace.archived ? t('status.archived') : t('canvas.updatedAt', { time: updatedAt })}
         </span>
         {!canvasWorkspace.archived ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick?.(canvasWorkspace.id);
-            }}
-            className={primaryCardActionClassName}
-            aria-label={t('canvas.openWorkspace')}
-          >
-            {t('canvas.openWorkspace')}
-          </button>
+          <div className="flex items-center gap-2">
+            {isStarted && onStop ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void onStop(canvasWorkspace.id);
+                }}
+                className={`${idePopupTonalButtonClassName} h-8 w-8 p-0 text-red-500`}
+                aria-label={t('terminalView.stop')}
+                title={t('terminalView.stop')}
+              >
+                <Square size={13} fill="currentColor" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClick?.(canvasWorkspace.id);
+              }}
+              className={primaryCardActionClassName}
+              aria-label={t('canvas.openWorkspace')}
+            >
+              {t('canvas.openWorkspace')}
+            </button>
+          </div>
         ) : (
           <span className="text-xs font-medium text-[rgb(var(--muted-foreground))]">
             {t('status.archived')}

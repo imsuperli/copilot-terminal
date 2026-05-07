@@ -80,6 +80,8 @@ describe('Terminal Sidebar', () => {
     useWindowStore.setState({
       windows: [],
       groups: [],
+      canvasWorkspaces: [],
+      startedCanvasWorkspaceIds: [],
       activeWindowId: null,
       activeGroupId: null,
       mruList: [],
@@ -438,6 +440,7 @@ describe('Terminal Sidebar', () => {
     useWindowStore.setState({
       windows: [localWindow],
       canvasWorkspaces: [createCanvasWorkspace()],
+      startedCanvasWorkspaceIds: ['canvas-1'],
       activeWindowId: localWindow.id,
       mruList: [localWindow.id],
       terminalSidebarFilter: 'canvas',
@@ -457,6 +460,30 @@ describe('Terminal Sidebar', () => {
 
     await user.click(screen.getByText('Incident Map'));
     expect(onCanvasSelect).toHaveBeenCalledWith('canvas-1');
+  });
+
+  it('does not show unstarted canvas workspaces in the terminal sidebar canvas filter', () => {
+    const localWindow = createRunningWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      canvasWorkspaces: [createCanvasWorkspace()],
+      startedCanvasWorkspaceIds: [],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      terminalSidebarFilter: 'canvas',
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        activeCanvasWorkspaceId={null}
+        onWindowSelect={vi.fn()}
+        onCanvasSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Incident Map')).not.toBeInTheDocument();
   });
 
   it('renders the open code pane action above new terminal and triggers it', async () => {

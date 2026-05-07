@@ -176,6 +176,26 @@ describe('CardGrid', () => {
     expect(screen.getByText('Window 3')).toBeInTheDocument();
   });
 
+  it('does not render canvas-owned windows in standalone terminal cards', () => {
+    const standaloneWindow = makeWindow({ id: 'standalone-1', name: 'Standalone Window' });
+    const canvasOwnedWindow = makeWindow({
+      id: 'canvas-owned-1',
+      name: 'Canvas Owned Window',
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+    });
+
+    useWindowStore.setState({
+      windows: [standaloneWindow, canvasOwnedWindow],
+      canvasWorkspaces: [makeCanvasWorkspace()],
+    });
+
+    renderCardGrid({ currentTab: 'active' });
+
+    expect(screen.getByText('Standalone Window')).toBeInTheDocument();
+    expect(screen.queryByText('Canvas Owned Window')).not.toBeInTheDocument();
+  });
+
   // 15+ windows scroll
   it('renders 15+ windows without error (scroll state)', () => {
     const { addWindow } = useWindowStore.getState();

@@ -1,338 +1,280 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { useWindowStore, WindowStatus, Window } from '../windowStore'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useWindowStore, WindowStatus } from '../windowStore';
+import { createSinglePaneWindow } from '../../utils/layoutHelpers';
+import type { Window } from '../../types/window';
+
+function createWindow(overrides: Partial<Window> & {
+  id: string;
+  name?: string;
+  cwd?: string;
+  command?: string;
+  status?: WindowStatus;
+}): Window {
+  const base = createSinglePaneWindow(
+    overrides.name ?? `Window ${overrides.id}`,
+    overrides.cwd ?? `/workspace/${overrides.id}`,
+    overrides.command ?? 'bash',
+  );
+
+  const nextWindow: Window = {
+    ...base,
+    ...overrides,
+  };
+
+  if (nextWindow.layout.type === 'pane' && overrides.status) {
+    nextWindow.layout = {
+      ...nextWindow.layout,
+      pane: {
+        ...nextWindow.layout.pane,
+        status: overrides.status,
+        pid: overrides.status === WindowStatus.Completed ? null : nextWindow.layout.pane.pid,
+      },
+    };
+  }
+
+  return nextWindow;
+}
 
 describe('windowStore', () => {
   beforeEach(() => {
-    // Reset store before each test
-    useWindowStore.setState({ windows: [], activeWindowId: null })
-  })
+    vi.clearAllMocks();
+    useWindowStore.setState({
+      windows: [],
+      groups: [],
+      canvasWorkspaces: [],
+      canvasWorkspaceTemplates: [],
+      canvasActivity: [],
+      activeWindowId: null,
+      activeCanvasWorkspaceId: null,
+      startedCanvasWorkspaceIds: [],
+      activeGroupId: null,
+      mruList: [],
+      groupMruList: [],
+      customCategories: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+      terminalSidebarSections: {
+        archived: false,
+        canvas: true,
+        local: true,
+        ssh: true,
+      },
+      terminalSidebarFilter: 'all',
+    });
+  });
 
   describe('addWindow', () => {
-    it('should add a window to the store', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('adds a window to the store', () => {
+      const window = createWindow({ id: 'win-1' });
 
-      useWindowStore.getState().addWindow(window)
+      useWindowStore.getState().addWindow(window);
 
-      const state = useWindowStore.getState()
-      expect(state.windows).toHaveLength(1)
-      expect(state.windows[0]).toEqual(window)
-    })
+      const state = useWindowStore.getState();
+      expect(state.windows).toHaveLength(1);
+      expect(state.windows[0]).toEqual(window);
+      expect(state.mruList).toEqual(['win-1']);
+    });
 
-    it('should add multiple windows', () => {
-      const window1: Window = {
-        id: 'test-id-1',
-        name: 'Window 1',
-        workingDirectory: '/test/path1',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('adds multiple windows and preserves insertion order in state', () => {
+      const window1 = createWindow({ id: 'win-1' });
+      const window2 = createWindow({ id: 'win-2' });
 
-      const window2: Window = {
-        id: 'test-id-2',
-        name: 'Window 2',
-        workingDirectory: '/test/path2',
-        command: 'zsh',
-        status: WindowStatus.Running,
-        pid: 5678,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+      useWindowStore.getState().addWindow(window1);
+      useWindowStore.getState().addWindow(window2);
 
-      useWindowStore.getState().addWindow(window1)
-      useWindowStore.getState().addWindow(window2)
-
-      const state = useWindowStore.getState()
-      expect(state.windows).toHaveLength(2)
-      expect(state.windows[0].id).toBe('test-id-1')
-      expect(state.windows[1].id).toBe('test-id-2')
-    })
-  })
+      const state = useWindowStore.getState();
+      expect(state.windows).toHaveLength(2);
+      expect(state.windows.map((window) => window.id)).toEqual(['win-1', 'win-2']);
+      expect(state.mruList).toEqual(['win-2', 'win-1']);
+    });
+  });
 
   describe('removeWindow', () => {
-    it('should remove a window by id', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('removes a window by id', () => {
+      const window = createWindow({ id: 'win-1' });
 
-      useWindowStore.getState().addWindow(window)
-      useWindowStore.getState().removeWindow('test-id-1')
+      useWindowStore.getState().addWindow(window);
+      useWindowStore.getState().removeWindow('win-1');
 
-      const state = useWindowStore.getState()
-      expect(state.windows).toHaveLength(0)
-    })
+      expect(useWindowStore.getState().windows).toHaveLength(0);
+    });
 
-    it('should clear activeWindowId when removing active window', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('clears activeWindowId when removing the active window', () => {
+      const window = createWindow({ id: 'win-1' });
 
-      useWindowStore.getState().addWindow(window)
-      useWindowStore.getState().setActiveWindow('test-id-1')
-      useWindowStore.getState().removeWindow('test-id-1')
+      useWindowStore.getState().addWindow(window);
+      useWindowStore.getState().setActiveWindow('win-1');
+      useWindowStore.getState().removeWindow('win-1');
 
-      const state = useWindowStore.getState()
-      expect(state.activeWindowId).toBeNull()
-    })
+      expect(useWindowStore.getState().activeWindowId).toBeNull();
+    });
 
-    it('should not clear activeWindowId when removing non-active window', () => {
-      const window1: Window = {
-        id: 'test-id-1',
-        name: 'Window 1',
-        workingDirectory: '/test/path1',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('keeps activeWindowId when removing a different window', () => {
+      const window1 = createWindow({ id: 'win-1' });
+      const window2 = createWindow({ id: 'win-2' });
 
-      const window2: Window = {
-        id: 'test-id-2',
-        name: 'Window 2',
-        workingDirectory: '/test/path2',
-        command: 'zsh',
-        status: WindowStatus.Running,
-        pid: 5678,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+      useWindowStore.getState().addWindow(window1);
+      useWindowStore.getState().addWindow(window2);
+      useWindowStore.getState().setActiveWindow('win-1');
+      useWindowStore.getState().removeWindow('win-2');
 
-      useWindowStore.getState().addWindow(window1)
-      useWindowStore.getState().addWindow(window2)
-      useWindowStore.getState().setActiveWindow('test-id-1')
-      useWindowStore.getState().removeWindow('test-id-2')
-
-      const state = useWindowStore.getState()
-      expect(state.activeWindowId).toBe('test-id-1')
-    })
-  })
+      expect(useWindowStore.getState().activeWindowId).toBe('win-1');
+    });
+  });
 
   describe('updateWindowStatus', () => {
-    it('should update window status', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
+    it('updates all panes to the given status for a single-pane window', () => {
+      const window = createWindow({ id: 'win-1', status: WindowStatus.Running });
+
+      useWindowStore.getState().addWindow(window);
+      useWindowStore.getState().updateWindowStatus('win-1', WindowStatus.Completed);
+
+      const storedWindow = useWindowStore.getState().windows[0];
+      expect(storedWindow.layout.type).toBe('pane');
+      if (storedWindow.layout.type === 'pane') {
+        expect(storedWindow.layout.pane.status).toBe(WindowStatus.Completed);
       }
+    });
 
-      useWindowStore.getState().addWindow(window)
-      useWindowStore.getState().updateWindowStatus('test-id-1', WindowStatus.Completed)
-
-      const state = useWindowStore.getState()
-      expect(state.windows[0].status).toBe(WindowStatus.Completed)
-    })
-
-    it('should update lastActiveAt when updating status', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
+    it('updates lastActiveAt when status changes', () => {
+      const window = createWindow({
+        id: 'win-1',
         createdAt: '2024-01-01T00:00:00.000Z',
-        lastActiveAt: '2024-01-01T00:00:00.000Z'
-      }
+        lastActiveAt: '2024-01-01T00:00:00.000Z',
+      });
 
-      useWindowStore.getState().addWindow(window)
-      useWindowStore.getState().updateWindowStatus('test-id-1', WindowStatus.WaitingForInput)
+      useWindowStore.getState().addWindow(window);
+      useWindowStore.getState().updateWindowStatus('win-1', WindowStatus.WaitingForInput);
 
-      const state = useWindowStore.getState()
-      expect(state.windows[0].lastActiveAt).not.toBe('2024-01-01T00:00:00.000Z')
-    })
-  })
+      expect(useWindowStore.getState().windows[0]?.lastActiveAt).not.toBe('2024-01-01T00:00:00.000Z');
+    });
+  });
 
   describe('setActiveWindow', () => {
-    it('should set active window id', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('sets the active window id', () => {
+      const window = createWindow({ id: 'win-1' });
 
-      useWindowStore.getState().addWindow(window)
-      useWindowStore.getState().setActiveWindow('test-id-1')
+      useWindowStore.getState().addWindow(window);
+      useWindowStore.getState().setActiveWindow('win-1');
 
-      const state = useWindowStore.getState()
-      expect(state.activeWindowId).toBe('test-id-1')
-    })
+      expect(useWindowStore.getState().activeWindowId).toBe('win-1');
+    });
 
-    it('should update lastActiveAt when setting active window', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
+    it('updates lastActiveAt when activating a window', () => {
+      const window = createWindow({
+        id: 'win-1',
         createdAt: '2024-01-01T00:00:00.000Z',
-        lastActiveAt: '2024-01-01T00:00:00.000Z'
-      }
+        lastActiveAt: '2024-01-01T00:00:00.000Z',
+      });
 
-      useWindowStore.getState().addWindow(window)
-      useWindowStore.getState().setActiveWindow('test-id-1')
+      useWindowStore.getState().addWindow(window);
+      useWindowStore.getState().setActiveWindow('win-1');
 
-      const state = useWindowStore.getState()
-      expect(state.windows[0].lastActiveAt).not.toBe('2024-01-01T00:00:00.000Z')
-    })
-  })
+      expect(useWindowStore.getState().windows[0]?.lastActiveAt).not.toBe('2024-01-01T00:00:00.000Z');
+    });
+  });
 
   describe('getWindowById', () => {
-    it('should return window by id', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+    it('returns a window by id', () => {
+      const window = createWindow({ id: 'win-1' });
 
-      useWindowStore.getState().addWindow(window)
-      const result = useWindowStore.getState().getWindowById('test-id-1')
+      useWindowStore.getState().addWindow(window);
 
-      expect(result).toEqual(window)
-    })
+      expect(useWindowStore.getState().getWindowById('win-1')).toEqual(window);
+    });
 
-    it('should return undefined for non-existent window', () => {
-      const result = useWindowStore.getState().getWindowById('non-existent')
-      expect(result).toBeUndefined()
-    })
-  })
+    it('returns undefined for a missing window', () => {
+      expect(useWindowStore.getState().getWindowById('missing')).toBeUndefined();
+    });
+  });
 
-  describe('getWindowsByStatus', () => {
-    it('should return windows filtered by status', () => {
-      const window1: Window = {
-        id: 'test-id-1',
-        name: 'Window 1',
-        workingDirectory: '/test/path1',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+  describe('active and archived windows', () => {
+    it('returns active and archived windows from current store shape', () => {
+      const activeWindow = createWindow({ id: 'active-1' });
+      const archivedWindow = createWindow({ id: 'archived-1', archived: true });
 
-      const window2: Window = {
-        id: 'test-id-2',
-        name: 'Window 2',
-        workingDirectory: '/test/path2',
-        command: 'zsh',
-        status: WindowStatus.Completed,
-        pid: 5678,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
+      useWindowStore.getState().addWindow(activeWindow);
+      useWindowStore.getState().addWindow(archivedWindow);
 
-      const window3: Window = {
-        id: 'test-id-3',
-        name: 'Window 3',
-        workingDirectory: '/test/path3',
-        command: 'fish',
-        status: WindowStatus.Running,
-        pid: 9012,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
-
-      useWindowStore.getState().addWindow(window1)
-      useWindowStore.getState().addWindow(window2)
-      useWindowStore.getState().addWindow(window3)
-
-      const runningWindows = useWindowStore.getState().getWindowsByStatus(WindowStatus.Running)
-      expect(runningWindows).toHaveLength(2)
-      expect(runningWindows[0].id).toBe('test-id-1')
-      expect(runningWindows[1].id).toBe('test-id-3')
-
-      const completedWindows = useWindowStore.getState().getWindowsByStatus(WindowStatus.Completed)
-      expect(completedWindows).toHaveLength(1)
-      expect(completedWindows[0].id).toBe('test-id-2')
-    })
-
-    it('should return empty array when no windows match status', () => {
-      const window: Window = {
-        id: 'test-id-1',
-        name: 'Test Window',
-        workingDirectory: '/test/path',
-        command: 'bash',
-        status: WindowStatus.Running,
-        pid: 1234,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString()
-      }
-
-      useWindowStore.getState().addWindow(window)
-      const errorWindows = useWindowStore.getState().getWindowsByStatus(WindowStatus.Error)
-
-      expect(errorWindows).toHaveLength(0)
-    })
-  })
+      expect(useWindowStore.getState().getActiveWindows().map((window) => window.id)).toEqual(['active-1']);
+      expect(useWindowStore.getState().getArchivedWindows().map((window) => window.id)).toEqual(['archived-1']);
+    });
+  });
 
   describe('edge cases', () => {
-    it('should not throw when removing non-existent window', () => {
+    it('does not throw when removing a missing window', () => {
       expect(() => {
-        useWindowStore.getState().removeWindow('non-existent')
-      }).not.toThrow()
+        useWindowStore.getState().removeWindow('missing');
+      }).not.toThrow();
+    });
 
-      const state = useWindowStore.getState()
-      expect(state.windows).toHaveLength(0)
-    })
-
-    it('should not throw when updating non-existent window status', () => {
+    it('does not throw when updating a missing window status', () => {
       expect(() => {
-        useWindowStore.getState().updateWindowStatus('non-existent', WindowStatus.Completed)
-      }).not.toThrow()
+        useWindowStore.getState().updateWindowStatus('missing', WindowStatus.Completed);
+      }).not.toThrow();
+    });
 
-      const state = useWindowStore.getState()
-      expect(state.windows).toHaveLength(0)
-    })
-
-    it('should not throw when setting non-existent window as active', () => {
+    it('does not throw when setting a missing window as active', () => {
       expect(() => {
-        useWindowStore.getState().setActiveWindow('non-existent')
-      }).not.toThrow()
+        useWindowStore.getState().setActiveWindow('missing');
+      }).not.toThrow();
 
-      const state = useWindowStore.getState()
-      expect(state.activeWindowId).toBe('non-existent')
-    })
-  })
-})
+      expect(useWindowStore.getState().activeWindowId).toBe('missing');
+    });
+  });
 
+  describe('canvas workspace runtime', () => {
+    it('toggles started canvas workspaces', () => {
+      useWindowStore.getState().setCanvasWorkspaceStarted('canvas-1', true);
+      expect(useWindowStore.getState().isCanvasWorkspaceStarted('canvas-1')).toBe(true);
+
+      useWindowStore.getState().setCanvasWorkspaceStarted('canvas-1', false);
+      expect(useWindowStore.getState().isCanvasWorkspaceStarted('canvas-1')).toBe(false);
+    });
+
+    it('removes canvas-owned blocks when removing a canvas-owned window', () => {
+      const canvasOwnedWindow = createWindow({
+        id: 'canvas-window-1',
+        name: 'Canvas Window',
+        ownerType: 'canvas-owned',
+        ownerCanvasWorkspaceId: 'canvas-1',
+        status: WindowStatus.Completed,
+      });
+
+      useWindowStore.setState({
+        windows: [canvasOwnedWindow],
+        canvasWorkspaces: [{
+          id: 'canvas-1',
+          name: 'Canvas',
+          createdAt: '2026-05-07T00:00:00.000Z',
+          updatedAt: '2026-05-07T00:00:00.000Z',
+          blocks: [{
+            id: 'block-1',
+            type: 'window',
+            windowId: 'canvas-window-1',
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 220,
+            zIndex: 1,
+          }],
+          links: [{
+            id: 'link-1',
+            fromBlockId: 'block-1',
+            toBlockId: 'block-1',
+            kind: 'related',
+            createdAt: '2026-05-07T00:00:00.000Z',
+          }],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 2,
+        }],
+      });
+
+      useWindowStore.getState().removeWindow('canvas-window-1');
+
+      const canvasWorkspace = useWindowStore.getState().canvasWorkspaces[0];
+      expect(canvasWorkspace?.blocks).toEqual([]);
+      expect(canvasWorkspace?.links).toEqual([]);
+    });
+  });
+});

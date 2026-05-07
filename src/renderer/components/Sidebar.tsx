@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { FileCode2, Orbit, Plus, Settings } from 'lucide-react';
+import { FileCode2, Orbit, Plus, Settings, Square } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
@@ -24,6 +24,7 @@ interface SidebarProps {
   onWindowSelect: (windowId: string) => void;
   onGroupSelect?: (groupId: string) => void;
   onCanvasSelect?: (canvasWorkspaceId: string) => void;
+  onCanvasStop?: (canvasWorkspaceId: string) => void | Promise<void>;
   onWindowContextMenu?: (windowId: string, e: React.MouseEvent) => void;
   onSettingsClick?: () => void;
   onOpenCodePane?: () => void;
@@ -110,6 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onWindowSelect,
   onGroupSelect,
   onCanvasSelect,
+  onCanvasStop,
   onWindowContextMenu,
   onSettingsClick,
   onOpenCodePane,
@@ -128,6 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const windows = useWindowStore((state) => state.windows);
   const groups = useWindowStore((state) => state.groups);
   const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
+  const startedCanvasWorkspaceIds = useWindowStore((state) => state.startedCanvasWorkspaceIds);
   const terminalSidebarFilter = useWindowStore((state) => state.terminalSidebarFilter);
   const setTerminalSidebarFilter = useWindowStore((state) => state.setTerminalSidebarFilter);
 
@@ -158,6 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
   const activeCanvasItems = useMemo<CanvasSidebarItem[]>(() => (
     canvasWorkspaces
+      .filter((canvasWorkspace) => startedCanvasWorkspaceIds.includes(canvasWorkspace.id))
       .filter((canvasWorkspace) => !canvasWorkspace.archived)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
       .map((canvasWorkspace) => ({
@@ -166,7 +170,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         canvasWorkspace,
         archived: false,
       }))
-  ), [canvasWorkspaces]);
+  ), [canvasWorkspaces, startedCanvasWorkspaceIds]);
   const sidebarWindowIndex = useMemo<SidebarWindowIndex>(() => {
     const windowById = new Map(windows.map((window) => [window.id, window]));
     const windowKindById = new Map<string, NonNullable<Window['kind']>>();
@@ -399,6 +403,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           isActive={item.id === activeCanvasWorkspaceId}
           isExpanded={sidebarExpanded}
           onClick={() => onCanvasSelect?.(item.id)}
+          onStop={onCanvasStop ? () => onCanvasStop(item.id) : undefined}
         />
       );
     }
@@ -815,6 +820,7 @@ interface SidebarCanvasItemProps {
   isActive: boolean;
   isExpanded: boolean;
   onClick: () => void;
+  onStop?: () => void | Promise<void>;
 }
 
 const SidebarCanvasItem: React.FC<SidebarCanvasItemProps> = ({
@@ -822,6 +828,7 @@ const SidebarCanvasItem: React.FC<SidebarCanvasItemProps> = ({
   isActive,
   isExpanded,
   onClick,
+  onStop,
 }) => {
   const { t, language } = useI18n();
   const itemSurfaceClassName = isActive
@@ -908,6 +915,21 @@ const SidebarCanvasItem: React.FC<SidebarCanvasItemProps> = ({
           <span>{updatedAt}</span>
         </div>
       </div>
+      {onStop ? (
+        <button
+          type="button"
+          aria-label={t('terminalView.stop')}
+          title={t('terminalView.stop')}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            void onStop();
+          }}
+          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+        >
+          <Square size={13} fill="currentColor" />
+        </button>
+      ) : null}
     </button>
   );
 };

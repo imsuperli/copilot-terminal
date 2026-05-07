@@ -230,3 +230,9 @@ export function getSSHSessionFamilyWindows(
 export function getPersistableWindows(windows: Window[]): Window[] {
   return windows.filter((window) => !window.ephemeral);
 }
+
+export function getStandalonePersistableWindows(windows: Window[]): Window[] {
+  return getPersistableWindows(windows).filter((window) => (
+    (window.ownerType ?? 'standalone') === 'standalone'
+  ));
+}

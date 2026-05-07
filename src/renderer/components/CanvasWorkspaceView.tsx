@@ -71,6 +71,7 @@ import {
 } from './ui/ide-popup';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useKeyboardShortcutSettings } from '../hooks/useKeyboardShortcutSettings';
+import { destroyWindowResourcesAndRemoveRecord } from '../utils/windowDestruction';
 
 const LazyQuickSwitcher = React.lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -83,6 +84,7 @@ interface CanvasWorkspaceViewProps {
   onOpenCanvasWorkspace?: (canvasWorkspaceId: string) => void;
   onOpenGroup?: (groupId: string) => void;
   renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => React.ReactNode;
+  onStopWorkspace?: (canvasWorkspaceId: string) => void | Promise<void>;
   onExitWorkspace?: () => void | Promise<void>;
 }
 
@@ -222,6 +224,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   onOpenCanvasWorkspace,
   onOpenGroup,
   renderLiveWindow,
+  onStopWorkspace,
   onExitWorkspace,
 }) => {
   const keyboardShortcuts = useKeyboardShortcutSettings();
@@ -332,6 +335,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
     return windows.filter((windowItem) => !windowItem.archived && !linkedWindowIds.has(windowItem.id));
   }, [canvasWorkspace.blocks, windows]);
+
+  const canvasOwnedWindows = useMemo(() => (
+    windows.filter((windowItem) => (
+      windowItem.ownerType === 'canvas-owned'
+      && windowItem.ownerCanvasWorkspaceId === canvasWorkspace.id
+    ))
+  ), [canvasWorkspace.id, windows]);
 
   const relinkAvailableWindows = useMemo(() => {
     const relinkingBlock = relinkingBlockId
@@ -744,6 +754,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     const draftWindow = createCanvasWindowDraft('chat', {
       name: t('canvas.selectionChatTitle'),
       linkedPaneId: selectPreferredChatLinkedPaneId(linkedTerminalPanes),
+      ownerCanvasWorkspaceId: canvasWorkspace.id,
     });
     addWindow(draftWindow);
     addWindowBlockFromWindow(draftWindow);
@@ -868,12 +879,26 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     }
 
     const ids = new Set(blockIds);
+    const canvasOwnedWindowIds = canvasWorkspace.blocks
+      .filter((block): block is CanvasWindowBlock => block.type === 'window' && ids.has(block.id))
+      .map((block) => block.windowId)
+      .filter((windowId) => {
+        const windowItem = windowsById.get(windowId);
+        return windowItem?.ownerType === 'canvas-owned' && windowItem.ownerCanvasWorkspaceId === canvasWorkspace.id;
+      });
+
+    for (const windowId of canvasOwnedWindowIds) {
+      void destroyWindowResourcesAndRemoveRecord(windowId).catch((error) => {
+        console.error(`Failed to destroy canvas-owned window ${windowId}:`, error);
+      });
+    }
+
     persistWorkspace((current) => ({
       blocks: current.blocks.filter((block) => !ids.has(block.id)),
       links: (current.links ?? []).filter((link) => !ids.has(link.fromBlockId) && !ids.has(link.toBlockId)),
     }));
     setSelectedBlockIds((previous) => previous.filter((blockId) => !ids.has(blockId)));
-  }, [persistWorkspace]);
+  }, [canvasWorkspace.blocks, canvasWorkspace.id, persistWorkspace, windowsById]);
 
   const arrangeCanvas = useCallback((mode: CanvasArrangeMode) => {
     persistWorkspace((current) => ({
@@ -898,11 +923,16 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     setWorkspaceRenameOpen(false);
   }, [canvasWorkspace.id, canvasWorkspace.name, createCanvasEvent, updateCanvasWorkspace, workspaceNameDraft]);
 
+  const stopWorkspaceRuntime = useCallback(async () => {
+    await onStopWorkspace?.(canvasWorkspace.id);
+  }, [canvasWorkspace.id, onStopWorkspace]);
+
   const handleWorkspaceDelete = useCallback(async () => {
+    await stopWorkspaceRuntime();
     removeCanvasWorkspace(canvasWorkspace.id);
     setWorkspaceDeleteOpen(false);
     await onExitWorkspace?.();
-  }, [canvasWorkspace.id, onExitWorkspace, removeCanvasWorkspace]);
+  }, [canvasWorkspace.id, onExitWorkspace, removeCanvasWorkspace, stopWorkspaceRuntime]);
 
   const handleCreateWindowBlock = useCallback((payload: {
     kind: 'local' | 'ssh' | 'code' | 'browser' | 'chat';
@@ -923,10 +953,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       url: payload.url,
       linkedPaneId: payload.linkedPaneId,
       sshProfile,
+      ownerCanvasWorkspaceId: canvasWorkspace.id,
     });
     addWindow(draftWindow);
     addWindowBlockFromWindow(draftWindow);
-  }, [addWindow, addWindowBlockFromWindow, canvasWorkspace.workingDirectory, sshProfiles]);
+  }, [addWindow, addWindowBlockFromWindow, canvasWorkspace.id, canvasWorkspace.workingDirectory, sshProfiles]);
 
   const handleApplyTemplate = useCallback((templateId: string) => {
     const template = resolvedTemplates.find((item) => item.id === templateId);
@@ -941,6 +972,8 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     });
 
     for (const windowItem of instantiated.windows) {
+      windowItem.ownerType = 'canvas-owned';
+      windowItem.ownerCanvasWorkspaceId = canvasWorkspace.id;
       addWindow(windowItem);
     }
 
@@ -1601,6 +1634,10 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           setWorkspaceRenameOpen(true);
         }}
         onDeleteWorkspace={() => setWorkspaceDeleteOpen(true)}
+        onStopWorkspace={() => {
+          void stopWorkspaceRuntime();
+        }}
+        canStopWorkspace={canvasOwnedWindows.length > 0}
       />
 
       <div

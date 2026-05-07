@@ -5,7 +5,7 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { Window, WindowStatus } from '../types/window';
 import { getAllWindowIds } from './groupLayoutHelpers';
 import { getAllPanes } from './layoutHelpers';
-import { getPersistableWindows, getStandaloneSSHProfileId } from './sshWindowBindings';
+import { getStandalonePersistableWindows, getStandaloneSSHProfileId } from './sshWindowBindings';
 import { isInactiveTerminalPaneStatus } from './windowLifecycle';
 
 type CardCollectionOptions = {
@@ -26,7 +26,7 @@ function createCardCollectionContext(
   groups: WindowGroup[],
   options: CardCollectionOptions = {},
 ): CardCollectionContext {
-  const persistableWindows = getPersistableWindows(windows);
+  const persistableWindows = getStandalonePersistableWindows(windows);
 
   return {
     groupedWindowIds: new Set(groups.flatMap((group) => getAllWindowIds(group.layout))),

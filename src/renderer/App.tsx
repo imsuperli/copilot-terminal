@@ -66,6 +66,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { canStartPaneSession, hasLiveTerminalSession, isInactiveTerminalPaneStatus } from './utils/windowLifecycle';
 import { useKeyboardShortcutSettings } from './hooks/useKeyboardShortcutSettings';
 import { matchesKeyboardShortcut } from '../shared/utils/keyboardShortcuts';
+import { destroyWindowResourcesKeepRecord } from './utils/windowDestruction';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
 const STARTUP_MASK_HOLD_MS = 40;
@@ -288,6 +289,7 @@ const ActiveCanvasSurface = React.memo(({
   onCanvasSwitch,
   onExitWorkspace,
   onGroupSwitch,
+  onStopWorkspace,
   onWindowSwitch,
   onSSHProfileSaved,
   sshEnabled,
@@ -297,6 +299,7 @@ const ActiveCanvasSurface = React.memo(({
   onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
   onExitWorkspace: () => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
+  onStopWorkspace: (canvasWorkspaceId: string) => void | Promise<void>;
   onWindowSwitch: (windowId: string) => void;
   onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
   sshEnabled: boolean;
@@ -335,6 +338,7 @@ const ActiveCanvasSurface = React.memo(({
           onWindowSelect={onWindowSwitch}
           onGroupSelect={onGroupSwitch}
           onCanvasSelect={onCanvasSwitch}
+          onCanvasStop={onStopWorkspace}
           onSettingsClick={handleSettingsClick}
           sshEnabled={sshEnabled}
           sshProfiles={sshProfiles}
@@ -349,6 +353,7 @@ const ActiveCanvasSurface = React.memo(({
             onOpenWindow={onWindowSwitch}
             onOpenCanvasWorkspace={onCanvasSwitch}
             onOpenGroup={onGroupSwitch}
+            onStopWorkspace={onStopWorkspace}
             renderLiveWindow={(windowId, options) => {
               const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
               if (!embeddedWindow) {
@@ -401,6 +406,7 @@ function AppContent() {
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const activeCanvasWorkspaceId = useWindowStore((state) => state.activeCanvasWorkspaceId);
+  const setCanvasWorkspaceStarted = useWindowStore((state) => state.setCanvasWorkspaceStarted);
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
   const groups = useWindowStore((state) => state.groups);
   const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
@@ -1271,8 +1277,27 @@ function AppContent() {
 
   const handleEnterCanvasWorkspace = useCallback(async (canvasWorkspaceId: string) => {
     setCanvasTerminalReturnTargetId(null);
+    setCanvasWorkspaceStarted(canvasWorkspaceId, true);
     await switchToCanvasView(canvasWorkspaceId);
-  }, [switchToCanvasView]);
+  }, [setCanvasWorkspaceStarted, switchToCanvasView]);
+
+  const handleStopCanvasWorkspace = useCallback(async (canvasWorkspaceId: string) => {
+    const ownedWindows = useWindowStore.getState().windows.filter((windowItem) => (
+      windowItem.ownerType === 'canvas-owned'
+      && windowItem.ownerCanvasWorkspaceId === canvasWorkspaceId
+    ));
+
+    for (const windowItem of ownedWindows) {
+      await destroyWindowResourcesKeepRecord(windowItem.id);
+    }
+
+    setCanvasWorkspaceStarted(canvasWorkspaceId, false);
+
+    if (currentView === 'canvas' && currentActiveCanvasWorkspaceId === canvasWorkspaceId) {
+      setCanvasTerminalReturnTargetId(null);
+      await switchToUnifiedView();
+    }
+  }, [currentActiveCanvasWorkspaceId, currentView, setCanvasWorkspaceStarted, switchToUnifiedView]);
 
   const handleWindowSwitch = useCallback((windowId: string) => {
     setCanvasTerminalReturnTargetId(null);
@@ -1633,6 +1658,8 @@ function AppContent() {
             <CardGrid
               onEnterTerminal={handleEnterTerminal}
               onEnterCanvasWorkspace={handleEnterCanvasWorkspace}
+              onStopCanvasWorkspace={handleStopCanvasWorkspace}
+              onDeleteCanvasWorkspace={handleStopCanvasWorkspace}
               onEnterGroup={handleEnterGroup}
               onCreateWindow={handleCreateWindow}
               sshEnabled={sshEnabled}
@@ -1675,6 +1702,7 @@ function AppContent() {
           onWindowSwitch={handleOpenWindowFromCanvas}
           onCanvasSwitch={handleCanvasSwitchFromTerminalContext}
           onGroupSwitch={handleGroupSwitchFromCanvasContext}
+          onStopWorkspace={handleStopCanvasWorkspace}
           onExitWorkspace={handleReturnFromCanvas}
           sshEnabled={sshEnabled}
           sshProfiles={sshProfiles}

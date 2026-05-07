@@ -138,6 +138,7 @@ export interface SshPaneBinding {
 }
 
 export type WindowKind = 'local' | 'ssh' | 'mixed';
+export type WindowOwnerType = 'standalone' | 'canvas-owned';
 
 /**
  * 窗格接口
@@ -235,6 +236,8 @@ export interface Window {
   claudeCost?: number;           // Claude 成本统计（运行态）
   ephemeral?: boolean;           // 运行态临时窗口，不参与持久化/恢复
   sshTabOwnerWindowId?: string;  // 兼容旧数据；新逻辑不再依赖 owner 绑定
+  ownerType?: WindowOwnerType;   // 窗口归属，缺失时视为 standalone
+  ownerCanvasWorkspaceId?: string | null; // canvas-owned 窗口所属画布 ID
 }
 
 /**

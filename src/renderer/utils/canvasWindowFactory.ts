@@ -137,46 +137,62 @@ export function createCanvasWindowDraft(
     url?: string;
     linkedPaneId?: string;
     sshProfile?: SSHProfile;
+    ownerCanvasWorkspaceId?: string;
   },
 ): Window {
+  let windowDraft: Window;
+
   switch (kind) {
     case 'local':
-      return createCanvasLocalWindowDraft({
+      windowDraft = createCanvasLocalWindowDraft({
         name: options?.name,
         workingDirectory: options?.workingDirectory,
         command: options?.command,
       });
+      break;
     case 'ssh':
       if (!options?.sshProfile) {
         throw new Error('SSH profile is required to create an SSH canvas window.');
       }
-      return createCanvasSSHWindowDraft(options.sshProfile, {
+      windowDraft = createCanvasSSHWindowDraft(options.sshProfile, {
         name: options.name,
         remoteCwd: options.workingDirectory,
         command: options.command,
       });
+      break;
     case 'code':
-      return createCanvasCodeWindowDraft({
+      windowDraft = createCanvasCodeWindowDraft({
         name: options?.name,
         rootPath: options?.workingDirectory,
       });
+      break;
     case 'browser':
-      return createCanvasBrowserWindowDraft({
+      windowDraft = createCanvasBrowserWindowDraft({
         name: options?.name,
         url: options?.url,
       });
+      break;
     case 'chat':
-      return createCanvasChatWindowDraft({
+      windowDraft = createCanvasChatWindowDraft({
         name: options?.name,
         linkedPaneId: options?.linkedPaneId,
       });
+      break;
     default:
-      return createCanvasLocalWindowDraft({
+      windowDraft = createCanvasLocalWindowDraft({
         name: options?.name,
         workingDirectory: options?.workingDirectory,
         command: options?.command,
       });
+      break;
   }
+
+  if (options?.ownerCanvasWorkspaceId?.trim()) {
+    windowDraft.ownerType = 'canvas-owned';
+    windowDraft.ownerCanvasWorkspaceId = options.ownerCanvasWorkspaceId.trim();
+  }
+
+  return windowDraft;
 }
 
 export function inferCanvasWindowDraftKind(windowItem: Window): CanvasWindowDraftKind {

@@ -9,7 +9,7 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
-import { getPersistableWindows, isEphemeralSSHCloneWindow } from '../../utils/sshWindowBindings';
+import { getStandalonePersistableWindows, isEphemeralSSHCloneWindow } from '../../utils/sshWindowBindings';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
 import { getSidebarCardCounts } from '../../utils/cardCollection';
@@ -70,7 +70,7 @@ export function Sidebar({
   const addCustomCategory = useWindowStore((state) => state.addCustomCategory);
   const updateCustomCategory = useWindowStore((state) => state.updateCustomCategory);
   const removeCustomCategory = useWindowStore((state) => state.removeCustomCategory);
-  const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
+  const persistableWindows = useMemo(() => getStandalonePersistableWindows(windows), [windows]);
 
   const activeWindows = persistableWindows.filter(w => !w.archived);
   const archivedWindows = persistableWindows.filter(w => w.archived);
