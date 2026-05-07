@@ -31,14 +31,13 @@ import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import {
   buildStandaloneSSHWindowMap,
   getPersistableWindows,
-  getSSHSessionOwnerWindowId,
   getStandaloneSSHProfileId,
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { destroySSHWindowFamilyResources, destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { createCanvasWindowBlock } from '../utils/canvasWorkspace';
 
 // 统一的卡片项类型
@@ -660,19 +659,8 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   const handleDestroyWindowSession = useCallback(async (win: Window) => {
     try {
-      const ownerWindowId = getSSHSessionOwnerWindowId(win);
-      if (ownerWindowId) {
-        const { activeWindowId } = useWindowStore.getState();
-        const windowIdsToRemove = await destroySSHWindowFamilyResources(win, {
-          removeTargetRecord: true,
-          includeOwnedClones: !isEphemeralSSHCloneWindow(win),
-        });
-
-        if (activeWindowId && windowIdsToRemove.includes(activeWindowId)) {
-          useWindowStore.getState().setActiveWindow(null);
-          await window.electronAPI.switchToUnifiedView();
-        }
-
+      if (isEphemeralSSHCloneWindow(win)) {
+        await destroyWindowResourcesAndRemoveRecord(win.id);
         return;
       }
 
@@ -833,11 +821,8 @@ export const CardGrid = React.memo<CardGridProps>(({
       await Promise.all(
         windowsToDestroy.map(async (win) => {
           try {
-            if (getSSHSessionOwnerWindowId(win)) {
-              await destroySSHWindowFamilyResources(win, {
-                removeTargetRecord: false,
-                includeOwnedClones: !isEphemeralSSHCloneWindow(win),
-              });
+            if (isEphemeralSSHCloneWindow(win)) {
+              await destroyWindowResourcesAndRemoveRecord(win.id);
               return;
             }
 

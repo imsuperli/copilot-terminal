@@ -14,8 +14,8 @@ import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { getPersistableWindows, getSSHSessionOwnerWindowId, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
-import { destroySSHWindowFamilyResources, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import { getPersistableWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
@@ -87,11 +87,8 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
 
   const handleDestroyWindowSession = useCallback(async (win: Window) => {
     try {
-      if (getSSHSessionOwnerWindowId(win)) {
-        await destroySSHWindowFamilyResources(win, {
-          removeTargetRecord: false,
-          includeOwnedClones: !isEphemeralSSHCloneWindow(win),
-        });
+      if (isEphemeralSSHCloneWindow(win)) {
+        await destroyWindowResourcesAndRemoveRecord(win.id);
         return;
       }
 

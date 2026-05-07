@@ -26,6 +26,7 @@ import {
   getWindowCount,
 } from '../utils/groupLayoutHelpers';
 import { getPersistableWindows } from '../utils/sshWindowBindings';
+import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { isLegacyPausedStatus } from '../utils/windowLifecycle';
 import { updateSettingsCategories } from './categoryHelpers';
 import { usePaneNoteStore } from './paneNoteStore';
@@ -790,6 +791,28 @@ export const useWindowStore = create<WindowStore>()(
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
         }
+
+        if (getWindowKind(existingWindow) === 'ssh') {
+          const survivingClone = state.windows.find((window) => (
+            window.ephemeral
+            && getWindowKind(window) === 'ssh'
+            && window.sshTabOwnerWindowId?.trim() === id
+          ));
+
+          if (survivingClone) {
+            const nextOwnerWindowId = survivingClone.id;
+            for (const window of state.windows) {
+              if (
+                window.ephemeral
+                && getWindowKind(window) === 'ssh'
+                && window.sshTabOwnerWindowId?.trim() === id
+              ) {
+                window.sshTabOwnerWindowId = nextOwnerWindowId;
+              }
+            }
+          }
+        }
+
         // 从 MRU 列表移除
         state.mruList = state.mruList.filter(wid => wid !== id);
 
