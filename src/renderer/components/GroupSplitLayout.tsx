@@ -7,6 +7,7 @@ import { useWindowStore } from '../stores/windowStore';
 import { useI18n } from '../i18n';
 import { DraggableWindowCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
+import { requestActiveTerminalFocus } from '../utils/terminalFocus';
 
 export interface GroupSplitLayoutProps {
   groupId: string;
@@ -187,6 +188,10 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
       onSplitResize(groupId, splitPath, nextSizes);
       setIsResizing(false);
       setResizingIndex(-1);
+      requestActiveTerminalFocus({
+        windowId: activeWindowId,
+        defer: true,
+      });
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -196,7 +201,7 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, groupId]);
+  }, [activeWindowId, applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, groupId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
 

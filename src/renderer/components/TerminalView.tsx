@@ -66,6 +66,7 @@ import {
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
+import { requestActiveTerminalFocus } from '../utils/terminalFocus';
 import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { destroySSHWindowFamilyResources } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
@@ -377,6 +378,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
   const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
   const [titleBarActionsSlot, setTitleBarActionsSlot] = useState<HTMLElement | null>(null);
+
+  const restoreActiveTerminalFocus = useCallback((options?: { defer?: boolean }) => {
+    if (!activePane || !isTerminalPane(activePane) || !activeTerminalPane) {
+      return;
+    }
+
+    requestActiveTerminalFocus({
+      windowId: terminalWindow.id,
+      paneId: activeTerminalPane.id,
+      defer: options?.defer,
+    });
+  }, [activePane, activeTerminalPane, terminalWindow.id]);
 
   useEffect(() => {
     if (canvasEmbedded) {
@@ -1023,7 +1036,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
-    await startWindowPanes(terminalWindow, updatePane);
+    const latestWindow = useWindowStore.getState().getWindowById(terminalWindow.id) ?? terminalWindow;
+    await startWindowPanes(latestWindow, updatePane);
   }, [terminalWindow, updatePane]);
 
   const handleOpenSSHPortForwards = useCallback(() => {
@@ -1144,6 +1158,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [activePaneCapabilities?.canOpenSFTP, sshSftpOpen]);
 
+  const handleSSHSftpOpenChange = useCallback((nextOpen: boolean) => {
+    setSSHSftpOpen(nextOpen);
+    if (!nextOpen) {
+      restoreActiveTerminalFocus({ defer: true });
+    }
+  }, [restoreActiveTerminalFocus]);
+
   // 处理重启窗口：先停止，再启动
   const handleRestartWindow = useCallback(async () => {
     if (isEphemeralRemoteTab) {
@@ -1231,6 +1252,28 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     },
     [onCanvasSwitch],
   );
+
+  const handleQuickSwitcherClose = useCallback(() => {
+    setQuickSwitcherOpen(false);
+    restoreActiveTerminalFocus({ defer: true });
+  }, [restoreActiveTerminalFocus]);
+
+  const handleSettingsPanelClose = useCallback(() => {
+    setIsSettingsPanelOpen(false);
+    restoreActiveTerminalFocus({ defer: true });
+  }, [restoreActiveTerminalFocus]);
+
+  const handleSSHPortForwardDialogOpenChange = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) {
+      setSSHPortForwardTarget(null);
+      restoreActiveTerminalFocus({ defer: true });
+    }
+  }, [restoreActiveTerminalFocus]);
+
+  const handleSSHMetricsClose = useCallback(() => {
+    setSSHMetricsOpen(false);
+    restoreActiveTerminalFocus({ defer: true });
+  }, [restoreActiveTerminalFocus]);
 
   // 处理拖拽窗口到终端区域创建或调整分组
   const handleWindowDrop = useCallback(
@@ -1600,8 +1643,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     handleOpenInIDE,
     handleOpenSSHPortForwards,
     handleOpenSSHSftp,
+    handleSSHSftpOpenChange,
     handleDeleteWindow,
     handleRestartWindow,
+    handleSSHMetricsClose,
     handleSplitBrowserPane,
     handleSplitChatPane,
     handleSplitPane,
@@ -1699,7 +1744,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             <Suspense fallback={null}>
               <LazySSHSftpDialog
                 open={sshSftpOpen}
-                onOpenChange={setSSHSftpOpen}
+                onOpenChange={handleSSHSftpOpenChange}
                 windowId={terminalWindow.id}
                 paneId={activeTerminalPane?.id ?? null}
                 initialPath={activeSshRuntimeCwd}
@@ -1747,7 +1792,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             paneId={activeTerminalPane?.id ?? null}
             paneStatus={activeTerminalPane?.status ?? null}
             currentCwd={activeSshRuntimeCwd}
-            onClose={() => setSSHMetricsOpen(false)}
+            onClose={handleSSHMetricsClose}
           />
         )}
       </div>
@@ -1763,7 +1808,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             onSelect={handleQuickSwitcherSelect}
             onSelectGroup={handleQuickSwitcherSelectGroup}
             onSelectCanvas={handleQuickSwitcherSelectCanvas}
-            onClose={() => setQuickSwitcherOpen(false)}
+            onClose={handleQuickSwitcherClose}
           />
         </Suspense>
       )}
@@ -1773,7 +1818,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         <Suspense fallback={null}>
           <LazySettingsPanel
             open={isSettingsPanelOpen}
-            onClose={() => setIsSettingsPanelOpen(false)}
+            onClose={handleSettingsPanelClose}
           />
         </Suspense>
       )}
@@ -1781,11 +1826,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
       <SSHPortForwardDialog
         open={Boolean(sshPortForwardTarget)}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            setSSHPortForwardTarget(null);
-          }
-        }}
+        onOpenChange={handleSSHPortForwardDialogOpenChange}
         windowId={sshPortForwardTarget?.windowId ?? null}
         paneId={sshPortForwardTarget?.paneId ?? null}
       />

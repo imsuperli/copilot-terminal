@@ -21,6 +21,7 @@ import {
   startBrowserPanePointerDrag,
   updateBrowserPanePointerDragHover,
 } from '../utils/browserPanePointerDragState';
+import { requestActiveTerminalFocus } from '../utils/terminalFocus';
 import { DragItemTypes, PaneDropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserPaneDragItem, PaneDropResult } from './dnd';
 
@@ -231,6 +232,11 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
       onSplitResize(windowId, splitPath, nextSizes);
       setIsResizing(false);
       setResizingIndex(-1);
+      requestActiveTerminalFocus({
+        windowId,
+        paneId: activePaneId,
+        defer: true,
+      });
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -240,7 +246,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
+  }, [activePaneId, applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
 

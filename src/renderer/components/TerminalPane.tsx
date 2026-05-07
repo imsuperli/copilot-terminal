@@ -28,10 +28,21 @@ import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import '../styles/xterm.css';
 import { dispatchAppError, dispatchAppSuccess } from '../utils/appNotice';
 import type { SSHClipboardImageShortcut } from '../../shared/types/workspace';
+import {
+  ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT,
+  matchesActiveTerminalFocusRequest,
+} from '../utils/terminalFocus';
 
 const completedReplaySessions = new Set<string>();
 const DIRECT_LIVE_OUTPUT_MAX_CHARS = 256;
 const DIRECT_LIVE_OUTPUT_IDLE_MS = 12;
+const REPLAY_PROTOCOL_QUERY_PATTERN = new RegExp(
+  [
+    '\\x1b\\[(?:[>=])?c',
+    '\\x1b\\[\\?u',
+  ].join('|'),
+  'g',
+);
 
 function getDefaultSSHClipboardImageShortcut(platform: string | undefined): SSHClipboardImageShortcut {
   return platform === 'darwin' ? 'ctrl-v' : 'alt-v';
@@ -191,12 +202,50 @@ function extractPtyHistorySnapshot(response: unknown): PtyHistorySnapshot {
   };
 }
 
-function stripReplayDeviceAttributeQueries(data: string): string {
+function stripReplayProtocolQueries(data: string): string {
   if (!data) {
     return data;
   }
 
-  return data.replace(/\x1b\[(?:[>=])?c/g, '');
+  return data.replace(REPLAY_PROTOCOL_QUERY_PATTERN, '');
+}
+
+type TerminalCoreKeyboardState = {
+  decPrivateModes?: {
+    win32InputMode?: boolean;
+  };
+  kittyKeyboard?: {
+    flags: number;
+    mainFlags: number;
+    altFlags: number;
+    mainStack: number[];
+    altStack: number[];
+  };
+};
+
+type TerminalWithKeyboardState = Terminal & {
+  _core?: {
+    coreService?: TerminalCoreKeyboardState;
+  };
+};
+
+function resetTerminalKeyboardProtocolState(terminal: Terminal): void {
+  const coreState = (terminal as TerminalWithKeyboardState)._core?.coreService;
+  if (!coreState) {
+    return;
+  }
+
+  if (coreState.decPrivateModes) {
+    coreState.decPrivateModes.win32InputMode = false;
+  }
+
+  if (coreState.kittyKeyboard) {
+    coreState.kittyKeyboard.flags = 0;
+    coreState.kittyKeyboard.mainFlags = 0;
+    coreState.kittyKeyboard.altFlags = 0;
+    coreState.kittyKeyboard.mainStack.length = 0;
+    coreState.kittyKeyboard.altStack.length = 0;
+  }
 }
 
 function readRootCssColor(variableName: string, fallback: string): string {
@@ -790,6 +839,26 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     };
   }, [focusTerminalInput, forceResizeToContainer, isActive, isWindowActive, layoutPaneCount]);
 
+  useEffect(() => {
+    const handleFocusRequest = (event: Event) => {
+      if (!isActive || !isWindowActive) {
+        return;
+      }
+
+      const detail = (event as CustomEvent<{ windowId: string; paneId?: string | null; defer?: boolean } | undefined>).detail;
+      if (!matchesActiveTerminalFocusRequest(detail, windowId, pane.id)) {
+        return;
+      }
+
+      focusTerminalInput({ defer: detail?.defer });
+    };
+
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, handleFocusRequest);
+    return () => {
+      window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, handleFocusRequest);
+    };
+  }, [focusTerminalInput, isActive, isWindowActive, pane.id, windowId]);
+
   // 监听字体设置更新
   useEffect(() => {
     const unsubscribe = onTerminalSettingsUpdated((settings) => {
@@ -1066,6 +1135,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       if (resetTerminal && terminalRef.current) {
         clearQueuedOutput();
         terminalRef.current.reset();
+        resetTerminalKeyboardProtocolState(terminalRef.current);
       }
 
       try {
@@ -1077,7 +1147,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         const historySnapshot = extractPtyHistorySnapshot(response);
         lastAppliedSeqRef.current = historySnapshot.lastSeq;
         const replayData = shouldSuppressReplayProtocolReplies
-          ? stripReplayDeviceAttributeQueries(historySnapshot.chunks.join(''))
+          ? stripReplayProtocolQueries(historySnapshot.chunks.join(''))
           : historySnapshot.chunks.join('');
         if (replayData && isReplayStillCurrent()) {
           if (shouldSuppressReplayProtocolReplies) {
@@ -1399,6 +1469,16 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     focusTerminalInput();
   }, [focusTerminalInput, isActive, onActivate]);
 
+  const handleTerminalMouseDownCapture = useCallback(() => {
+    if (!isActive) {
+      onActivate();
+      focusTerminalInput({ defer: true });
+      return;
+    }
+
+    focusTerminalInput();
+  }, [focusTerminalInput, isActive, onActivate]);
+
   return (
     <div
       ref={paneRootRef}
@@ -1487,7 +1567,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       {/* 终端容器 */}
       <div
         ref={terminalContainerRef}
+        data-terminal-input-region="true"
         className="min-h-0 min-w-0 flex-1 overflow-hidden px-1"
+        onMouseDownCapture={handleTerminalMouseDownCapture}
       />
     </div>
   );

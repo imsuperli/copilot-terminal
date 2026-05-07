@@ -6,6 +6,7 @@ import { TerminalView } from '../TerminalView';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
+import { ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT } from '../../utils/terminalFocus';
 
 const { mockSftpDialog, mockPortForwardDialog } = vi.hoisted(() => ({
   mockSftpDialog: vi.fn(),
@@ -126,11 +127,20 @@ vi.mock('../../i18n', () => ({
 }));
 
 vi.mock('../SSHSftpDialog', () => ({
-  SSHSftpDialog: (props: { open: boolean; windowId: string | null; paneId: string | null; initialPath?: string | null }) => {
+  SSHSftpDialog: (props: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    windowId: string | null;
+    paneId: string | null;
+    initialPath?: string | null;
+  }) => {
     mockSftpDialog(props);
     return props.open ? (
       <div data-testid="ssh-sftp-dialog">
         {`${props.windowId}:${props.paneId}:${props.initialPath ?? ''}`}
+        <button type="button" aria-label="关闭 SSH 文件面板" onClick={() => props.onOpenChange(false)}>
+          关闭 SSH 文件面板
+        </button>
       </div>
     ) : null;
   },
@@ -496,6 +506,39 @@ describe('TerminalView SSH toolbar', () => {
     }));
   });
 
+  it('restores terminal focus when the ssh sftp dialog closes', async () => {
+    const user = userEvent.setup();
+    const focusRequestListener = vi.fn();
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '打开 SSH 文件面板' }));
+    expect(await screen.findByTestId('ssh-sftp-dialog')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭 SSH 文件面板' }));
+
+    await waitFor(() => {
+      expect(focusRequestListener).toHaveBeenCalledTimes(1);
+    });
+
+    const customEvent = focusRequestListener.mock.calls[0]?.[0] as CustomEvent<{ windowId: string; paneId?: string; defer?: boolean }>;
+    expect(customEvent.detail).toEqual({
+      windowId: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      defer: true,
+    });
+
+    window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+  });
+
   it('keeps the ssh session status bar hidden by default', () => {
     render(
       <TerminalView
@@ -528,6 +571,39 @@ describe('TerminalView SSH toolbar', () => {
 
     await user.click(screen.getByRole('button', { name: '隐藏 SSH 监控' }));
     expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
+  });
+
+  it('restores terminal focus when the ssh session status bar closes', async () => {
+    const user = userEvent.setup();
+    const focusRequestListener = vi.fn();
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '显示 SSH 监控' }));
+    expect(screen.getByTestId('ssh-session-status-bar')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭监控' }));
+
+    await waitFor(() => {
+      expect(focusRequestListener).toHaveBeenCalledTimes(1);
+    });
+
+    const customEvent = focusRequestListener.mock.calls[0]?.[0] as CustomEvent<{ windowId: string; paneId?: string; defer?: boolean }>;
+    expect(customEvent.detail).toEqual({
+      windowId: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      defer: true,
+    });
+
+    window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
   });
 
   it('clones a remote tab from its context menu and switches to the new tab immediately', async () => {

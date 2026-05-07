@@ -5,6 +5,7 @@ import { SplitLayout } from '../SplitLayout';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 import { useWindowStore } from '../../stores/windowStore';
 import { __resetPaneNoteStoreForTests, getPaneNote, usePaneNoteStore } from '../../stores/paneNoteStore';
+import { ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT } from '../../utils/terminalFocus';
 
 vi.mock('react-dnd', () => ({
   useDrop: () => [{ isOver: false }, () => undefined],
@@ -149,6 +150,61 @@ describe('SplitLayout', () => {
 
     expect(frame.dataset.paneVisualState).toBe('window-inactive');
     expect(overlay.style.opacity).toBe('var(--appearance-pane-window-inactive-scrim-opacity)');
+  });
+
+  it('requests active terminal focus after finishing a split resize drag', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-a'), createPaneNode('pane-b')],
+    };
+
+    const focusRequestListener = vi.fn();
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+
+    const { container } = render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const splitContainer = container.querySelector('.flex-row.w-full.h-full') as HTMLDivElement | null;
+    if (!splitContainer) {
+      throw new Error('expected split container');
+    }
+
+    vi.spyOn(splitContainer, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 400,
+      right: 1000,
+      width: 1000,
+      height: 400,
+      toJSON: () => ({}),
+    });
+
+    const divider = screen.getByRole('separator', { name: '调整垂直分割线' });
+    fireEvent.mouseDown(divider, { clientX: 500, clientY: 0 });
+    fireEvent.mouseMove(document, { clientX: 350, clientY: 0 });
+    fireEvent.mouseUp(document);
+
+    expect(focusRequestListener).toHaveBeenCalledTimes(1);
+    const customEvent = focusRequestListener.mock.calls[0]?.[0] as CustomEvent<{ windowId: string; paneId?: string; defer?: boolean }>;
+    expect(customEvent.detail).toEqual({
+      windowId: 'win-1',
+      paneId: 'pane-a',
+      defer: true,
+    });
+
+    window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
   });
 
   it('creates a pane note, collapses when inactive, and expands on hover', async () => {

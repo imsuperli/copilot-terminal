@@ -5,6 +5,7 @@ import { GroupSplitLayout } from '../GroupSplitLayout';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 import { GroupLayoutNode } from '../../../shared/types/window-group';
+import { ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT } from '../../utils/terminalFocus';
 
 vi.mock('../TerminalView', () => ({
   TerminalView: ({ window }: { window: Window }) => (
@@ -244,5 +245,67 @@ describe('GroupSplitLayout', () => {
       type: 'split',
       sizes: [0.3, 0.7],
     });
+  });
+
+  it('requests focus restoration for the active group window after resize drag ends', () => {
+    const layout = createGroupLayout();
+
+    useWindowStore.setState({
+      windows: [createWindow('win-a'), createWindow('win-b')],
+      groups: [{
+        id: 'group-1',
+        name: 'Group 1',
+        layout,
+        activeWindowId: 'win-a',
+        createdAt: '2026-04-11T00:00:00.000Z',
+        lastActiveAt: '2026-04-11T00:00:00.000Z',
+      }],
+    });
+
+    const focusRequestListener = vi.fn();
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+
+    const { container } = render(
+      <GroupSplitLayout
+        groupId="group-1"
+        layout={layout}
+        activeWindowId="win-a"
+        isGroupActive
+        onWindowActivate={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        onReturn={vi.fn()}
+      />
+    );
+
+    const splitContainer = container.querySelector('.flex-row.w-full.h-full') as HTMLDivElement | null;
+    if (!splitContainer) {
+      throw new Error('expected group split container');
+    }
+
+    vi.spyOn(splitContainer, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 400,
+      right: 1000,
+      width: 1000,
+      height: 400,
+      toJSON: () => ({}),
+    });
+
+    const divider = screen.getByRole('separator', { name: '调整垂直分割线' });
+    fireEvent.mouseDown(divider, { clientX: 500, clientY: 0 });
+    fireEvent.mouseMove(document, { clientX: 350, clientY: 0 });
+    fireEvent.mouseUp(document);
+
+    expect(focusRequestListener).toHaveBeenCalledTimes(1);
+    const customEvent = focusRequestListener.mock.calls[0]?.[0] as CustomEvent<{ windowId: string; paneId?: string; defer?: boolean }>;
+    expect(customEvent.detail).toEqual({
+      windowId: 'win-a',
+      defer: true,
+    });
+
+    window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
   });
 });

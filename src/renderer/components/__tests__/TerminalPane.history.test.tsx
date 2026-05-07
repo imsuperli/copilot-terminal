@@ -25,6 +25,20 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks, requestAnimation
     modes: {
       bracketedPasteMode: boolean;
     };
+    _core: {
+      coreService: {
+        decPrivateModes: {
+          win32InputMode: boolean;
+        };
+        kittyKeyboard: {
+          flags: number;
+          mainFlags: number;
+          altFlags: number;
+          mainStack: number[];
+          altStack: number[];
+        };
+      };
+    };
     cols: number;
     rows: number;
   }>,
@@ -66,6 +80,20 @@ vi.mock('@xterm/xterm', () => ({
       options: { ...(options ?? {}) },
       modes: {
         bracketedPasteMode: false,
+      },
+      _core: {
+        coreService: {
+          decPrivateModes: {
+            win32InputMode: false,
+          },
+          kittyKeyboard: {
+            flags: 0,
+            mainFlags: 0,
+            altFlags: 0,
+            mainStack: [],
+            altStack: [],
+          },
+        },
       },
       cols: 120,
       rows: 40,
@@ -793,6 +821,134 @@ describe('TerminalPane history replay', () => {
     );
   });
 
+  it('replays keyboard protocol state on same-session remount without echoing query replies back into the PTY', async () => {
+    const windowId = 'win-kitty-remount';
+    const paneId = 'pane-kitty-remount';
+
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: ['before\u001b[?9001h\u001b[=5;2u\u001b[>3u\u001b[<1u\u001b[?uafter'], lastSeq: 1 },
+    });
+
+    const { unmount } = render(
+      <TerminalPane
+        windowId={windowId}
+        pane={{
+          id: paneId,
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 4321,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances[0]?.write).toHaveBeenCalledWith(
+        'before\u001b[?9001h\u001b[=5;2u\u001b[>3u\u001b[<1u\u001b[?uafter',
+        expect.any(Function),
+      );
+    });
+
+    unmount();
+
+    render(
+      <TerminalPane
+        windowId={windowId}
+        pane={{
+          id: paneId,
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 4321,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances[1]?.write).toHaveBeenCalledWith(
+        'before\u001b[?9001h\u001b[=5;2u\u001b[>3u\u001b[<1uafter',
+        expect.any(Function),
+      );
+    });
+
+    expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith(
+      windowId,
+      paneId,
+      '\u001b[?5u',
+      { source: 'xterm.onData' },
+    );
+  });
+
+  it('resets pane-local keyboard protocol state before replaying a fresh session', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+
+    const { rerender } = render(
+      <TerminalPane
+        windowId="win-fresh-session"
+        pane={{
+          id: 'pane-fresh-session',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Paused,
+          pid: null,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    terminalInstances[0]._core.coreService.decPrivateModes.win32InputMode = true;
+    terminalInstances[0]._core.coreService.kittyKeyboard.flags = 7;
+    terminalInstances[0]._core.coreService.kittyKeyboard.mainFlags = 7;
+    terminalInstances[0]._core.coreService.kittyKeyboard.altFlags = 3;
+    terminalInstances[0]._core.coreService.kittyKeyboard.mainStack.push(1, 2);
+    terminalInstances[0]._core.coreService.kittyKeyboard.altStack.push(4);
+
+    rerender(
+      <TerminalPane
+        windowId="win-fresh-session"
+        pane={{
+          id: 'pane-fresh-session',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 9001,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances[0].reset).toHaveBeenCalled();
+    });
+
+    expect(terminalInstances[0]._core.coreService.decPrivateModes.win32InputMode).toBe(false);
+    expect(terminalInstances[0]._core.coreService.kittyKeyboard).toEqual({
+      flags: 0,
+      mainFlags: 0,
+      altFlags: 0,
+      mainStack: [],
+      altStack: [],
+    });
+  });
+
   it('falls back to normal text paste when ssh image upload reports handled false', async () => {
     vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
       success: true,
@@ -1005,6 +1161,43 @@ describe('TerminalPane history replay', () => {
     expect(paneRoot).not.toBeNull();
 
     fireEvent.click(paneRoot!);
+
+    expect(terminal.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-focuses xterm on terminal-region mousedown even when the pane is already active', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+
+    const { container } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    const terminal = terminalInstances[0];
+    terminal.focus.mockClear();
+
+    const terminalRegion = container.querySelector('[data-terminal-input-region="true"]');
+    expect(terminalRegion).not.toBeNull();
+
+    fireEvent.mouseDown(terminalRegion!);
 
     expect(terminal.focus).toHaveBeenCalledTimes(1);
   });

@@ -7,18 +7,24 @@ import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 import { getAllPanes } from '../../utils/layoutHelpers';
+import { ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT } from '../../utils/terminalFocus';
 
 vi.mock('../Sidebar', () => ({
   Sidebar: ({
     onOpenCodePane,
+    onSettingsClick,
     showOpenCodePaneAction,
     canOpenCodePane,
   }: {
     onOpenCodePane?: () => void;
+    onSettingsClick?: () => void;
     showOpenCodePaneAction?: boolean;
     canOpenCodePane?: boolean;
   }) => (
     <div data-testid="sidebar">
+      <button type="button" aria-label="open-settings" onClick={() => onSettingsClick?.()}>
+        open-settings
+      </button>
       {showOpenCodePaneAction ? (
         <button
           type="button"
@@ -38,7 +44,13 @@ vi.mock('../QuickSwitcher', () => ({
 }));
 
 vi.mock('../SettingsPanel', () => ({
-  SettingsPanel: ({ open }: { open: boolean }) => (open ? <div data-testid="settings-panel" /> : null),
+  SettingsPanel: ({ open, onClose }: { open: boolean; onClose?: () => void }) => (open ? (
+    <div data-testid="settings-panel">
+      <button type="button" aria-label="close-settings-panel" onClick={() => onClose?.()}>
+        close-settings-panel
+      </button>
+    </div>
+  ) : null),
 }));
 
 vi.mock('../RemoteWindowTabs', () => ({
@@ -415,6 +427,54 @@ function createTerminalWithCodePaneWindow(): Window {
   };
 }
 
+function createCodeActiveWindow(): Window {
+  return {
+    id: 'win-code-active-1',
+    name: 'Code Active Window',
+    activePaneId: 'code-1',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-local-1',
+          pane: {
+            id: 'pane-local-1',
+            cwd: '/workspace/project',
+            command: 'bash',
+            status: WindowStatus.Running,
+            pid: 101,
+          },
+        },
+        {
+          type: 'pane',
+          id: 'code-1',
+          pane: {
+            id: 'code-1',
+            kind: 'code',
+            cwd: '/workspace/project',
+            command: '',
+            status: WindowStatus.Paused,
+            pid: null,
+            code: {
+              rootPath: '/workspace/project',
+              openFiles: [],
+              activeFilePath: null,
+              selectedPath: null,
+              viewMode: 'editor',
+              diffTargetPath: null,
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
 describe('TerminalView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -628,6 +688,66 @@ describe('TerminalView', () => {
     expect(screen.queryByRole('button', { name: 'terminalView.openFolder' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'terminalView.openCode' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'terminalView.splitCode' })).not.toBeInTheDocument();
+  });
+
+  it('requests terminal refocus when closing settings from a terminal-active window', async () => {
+    const user = userEvent.setup();
+    const focusRequestListener = vi.fn();
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'open-settings' }));
+    expect(await screen.findByTestId('settings-panel')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'close-settings-panel' }));
+
+    await waitFor(() => {
+      expect(focusRequestListener).toHaveBeenCalledTimes(1);
+    });
+
+    const customEvent = focusRequestListener.mock.calls[0]?.[0] as CustomEvent<{ windowId: string; paneId?: string; defer?: boolean }>;
+    expect(customEvent.detail).toEqual({
+      windowId: 'win-local-1',
+      paneId: 'pane-local-1',
+      defer: true,
+    });
+
+    window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+  });
+
+  it('does not request terminal refocus when closing settings from a code-active window', async () => {
+    const user = userEvent.setup();
+    const focusRequestListener = vi.fn();
+    window.addEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
+
+    render(
+      <TerminalView
+        window={createCodeActiveWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'open-settings' }));
+    expect(await screen.findByTestId('settings-panel')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'close-settings-panel' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('settings-panel')).not.toBeInTheDocument();
+    });
+
+    expect(focusRequestListener).not.toHaveBeenCalled();
+    window.removeEventListener(ACTIVE_TERMINAL_FOCUS_REQUEST_EVENT, focusRequestListener);
   });
 
   it('does not render the window identity pill when the active pane is a browser pane', () => {
@@ -1111,7 +1231,7 @@ describe('TerminalView', () => {
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);
       const destroyedWindow = useWindowStore.getState().windows.find((window) => window.id === currentWindow.id);
       expect(destroyedWindow).toBeDefined();
-      expect(destroyedWindow?.layout.type === 'pane' && destroyedWindow.layout.pane.status).toBe(WindowStatus.Paused);
+      expect(destroyedWindow?.layout.type === 'pane' && destroyedWindow.layout.pane.status).toBe(WindowStatus.Completed);
       expect(destroyedWindow?.layout.type === 'pane' && destroyedWindow.layout.pane.pid).toBeNull();
       expect(onReturn).not.toHaveBeenCalled();
     } finally {
@@ -1155,7 +1275,7 @@ describe('TerminalView', () => {
       expect(window.electronAPI.startWindow).toHaveBeenCalled();
     });
 
-    expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith(currentWindow.id);
+    expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);
     expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)).toBeDefined();
   });
 

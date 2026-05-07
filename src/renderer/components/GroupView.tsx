@@ -15,13 +15,14 @@ import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
-import { getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { getWindowKind, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { destroySSHWindowFamilyResources } from '../utils/windowDestruction';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 import { getStartablePanes } from '../utils/windowLifecycle';
+import { requestActiveTerminalFocus } from '../utils/terminalFocus';
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -123,6 +124,26 @@ export const GroupView: React.FC<GroupViewProps> = ({
   }, [groupWindows]);
   const groupStartablePanesByWindowId = groupWindowRuntime.startablePanesByWindowId;
   const groupWindowById = groupWindowRuntime.windowById;
+  const activeGroupWindow = groupWindowById.get(group.activeWindowId) ?? null;
+  const activeGroupPanes = activeGroupWindow ? getAllPanes(activeGroupWindow.layout) : [];
+  const activeGroupPane = activeGroupWindow
+    ? activeGroupPanes.find((pane) => pane.id === activeGroupWindow.activePaneId) ?? activeGroupPanes[0] ?? null
+    : null;
+  const activeGroupTerminalPane = activeGroupPane && isTerminalPane(activeGroupPane)
+    ? activeGroupPane
+    : null;
+
+  const restoreActiveTerminalFocus = useCallback((options?: { defer?: boolean }) => {
+    if (!activeGroupTerminalPane) {
+      return;
+    }
+
+    requestActiveTerminalFocus({
+      windowId: group.activeWindowId,
+      paneId: activeGroupTerminalPane.id,
+      defer: options?.defer,
+    });
+  }, [activeGroupTerminalPane, group.activeWindowId]);
 
   const startStartablePanesForWindow = useCallback(
     async (targetWindow: Window, targetPanes: Pane[]) => {
@@ -222,6 +243,16 @@ export const GroupView: React.FC<GroupViewProps> = ({
     },
     [onCanvasSwitch],
   );
+
+  const handleQuickSwitcherClose = useCallback(() => {
+    setQuickSwitcherOpen(false);
+    restoreActiveTerminalFocus({ defer: true });
+  }, [restoreActiveTerminalFocus]);
+
+  const handleSettingsPanelClose = useCallback(() => {
+    setIsSettingsPanelOpen(false);
+    restoreActiveTerminalFocus({ defer: true });
+  }, [restoreActiveTerminalFocus]);
 
   // 处理归档组
   const handleArchiveGroup = useCallback(async () => {
@@ -515,7 +546,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
             onSelect={handleQuickSwitcherSelect}
             onSelectGroup={handleQuickSwitcherSelectGroup}
             onSelectCanvas={handleQuickSwitcherSelectCanvas}
-            onClose={() => setQuickSwitcherOpen(false)}
+            onClose={handleQuickSwitcherClose}
           />
         </Suspense>
       )}
@@ -525,7 +556,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         <Suspense fallback={null}>
           <LazySettingsPanel
             open={isSettingsPanelOpen}
-            onClose={() => setIsSettingsPanelOpen(false)}
+            onClose={handleSettingsPanelClose}
           />
         </Suspense>
       )}
