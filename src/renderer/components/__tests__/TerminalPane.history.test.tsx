@@ -1391,4 +1391,90 @@ describe('TerminalPane history replay', () => {
       expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh', '/home/a');
     });
   });
+
+  it('uses the saved custom SSH image shortcut for newly mounted SSH terminals', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        sshClipboardImage: {
+          enabled: true,
+          uploadLocation: 'current-working-directory',
+          shortcut: 'ctrl-alt-v',
+          customUploadDirectory: '',
+          copyRemotePathAfterUpload: true,
+          maxUploadBytes: 20 * 1024 * 1024,
+        },
+      },
+    } as Awaited<ReturnType<typeof window.electronAPI.getSettings>>);
+    vi.mocked(window.electronAPI.tryPasteSshClipboardImage).mockResolvedValue({
+      success: true,
+      data: { handled: true, remotePath: '/srv/app/copilot-clipboard.png' },
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-ssh"
+        pane={{
+          id: 'pane-ssh',
+          cwd: '/srv/app',
+          command: '',
+          status: WindowStatus.WaitingForInput,
+          pid: 1234,
+          backend: 'ssh',
+          ssh: {
+            profileId: 'profile-1',
+            remoteCwd: '/srv/app',
+          },
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+      expect(window.electronAPI.getSettings).toHaveBeenCalled();
+    });
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0]?.[0] as (event: KeyboardEvent) => boolean;
+
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: true,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.tryPasteSshClipboardImage).not.toHaveBeenCalled();
+    });
+
+    keyHandler({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: true,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await waitFor(() => {
+      expect(window.electronAPI.tryPasteSshClipboardImage).toHaveBeenCalledWith('win-ssh', 'pane-ssh', '/srv/app');
+    });
+  });
 });

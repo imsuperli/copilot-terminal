@@ -966,12 +966,22 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       ...(isWindows ? { windowsPty: { backend: 'conpty' as const } } : {}),
     });
 
-    // 异步加载并应用字体设置
+    // 异步加载并应用字体与 SSH 图片快捷键设置
     void (async () => {
       try {
         const response = await window.electronAPI?.getSettings?.();
-        if (response?.success && response.data?.terminal) {
-          const { fontFamily, fontSize } = response.data.terminal;
+        if (response?.success && response.data) {
+          const { terminal: terminalSettings, sshClipboardImage } = response.data;
+          const savedShortcut = sshClipboardImage?.shortcut;
+          if (savedShortcut) {
+            sshClipboardImageShortcutRef.current = savedShortcut;
+          }
+
+          if (!terminalSettings) {
+            return;
+          }
+
+          const { fontFamily, fontSize } = terminalSettings;
           if (fontFamily && 'options' in terminal && terminal.options) {
             terminal.options.fontFamily = fontFamily;
           }
