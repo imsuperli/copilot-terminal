@@ -293,6 +293,42 @@ describe('CanvasWorkspaceView', () => {
     expect(screen.getByRole('button', { name: /Terminal Beta/i })).toBeInTheDocument();
   });
 
+  it('keeps referenced terminal cards readable after picking an existing terminal', async () => {
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /引用终端/i }));
+    await user.click(screen.getByRole('button', { name: '选择终端' }));
+    await user.click(await screen.findByRole('button', { name: /Terminal Beta/i }));
+
+    rerender(
+      <CanvasWorkspaceView
+        canvasWorkspace={useWindowStore.getState().getCanvasWorkspaceById('canvas-1')!}
+      />,
+    );
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      expect(updated?.blocks.filter((block) => block.type === 'window')).toHaveLength(3);
+    });
+
+    const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+    const referencedBlock = updated?.blocks.find((block) => block.type === 'window' && block.id !== 'window-1' && block.id !== 'window-missing');
+    expect(referencedBlock?.type).toBe('window');
+    if (referencedBlock?.type === 'window') {
+      expect(screen.getByTestId(`canvas-window-footer-${referencedBlock.id}`)).toBeInTheDocument();
+    }
+    expect(screen.getByText(/Dir: \/srv\/db/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '打开终端' }).at(-1)?.className).toContain('min-w-[104px]');
+    expect(screen.getAllByRole('button', { name: '实时嵌入' }).at(-1)?.className).toContain('min-w-[104px]');
+  });
+
   it('toggles a window block into live embedded mode', async () => {
     const user = userEvent.setup();
     const renderLiveWindow = vi.fn((windowId: string) => <div>Live:{windowId}</div>);
@@ -325,7 +361,7 @@ describe('CanvasWorkspaceView', () => {
     }
   });
 
-  it('keeps terminal card action buttons above the summary overlay', async () => {
+  it('renders terminal card actions in flow layout with a dedicated footer row', async () => {
     render(
       <CanvasWorkspaceView
         canvasWorkspace={createCanvasWorkspace()}
@@ -333,10 +369,13 @@ describe('CanvasWorkspaceView', () => {
     );
 
     const openTerminalButton = await screen.findByRole('button', { name: '打开终端' });
-    const actionContainer = openTerminalButton.parentElement?.parentElement;
-    expect(actionContainer?.className).toMatch(/z-\d+/);
-    expect(actionContainer?.className).toContain('absolute');
-    expect(actionContainer?.className).toContain('bottom-4');
+    const liveButton = await screen.findByRole('button', { name: '实时嵌入' });
+    const footer = screen.getByTestId('canvas-window-footer-window-1');
+    expect(openTerminalButton.className).toContain('min-w-[104px]');
+    expect(liveButton.className).toContain('min-w-[104px]');
+    expect(footer.className).toContain('flex-col');
+    expect(footer.className).not.toContain('absolute');
+    expect(screen.getByText(/Dir: \/srv\/app/)).toBeInTheDocument();
   });
 
   it('merges template blocks into the existing canvas instead of replacing current blocks', async () => {

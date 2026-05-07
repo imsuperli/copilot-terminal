@@ -8,6 +8,7 @@ interface CanvasBlockChromeProps {
   block: CanvasBlock;
   title: string;
   summary?: CanvasBlockSummary;
+  showSummaryOverlay?: boolean;
   selected: boolean;
   missing?: boolean;
   editingTitle?: boolean;
@@ -55,6 +56,7 @@ export function CanvasBlockChrome({
   block,
   title,
   summary,
+  showSummaryOverlay = true,
   selected,
   missing = false,
   editingTitle = false,
@@ -140,7 +142,7 @@ export function CanvasBlockChrome({
 
       <div className="relative h-[calc(100%-37px)] overflow-hidden">{children}</div>
 
-      {!editingTitle && summary && (summary.metrics?.length || summary.tags?.length) ? (
+      {!editingTitle && showSummaryOverlay && summary && (summary.metrics?.length || summary.tags?.length) ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[4] border-t border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_8%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_72%,transparent)_100%)] px-3 py-2 backdrop-blur">
           {summary.metrics?.length ? (
             <div className="flex flex-wrap gap-1.5">

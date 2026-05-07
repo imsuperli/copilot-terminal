@@ -1761,6 +1761,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                   key={block.id}
                   block={block}
                   title={title}
+                  showSummaryOverlay={block.type !== 'window'}
                   summary={{
                     ...blockSummary,
                     metrics: [
@@ -1866,7 +1867,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         </div>
                       </div>
                     ) : (
-                    <div className="relative flex h-full flex-col p-4 pb-20 text-sm text-[rgb(var(--muted-foreground))]">
+                    <div className="flex h-full min-h-0 flex-col p-4 text-sm text-[rgb(var(--muted-foreground))]">
                       <div className="min-h-0 flex-1">
                         {linkedWindow ? (
                           isChatWindow ? (
@@ -1941,48 +1942,59 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                       </div>
 
                       {linkedWindow && (
-                        <div className="absolute inset-x-4 bottom-4 z-20 flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-2.5 py-1 text-xs text-[rgb(var(--muted-foreground))]">
-                              {getWindowKind(linkedWindow)}
-                            </span>
-                            {linkedBlockCount > 1 && (
+                        <div
+                          data-testid={`canvas-window-footer-${block.id}`}
+                          className="mt-4 flex shrink-0 flex-col gap-3 border-t border-[rgb(var(--border))] pt-3"
+                        >
+                          {!isChatWindow && !isBrowserWindow && !isCodeWindow && workingDirectory ? (
+                            <div className="line-clamp-1 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)] px-3 py-1 text-[11px] text-[rgb(var(--muted-foreground))]">
+                              {`Dir: ${workingDirectory}`}
+                            </div>
+                          ) : null}
+
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
                               <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-2.5 py-1 text-xs text-[rgb(var(--muted-foreground))]">
-                                {t('canvas.windowLinkedCount', { count: linkedBlockCount })}
+                                {getWindowKind(linkedWindow)}
                               </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onMouseDown={(event) => event.stopPropagation()}
-                              onClick={() => onOpenWindow?.(linkedWindow.id)}
-                              className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
-                            >
-                              <MonitorSmartphone size={13} />
-                              {isChatWindow
-                                ? t('canvas.openChat')
-                                : isBrowserWindow
-                                  ? t('canvas.openBrowser')
-                                  : isCodeWindow
-                                    ? t('canvas.openCodeWorkspace')
-                                    : t('canvas.openTerminal')}
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={(event) => event.stopPropagation()}
-                              onClick={() => toggleWindowDisplayMode(block.id, 'live')}
-                              className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary))] transition hover:bg-[rgb(var(--primary))]/16"
-                            >
-                              <MonitorSmartphone size={13} />
-                              {isChatWindow
-                                ? t('canvas.openLiveChat')
-                                : isBrowserWindow
-                                  ? t('canvas.openLiveBrowser')
-                                  : isCodeWindow
-                                    ? t('canvas.openLiveCodeWorkspace')
-                                    : t('canvas.openLive')}
-                            </button>
+                              {linkedBlockCount > 1 && (
+                                <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-2.5 py-1 text-xs text-[rgb(var(--muted-foreground))]">
+                                  {t('canvas.windowLinkedCount', { count: linkedBlockCount })}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onClick={() => onOpenWindow?.(linkedWindow.id)}
+                                className="inline-flex min-w-[104px] items-center justify-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+                              >
+                                <MonitorSmartphone size={13} />
+                                {isChatWindow
+                                  ? t('canvas.openChat')
+                                  : isBrowserWindow
+                                    ? t('canvas.openBrowser')
+                                    : isCodeWindow
+                                      ? t('canvas.openCodeWorkspace')
+                                      : t('canvas.openTerminal')}
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onClick={() => toggleWindowDisplayMode(block.id, 'live')}
+                                className="inline-flex min-w-[104px] items-center justify-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary))] transition hover:bg-[rgb(var(--primary))]/16"
+                              >
+                                <MonitorSmartphone size={13} />
+                                {isChatWindow
+                                  ? t('canvas.openLiveChat')
+                                  : isBrowserWindow
+                                    ? t('canvas.openLiveBrowser')
+                                    : isCodeWindow
+                                      ? t('canvas.openLiveCodeWorkspace')
+                                      : t('canvas.openLive')}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
