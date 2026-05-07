@@ -1081,7 +1081,7 @@ function AppContent() {
         useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
           blocks: [
             ...workspace.blocks,
-            createCanvasWindowBlock(reusableWindow, offsetIndex, workspace.nextZIndex),
+            createCanvasWindowBlock(reusableWindow, offsetIndex, workspace.nextZIndex, workspace.blocks),
           ],
           nextZIndex: workspace.nextZIndex + 1,
         });
@@ -1126,7 +1126,7 @@ function AppContent() {
         useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
           blocks: [
             ...latestWorkspace.blocks,
-            createCanvasWindowBlock(response.data, offsetIndex, latestWorkspace.nextZIndex),
+            createCanvasWindowBlock(response.data, offsetIndex, latestWorkspace.nextZIndex, latestWorkspace.blocks),
           ],
           nextZIndex: latestWorkspace.nextZIndex + 1,
         });
@@ -1239,7 +1239,7 @@ function AppContent() {
     useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
       blocks: [
         ...workspace.blocks,
-        createCanvasWindowBlock(windowItem, offsetIndex, workspace.nextZIndex),
+        createCanvasWindowBlock(windowItem, offsetIndex, workspace.nextZIndex, workspace.blocks),
       ],
       nextZIndex: workspace.nextZIndex + 1,
     });

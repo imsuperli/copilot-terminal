@@ -3,10 +3,14 @@ import type { CanvasBlock } from '../../../shared/types/canvas';
 import {
   arrangeCanvasBlocks,
   buildCanvasLinkGeometry,
+  findCanvasWindowInsertRect,
   fitViewportToBlocks,
+  getCanvasWindowBlockSize,
   moveCanvasBlocks,
   resizeCanvasBlock,
 } from '../canvasWorkspace';
+import { createChatPaneDraft } from '../chatPane';
+import { WindowStatus } from '../../types/window';
 
 const sampleBlocks: CanvasBlock[] = [
   { id: 'note-1', type: 'note', x: 20, y: 30, width: 320, height: 200, zIndex: 1, content: '', label: 'A' },
@@ -70,5 +74,41 @@ describe('canvasWorkspace utils', () => {
     expect(geometry.start.x).not.toBe(sampleBlocks[0].x + sampleBlocks[0].width / 2);
     expect(geometry.end.x).not.toBe(sampleBlocks[1].x + sampleBlocks[1].width / 2);
     expect(geometry.path.startsWith(`M ${geometry.start.x} ${geometry.start.y}`)).toBe(true);
+  });
+
+  it('uses a taller default size for chat window blocks', () => {
+    const chatPane = createChatPaneDraft('chat-pane-1');
+    const chatWindow = {
+      id: 'chat-window-1',
+      name: 'Canvas Chat',
+      activePaneId: 'chat-pane-1',
+      createdAt: '2026-05-07T00:00:00.000Z',
+      lastActiveAt: '2026-05-07T00:00:00.000Z',
+      kind: 'local' as const,
+      layout: {
+        type: 'pane' as const,
+        id: 'chat-pane-1',
+        pane: chatPane,
+      },
+    };
+
+    const size = getCanvasWindowBlockSize(chatWindow);
+    expect(size.width).toBeGreaterThan(360);
+    expect(size.height).toBeGreaterThan(220);
+  });
+
+  it('finds a non-overlapping insert rect beyond reserved top-left space', () => {
+    const rect = findCanvasWindowInsertRect(sampleBlocks, { width: 360, height: 220 });
+    expect(rect.x).toBeGreaterThanOrEqual(112);
+    expect(rect.y).toBeGreaterThanOrEqual(124);
+    for (const block of sampleBlocks) {
+      const intersects = !(
+        rect.x + rect.width < block.x
+        || rect.x > block.x + block.width
+        || rect.y + rect.height < block.y
+        || rect.y > block.y + block.height
+      );
+      expect(intersects).toBe(false);
+    }
   });
 });

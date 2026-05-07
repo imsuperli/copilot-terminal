@@ -5,6 +5,8 @@ import type {
   CanvasViewport,
 } from '../../shared/types/canvas';
 import type { Window } from '../types/window';
+import { getAllPanes } from './layoutHelpers';
+import { isBrowserPane, isChatPane, isCodePane } from '../../shared/utils/terminalCapabilities';
 
 export type CanvasArrangeMode = 'grid' | 'row' | 'column';
 export type CanvasResizeDirection = 'e' | 's' | 'se' | 'w' | 'n' | 'nw' | 'ne' | 'sw';
@@ -38,6 +40,12 @@ export const CANVAS_MIN_ZOOM = 0.3;
 export const CANVAS_MAX_ZOOM = 2.5;
 export const DEFAULT_NOTE_BLOCK_SIZE = { width: 320, height: 200 };
 export const DEFAULT_WINDOW_BLOCK_SIZE = { width: 360, height: 220 };
+export const DEFAULT_CHAT_WINDOW_BLOCK_SIZE = { width: 440, height: 320 };
+export const DEFAULT_BROWSER_WINDOW_BLOCK_SIZE = { width: 420, height: 300 };
+export const DEFAULT_CODE_WINDOW_BLOCK_SIZE = { width: 460, height: 320 };
+export const DEFAULT_CANVAS_INSERT_ORIGIN = { x: 112, y: 124 };
+export const DEFAULT_CANVAS_INSERT_STEP = { x: 28, y: 24 };
+export const DEFAULT_CANVAS_INSERT_SEARCH_PADDING = 24;
 
 const MIN_BLOCK_SIZE: Record<CanvasBlockType, { width: number; height: number }> = {
   note: { width: 220, height: 140 },
@@ -192,18 +200,111 @@ export function clampZoom(zoom: number): number {
   return Math.max(CANVAS_MIN_ZOOM, Math.min(CANVAS_MAX_ZOOM, zoom));
 }
 
-export function createCanvasWindowBlock(windowItem: Window, index: number, zIndex: number): CanvasWindowBlock {
+export function getCanvasWindowBlockSize(windowItem: Window): { width: number; height: number } {
+  const panes = getAllPanes(windowItem.layout);
+  const activePane = panes.find((pane) => pane.id === windowItem.activePaneId) ?? panes[0] ?? null;
+
+  if (!activePane) {
+    return DEFAULT_WINDOW_BLOCK_SIZE;
+  }
+
+  if (isChatPane(activePane)) {
+    return DEFAULT_CHAT_WINDOW_BLOCK_SIZE;
+  }
+
+  if (isCodePane(activePane)) {
+    return DEFAULT_CODE_WINDOW_BLOCK_SIZE;
+  }
+
+  if (isBrowserPane(activePane)) {
+    return DEFAULT_BROWSER_WINDOW_BLOCK_SIZE;
+  }
+
+  return DEFAULT_WINDOW_BLOCK_SIZE;
+}
+
+export function createCanvasWindowBlock(
+  windowItem: Window,
+  index: number,
+  zIndex: number,
+  existingBlocks?: CanvasBlock[],
+): CanvasWindowBlock {
+  const size = getCanvasWindowBlockSize(windowItem);
+  const insertionRect = existingBlocks
+    ? findCanvasWindowInsertRect(existingBlocks, size)
+    : {
+        x: DEFAULT_CANVAS_INSERT_ORIGIN.x + index * DEFAULT_CANVAS_INSERT_STEP.x,
+        y: DEFAULT_CANVAS_INSERT_ORIGIN.y + index * DEFAULT_CANVAS_INSERT_STEP.y,
+        width: size.width,
+        height: size.height,
+      };
   return {
     id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? `window-${crypto.randomUUID()}` : `window-${Date.now()}`,
     type: 'window',
     windowId: windowItem.id,
-    x: 80 + index * 28,
-    y: 80 + index * 24,
-    width: DEFAULT_WINDOW_BLOCK_SIZE.width,
-    height: DEFAULT_WINDOW_BLOCK_SIZE.height,
+    x: insertionRect.x,
+    y: insertionRect.y,
+    width: insertionRect.width,
+    height: insertionRect.height,
     zIndex,
     label: windowItem.name,
     displayMode: 'summary',
+  };
+}
+
+export function findCanvasWindowInsertRect(
+  blocks: CanvasBlock[],
+  size: { width: number; height: number },
+  options?: {
+    origin?: { x: number; y: number };
+    step?: { x: number; y: number };
+    searchPadding?: number;
+    maxAttempts?: number;
+  },
+): CanvasRect {
+  const origin = options?.origin ?? DEFAULT_CANVAS_INSERT_ORIGIN;
+  const step = options?.step ?? DEFAULT_CANVAS_INSERT_STEP;
+  const searchPadding = options?.searchPadding ?? DEFAULT_CANVAS_INSERT_SEARCH_PADDING;
+  const maxAttempts = options?.maxAttempts ?? 240;
+
+  let candidateX = origin.x;
+  let candidateY = origin.y;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidate: CanvasRect = {
+      x: candidateX,
+      y: candidateY,
+      width: size.width,
+      height: size.height,
+    };
+
+    const expandedCandidate: CanvasRect = {
+      x: candidate.x - searchPadding,
+      y: candidate.y - searchPadding,
+      width: candidate.width + searchPadding * 2,
+      height: candidate.height + searchPadding * 2,
+    };
+
+    const intersects = blocks.some((block) => doesCanvasRectIntersectBlock(expandedCandidate, block));
+    if (!intersects) {
+      return candidate;
+    }
+
+    candidateX += step.x;
+    candidateY += step.y;
+
+    if ((attempt + 1) % 8 === 0) {
+      candidateX = origin.x;
+      candidateY += size.height + CANVAS_GAP;
+    }
+  }
+
+  const bounds = getCanvasBounds(blocks);
+  return {
+    x: Math.max(origin.x, bounds.minX),
+    y: Math.max(origin.y, bounds.maxY + CANVAS_GAP),
+    width: size.width,
+    height: size.height,
   };
 }
 

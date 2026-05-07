@@ -927,7 +927,12 @@ export const CardGrid = React.memo<CardGridProps>(({
         updateCanvasWorkspace(targetCanvasWorkspace.id, {
           blocks: [
             ...targetCanvasWorkspace.blocks,
-            createCanvasWindowBlock(draggedWindow, offsetIndex, targetCanvasWorkspace.nextZIndex),
+            createCanvasWindowBlock(
+              draggedWindow,
+              offsetIndex,
+              targetCanvasWorkspace.nextZIndex,
+              targetCanvasWorkspace.blocks,
+            ),
           ],
           nextZIndex: targetCanvasWorkspace.nextZIndex + 1,
         });

@@ -26,9 +26,10 @@ import {
   type CanvasResizeDirection,
   clampZoom,
   DEFAULT_NOTE_BLOCK_SIZE,
-  DEFAULT_WINDOW_BLOCK_SIZE,
   fitViewportToBlocks,
+  findCanvasWindowInsertRect,
   getCanvasBounds,
+  getCanvasWindowBlockSize,
   getIntersectingCanvasBlockIds,
   getWorldPointFromClient,
   moveCanvasBlocks,
@@ -534,17 +535,19 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     let createdBlockId: string | null = null;
 
     persistWorkspace((current) => {
-      const offsetIndex = current.blocks.filter((block) => block.type === 'window').length;
+      const size = getCanvasWindowBlockSize(linkedWindow);
+      const nextRect = findCanvasWindowInsertRect(current.blocks, size);
       const nextBlock: CanvasWindowBlock = {
         id: createCanvasBlockId('window'),
         type: 'window',
         windowId,
-        x: 80 + offsetIndex * 28,
-        y: 80 + offsetIndex * 24,
-        width: DEFAULT_WINDOW_BLOCK_SIZE.width,
-        height: DEFAULT_WINDOW_BLOCK_SIZE.height,
+        x: nextRect.x,
+        y: nextRect.y,
+        width: nextRect.width,
+        height: nextRect.height,
         zIndex: current.nextZIndex,
         label: linkedWindow.name,
+        displayMode: 'summary',
       };
       createdBlockId = nextBlock.id;
 
@@ -567,17 +570,19 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     let createdBlockId: string | null = null;
 
     persistWorkspace((current) => {
-      const offsetIndex = current.blocks.filter((block) => block.type === 'window').length;
+      const size = getCanvasWindowBlockSize(windowItem);
+      const nextRect = findCanvasWindowInsertRect(current.blocks, size);
       const nextBlock: CanvasWindowBlock = {
         id: createCanvasBlockId('window'),
         type: 'window',
         windowId: windowItem.id,
-        x: 80 + offsetIndex * 28,
-        y: 80 + offsetIndex * 24,
-        width: DEFAULT_WINDOW_BLOCK_SIZE.width,
-        height: DEFAULT_WINDOW_BLOCK_SIZE.height,
+        x: nextRect.x,
+        y: nextRect.y,
+        width: nextRect.width,
+        height: nextRect.height,
         zIndex: current.nextZIndex,
         label: windowItem.name,
+        displayMode: 'summary',
       };
       createdBlockId = nextBlock.id;
 
@@ -1729,6 +1734,16 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                 ? panes.find((pane) => pane.id === linkedWindow.activePaneId) ?? panes[0] ?? null
                 : null;
               const outputPreview = activePane?.lastOutput?.trim() ?? '';
+              const isChatWindow = activePane?.kind === 'chat';
+              const isBrowserWindow = activePane?.kind === 'browser';
+              const isCodeWindow = activePane?.kind === 'code';
+              const chatMessageCount = activePane?.kind === 'chat' ? (activePane.chat?.messages?.length ?? 0) : 0;
+              const lastChatMessage = activePane?.kind === 'chat'
+                ? [...(activePane.chat?.messages ?? [])]
+                  .reverse()
+                  .find((message) => message.role === 'assistant' || message.role === 'user')
+                : null;
+              const chatPreview = lastChatMessage?.content?.trim() ?? '';
               const title = block.label || (
                 block.type === 'window'
                   ? linkedWindow?.name || t('canvas.missingWindow')
@@ -1854,17 +1869,59 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                     <div className="relative flex h-full flex-col p-4 pb-20 text-sm text-[rgb(var(--muted-foreground))]">
                       <div className="min-h-0 flex-1">
                         {linkedWindow ? (
-                          <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
-                            <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
-                            <div className="line-clamp-2">
-                              {t('canvas.windowDirectory', { path: workingDirectory || 'N/A' })}
+                          isChatWindow ? (
+                            <div className="mt-3 flex h-full min-h-0 flex-col">
+                              <div className="space-y-2 text-[rgb(var(--muted-foreground))]">
+                                <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
+                                <div>{t('canvas.chatMessageCount', { count: chatMessageCount })}</div>
+                              </div>
+                              <div className="mt-3 min-h-0 flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_44%,transparent)] p-3">
+                                {chatPreview ? (
+                                  <div className="line-clamp-6 whitespace-pre-wrap text-[rgb(var(--foreground))]">
+                                    {chatPreview}
+                                  </div>
+                                ) : (
+                                  <div className="text-[rgb(var(--muted-foreground))]">
+                                    {t('canvas.chatOpenHint')}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            {outputPreview ? (
-                              <div className="line-clamp-3">{outputPreview}</div>
-                            ) : (
-                              <div className="line-clamp-3">{t('canvas.windowOpenHint')}</div>
-                            )}
-                          </div>
+                          ) : isBrowserWindow ? (
+                            <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
+                              <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
+                              <div className="line-clamp-2 break-all">
+                                {activePane?.browser?.url || 'N/A'}
+                              </div>
+                              <div className="line-clamp-3">{t('canvas.browserOpenHint')}</div>
+                            </div>
+                          ) : isCodeWindow ? (
+                            <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
+                              <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
+                              <div className="line-clamp-2">
+                                {t('canvas.windowDirectory', {
+                                  path: activePane?.code?.rootPath || workingDirectory || 'N/A',
+                                })}
+                              </div>
+                              <div className="line-clamp-3">
+                                {activePane?.code?.activeFilePath
+                                  ? t('canvas.codeOpenHintWithFile', { path: activePane.code.activeFilePath })
+                                  : t('canvas.codeOpenHint')}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-3 space-y-2 text-[rgb(var(--muted-foreground))]">
+                              <div>{t('canvas.windowStatus', { status: statusLabel })}</div>
+                              <div className="line-clamp-2">
+                                {t('canvas.windowDirectory', { path: workingDirectory || 'N/A' })}
+                              </div>
+                              {outputPreview ? (
+                                <div className="line-clamp-3">{outputPreview}</div>
+                              ) : (
+                                <div className="line-clamp-3">{t('canvas.windowOpenHint')}</div>
+                              )}
+                            </div>
+                          )
                         ) : (
                           <div className="mt-3 space-y-3 text-[rgb(var(--muted-foreground))]">
                             <div className="line-clamp-3">
@@ -1903,7 +1960,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] px-3 py-1.5 text-xs font-medium text-[rgb(var(--foreground))] transition hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                             >
                               <MonitorSmartphone size={13} />
-                              {t('canvas.openTerminal')}
+                              {isChatWindow
+                                ? t('canvas.openChat')
+                                : isBrowserWindow
+                                  ? t('canvas.openBrowser')
+                                  : isCodeWindow
+                                    ? t('canvas.openCodeWorkspace')
+                                    : t('canvas.openTerminal')}
                             </button>
                             <button
                               type="button"
@@ -1912,7 +1975,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary))] transition hover:bg-[rgb(var(--primary))]/16"
                             >
                               <MonitorSmartphone size={13} />
-                              {t('canvas.openLive')}
+                              {isChatWindow
+                                ? t('canvas.openLiveChat')
+                                : isBrowserWindow
+                                  ? t('canvas.openLiveBrowser')
+                                  : isCodeWindow
+                                    ? t('canvas.openLiveCodeWorkspace')
+                                    : t('canvas.openLive')}
                             </button>
                           </div>
                         </div>

@@ -70,7 +70,7 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
       className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col border-t border-t-[rgb(var(--primary))]/55`}
       aria-label={`${t('canvas.cardAriaLabel')}: ${canvasWorkspace.name}`}
     >
-      <div className="flex min-h-0 flex-1 flex-col p-4">
+      <div className="flex min-h-0 flex-1 flex-col p-4 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgb(var(--primary))]/22 bg-[linear-gradient(180deg,rgb(var(--primary))/0.14_0%,color-mix(in_srgb,rgb(var(--card))_72%,transparent)_100%)] text-[rgb(var(--foreground))]">
@@ -150,7 +150,7 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-1 flex-col justify-between rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] p-4">
+        <div className="mt-4 flex min-h-0 flex-1 flex-col rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] p-4">
           <div className="space-y-2 text-sm text-[rgb(var(--muted-foreground))]">
             <div className="flex items-center gap-2">
               <Orbit size={14} />
@@ -161,7 +161,7 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
               <span>{t('canvas.noteBlocks', { count: blockSummary.noteCount })}</span>
             </div>
           </div>
-          <div className="mt-4 text-xs text-[rgb(var(--muted-foreground))]">
+          <div className="mt-auto pt-4 text-xs text-[rgb(var(--muted-foreground))]">
             {t('canvas.updatedAt', { time: updatedAt })}
           </div>
         </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CanvasWorkspace } from '../../../shared/types/canvas'
 import { createSinglePaneWindow } from '../layoutHelpers'
 import {
+  createDefaultCanvasTemplates,
   createTemplateFromWorkspace,
   instantiateCanvasWorkspaceFromTemplate,
   mergeCanvasWorkspaceContents,
@@ -112,5 +113,15 @@ describe('canvasTemplates', () => {
     expect(merged.blocks.some((block) => block.id === 'note-1')).toBe(true)
     expect(merged.blocks.some((block) => block.id === 'incoming-note')).toBe(true)
     expect(merged.nextZIndex).toBeGreaterThan(current.nextZIndex)
+  })
+
+  it('uses taller default dimensions for chat blocks in system templates', () => {
+    const templates = createDefaultCanvasTemplates()
+    const troubleshooting = templates.find((template) => template.id === 'canvas-template-troubleshooting')
+    const chatBlock = troubleshooting?.blocks.find((block) => block.kind === 'chat')
+
+    expect(chatBlock).toBeDefined()
+    expect(chatBlock?.width).toBeGreaterThan(360)
+    expect(chatBlock?.height).toBeGreaterThan(220)
   })
 })

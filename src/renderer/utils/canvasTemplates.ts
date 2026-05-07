@@ -6,7 +6,14 @@ import type {
   CanvasWorkspaceTemplate,
 } from '../../shared/types/canvas';
 import type { Window } from '../types/window';
-import { createCanvasWindowBlock, DEFAULT_NOTE_BLOCK_SIZE, DEFAULT_WINDOW_BLOCK_SIZE } from './canvasWorkspace';
+import {
+  createCanvasWindowBlock,
+  DEFAULT_BROWSER_WINDOW_BLOCK_SIZE,
+  DEFAULT_CHAT_WINDOW_BLOCK_SIZE,
+  DEFAULT_CODE_WINDOW_BLOCK_SIZE,
+  DEFAULT_NOTE_BLOCK_SIZE,
+  DEFAULT_WINDOW_BLOCK_SIZE,
+} from './canvasWorkspace';
 import { createCanvasTemplateWindowFromDefinition, inferCanvasWindowDraftKind } from './canvasWindowFactory';
 import type { SSHProfile } from '../../shared/types/ssh';
 
@@ -20,13 +27,22 @@ function createTemplateBlock(
   y: number,
   overrides: Partial<CanvasTemplateBlockDefinition> = {},
 ): CanvasTemplateBlockDefinition {
+  const defaultSize = kind === 'note'
+    ? DEFAULT_NOTE_BLOCK_SIZE
+    : kind === 'chat'
+      ? DEFAULT_CHAT_WINDOW_BLOCK_SIZE
+      : kind === 'browser'
+        ? DEFAULT_BROWSER_WINDOW_BLOCK_SIZE
+        : kind === 'code'
+          ? DEFAULT_CODE_WINDOW_BLOCK_SIZE
+          : DEFAULT_WINDOW_BLOCK_SIZE;
   return {
     id: overrides.id ?? uuidv4(),
     kind,
     x,
     y,
-    width: overrides.width ?? (kind === 'note' ? DEFAULT_NOTE_BLOCK_SIZE.width : DEFAULT_WINDOW_BLOCK_SIZE.width),
-    height: overrides.height ?? (kind === 'note' ? DEFAULT_NOTE_BLOCK_SIZE.height : DEFAULT_WINDOW_BLOCK_SIZE.height),
+    width: overrides.width ?? defaultSize.width,
+    height: overrides.height ?? defaultSize.height,
     ...overrides,
   };
 }

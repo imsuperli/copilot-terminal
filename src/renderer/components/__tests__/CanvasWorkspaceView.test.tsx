@@ -203,6 +203,79 @@ describe('CanvasWorkspaceView', () => {
     });
   });
 
+  it('creates chat blocks with a taller default height', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /AI Chat/i }));
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      const chatBlock = updated?.blocks
+        .filter((block) => block.type === 'window')
+        .find((block) => {
+          if (block.type !== 'window') {
+            return false;
+          }
+          const windowItem = useWindowStore.getState().getWindowById(block.windowId);
+          return windowItem?.layout.type === 'pane' && windowItem.layout.pane.kind === 'chat';
+        });
+      expect(chatBlock?.type).toBe('window');
+      if (chatBlock?.type === 'window') {
+        expect(chatBlock.height).toBeGreaterThan(220);
+        expect(chatBlock.width).toBeGreaterThan(360);
+      }
+    });
+  });
+
+  it('places newly created window blocks away from the top-left overlay and avoids overlap', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /本地终端/i }));
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /AI Chat/i }));
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      const blocks = updated?.blocks.filter((block) => block.type === 'window') ?? [];
+      expect(blocks).toHaveLength(4);
+
+      const createdBlocks = blocks.filter((block) => block.id !== 'window-1' && block.id !== 'window-missing');
+      expect(createdBlocks).toHaveLength(2);
+
+      for (const block of createdBlocks) {
+        expect(block.x).toBeGreaterThanOrEqual(112);
+        expect(block.y).toBeGreaterThanOrEqual(124);
+      }
+
+      const [firstBlock, secondBlock] = createdBlocks;
+      const overlaps = !(
+        firstBlock.x + firstBlock.width <= secondBlock.x
+        || secondBlock.x + secondBlock.width <= firstBlock.x
+        || firstBlock.y + firstBlock.height <= secondBlock.y
+        || secondBlock.y + secondBlock.height <= firstBlock.y
+      );
+      expect(overlaps).toBe(false);
+    });
+  });
+
   it('opens the existing terminal picker from the canvas create dialog', async () => {
     const user = userEvent.setup();
 
