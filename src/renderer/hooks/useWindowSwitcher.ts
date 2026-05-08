@@ -4,17 +4,23 @@ import { WindowStatus } from '../types/window';
 import { getStartablePanes, isWindowStartable } from '../utils/windowLifecycle';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import { markTerminalSwitchStart } from '../utils/perfObservability';
+import type { WindowSwitchOptions } from '../types/windowSwitch';
+import { resolveStandaloneSSHWindowSwitchTarget } from '../utils/sshWindowBindings';
 
 /**
  * 窗口切换 Hook
  * 统一处理窗口切换逻辑：如果窗口当前没有活动会话，先切换到终端视图，再在后台启动可启动窗格
  */
 export function useWindowSwitcher(onSwitchView: (windowId: string) => void | Promise<void>) {
-  const switchToWindow = useCallback(async (windowId: string) => {
-    const { getWindowById, updatePane, setActiveWindow } = useWindowStore.getState();
-    const win = getWindowById(windowId);
+  const switchToWindow = useCallback(async (windowId: string, options?: WindowSwitchOptions) => {
+    const state = useWindowStore.getState();
+    const { getWindowById, updatePane, setActiveWindow } = state;
+    const resolvedWindowId = options?.exact
+      ? windowId
+      : resolveStandaloneSSHWindowSwitchTarget(state.windows, windowId, state.mruList);
+    const win = getWindowById(resolvedWindowId);
     if (!win) {
-      console.error('Window not found:', windowId);
+      console.error('Window not found:', resolvedWindowId);
       return;
     }
 

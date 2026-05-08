@@ -8,6 +8,7 @@ import { useI18n } from '../i18n';
 import { DraggableWindowCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { requestActiveTerminalFocus } from '../utils/terminalFocus';
+import type { WindowSwitchHandler } from '../types/windowSwitch';
 
 export interface GroupSplitLayoutProps {
   groupId: string;
@@ -15,7 +16,7 @@ export interface GroupSplitLayoutProps {
   activeWindowId: string;
   isGroupActive: boolean;
   onWindowActivate: (windowId: string) => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onReturn: () => void;
   /** 拖拽窗口到组内某个窗口旁边时的回调 */
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
@@ -90,7 +91,7 @@ interface GroupSplitContainerProps {
   isGroupActive: boolean;
   totalWindowCount: number;
   onWindowActivate: (windowId: string) => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onReturn: () => void;
   onSplitResize: (groupId: string, splitPath: number[], sizes: number[]) => void;
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
@@ -311,7 +312,7 @@ interface GroupLayoutNodeRendererProps {
   isGroupActive: boolean;
   totalWindowCount: number;
   onWindowActivate: (windowId: string) => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onReturn: () => void;
   onSplitResize: (groupId: string, splitPath: number[], sizes: number[]) => void;
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
@@ -379,7 +380,7 @@ interface GroupWindowPaneProps {
   windowId: string;
   isActive: boolean;
   onActivate: () => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onReturn: () => void;
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
   onRemoveFromGroup?: (windowId: string) => void;

@@ -23,6 +23,7 @@ import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 import { getStartablePanes } from '../utils/windowLifecycle';
 import { requestActiveTerminalFocus } from '../utils/terminalFocus';
+import type { WindowSwitchHandler } from '../types/windowSwitch';
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -39,7 +40,7 @@ function getStartableTerminalPanes(window: Window): Pane[] {
 export interface GroupViewProps {
   group: WindowGroup;
   onReturn: () => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onGroupSwitch?: (groupId: string) => void;
   onCanvasSwitch?: (canvasWorkspaceId: string) => void;
   isActive: boolean;
@@ -357,7 +358,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         // 分组已被解散，跳转到剩余的窗口
         const remainingWindowId = windowIdsBeforeRemove.find(id => id !== windowId);
         if (remainingWindowId) {
-          onWindowSwitch(remainingWindowId);
+          onWindowSwitch(remainingWindowId, { exact: true });
         } else {
           // 没有剩余窗口，返回主界面
           onReturn();
@@ -390,7 +391,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         // 分组已被解散，跳转到剩余的窗口
         const remainingWindowId = windowIdsBeforeRemove.find(id => id !== windowId);
         if (remainingWindowId) {
-          onWindowSwitch(remainingWindowId);
+          onWindowSwitch(remainingWindowId, { exact: true });
         } else {
           // 没有剩余窗口，返回主界面
           onReturn();

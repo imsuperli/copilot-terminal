@@ -2,7 +2,44 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useWindowStore } from '../../stores/windowStore';
 import { useWindowSwitcher } from '../useWindowSwitcher';
-import { WindowStatus } from '../../types/window';
+import { WindowStatus, type Window } from '../../types/window';
+
+function createRunningSSHWindow(id: string, options: {
+  ephemeral?: boolean;
+  ownerWindowId?: string;
+} = {}): Window {
+  return {
+    id,
+    name: id,
+    activePaneId: `${id}-pane`,
+    createdAt: '2026-05-08T00:00:00.000Z',
+    lastActiveAt: '2026-05-08T00:00:00.000Z',
+    kind: 'ssh',
+    ...(options.ephemeral ? { ephemeral: true } : {}),
+    ...(options.ownerWindowId ? { sshTabOwnerWindowId: options.ownerWindowId } : {}),
+    layout: {
+      type: 'pane',
+      id: `${id}-layout`,
+      pane: {
+        id: `${id}-pane`,
+        cwd: '/srv/app',
+        command: '',
+        status: WindowStatus.Running,
+        pid: 1001,
+        backend: 'ssh',
+        ssh: {
+          profileId: 'profile-1',
+          host: '10.0.0.21',
+          port: 22,
+          user: 'root',
+          authType: 'password',
+          remoteCwd: '/srv/app',
+          reuseSession: true,
+        },
+      },
+    },
+  };
+}
 
 describe('useWindowSwitcher', () => {
   beforeEach(() => {
@@ -89,5 +126,51 @@ describe('useWindowSwitcher', () => {
         status: WindowStatus.Error,
       });
     });
+  });
+
+  it('restores the most recent ssh clone tab when switching to the owner window normally', async () => {
+    const ownerWindow = createRunningSSHWindow('window-ssh-owner');
+    const cloneWindow = createRunningSSHWindow('window-ssh-clone', {
+      ephemeral: true,
+      ownerWindowId: ownerWindow.id,
+    });
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      activeWindowId: null,
+      mruList: [cloneWindow.id, ownerWindow.id],
+    });
+
+    const onSwitchView = vi.fn();
+    const { result } = renderHook(() => useWindowSwitcher(onSwitchView));
+
+    await act(async () => {
+      await result.current.switchToWindow(ownerWindow.id);
+    });
+
+    expect(onSwitchView).toHaveBeenCalledWith(cloneWindow.id);
+    expect(useWindowStore.getState().activeWindowId).toBe(cloneWindow.id);
+  });
+
+  it('respects an exact ssh tab switch request', async () => {
+    const ownerWindow = createRunningSSHWindow('window-ssh-owner');
+    const cloneWindow = createRunningSSHWindow('window-ssh-clone', {
+      ephemeral: true,
+      ownerWindowId: ownerWindow.id,
+    });
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      activeWindowId: null,
+      mruList: [cloneWindow.id, ownerWindow.id],
+    });
+
+    const onSwitchView = vi.fn();
+    const { result } = renderHook(() => useWindowSwitcher(onSwitchView));
+
+    await act(async () => {
+      await result.current.switchToWindow(ownerWindow.id, { exact: true });
+    });
+
+    expect(onSwitchView).toHaveBeenCalledWith(ownerWindow.id);
+    expect(useWindowStore.getState().activeWindowId).toBe(ownerWindow.id);
   });
 });

@@ -70,6 +70,7 @@ import { idePopupIconButtonClassName } from './ui/ide-popup';
 import { getInactiveWindowStatus, getStartablePanes, hasAnyLiveTerminalSession, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import { appearanceTitlebarSurfaceStyle } from '../utils/appearance';
 import { usePaneNoteStore } from '../stores/paneNoteStore';
+import type { WindowSwitchHandler } from '../types/windowSwitch';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -240,7 +241,7 @@ function getWindowKindFromPanes(window: Window, panes: Pane[]): NonNullable<Wind
 export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onCanvasSwitch?: (canvasWorkspaceId: string) => void;
   isActive: boolean;
   /** 嵌入模式：在 GroupView 中使用时隐藏侧边栏和返回按钮，但保留顶部工具栏 */
@@ -546,7 +547,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const nextWindowId = getNextWindowAfterClose(allWindows, terminalWindow.id, closingWindowIdSet);
 
     if (nextWindowId) {
-      onWindowSwitch(nextWindowId);
+      onWindowSwitch(nextWindowId, { exact: true });
     }
 
     await destroyRemoteWindows([terminalWindow.id]);
@@ -564,7 +565,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const nextWindowId = getNextWindowAfterClose(allWindows, terminalWindow.id, closingWindowIdSet);
 
     if (nextWindowId) {
-      onWindowSwitch(nextWindowId);
+      onWindowSwitch(nextWindowId, { exact: true });
     }
 
     await deleteRemoteWindows(familyWindowIds);
@@ -586,7 +587,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       const nextWindowId = getNextWindowAfterClose(windows, terminalWindow.id, closingWindowIdSet);
 
       if (nextWindowId) {
-        onWindowSwitch(nextWindowId);
+        onWindowSwitch(nextWindowId, { exact: true });
 
         setTimeout(async () => {
           try {
@@ -630,7 +631,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           const hasNonTerminalSibling = panes.some((pane) => pane.id !== paneId);
 
           if (nextWindowId) {
-            onWindowSwitch(nextWindowId);
+            onWindowSwitch(nextWindowId, { exact: true });
           }
 
           void destroyWindowResourcesKeepRecord(terminalWindow.id).then(() => {
@@ -1012,7 +1013,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    onWindowSwitch(windowId);
+    onWindowSwitch(windowId, { exact: true });
   }, [embedded, groupId, onWindowSwitch]);
 
   const handleCloneRemoteWindow = useCallback(async (windowId: string) => {
@@ -1135,7 +1136,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       const nextWindowId = getNextWindowAfterClose(windows, terminalWindow.id, closingWindowIdSet);
 
       if (nextWindowId) {
-        onWindowSwitch(nextWindowId);
+        onWindowSwitch(nextWindowId, { exact: true });
 
         setTimeout(async () => {
           try {

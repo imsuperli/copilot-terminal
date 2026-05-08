@@ -67,6 +67,7 @@ import { canStartPaneSession, hasLiveTerminalSession, isInactiveTerminalPaneStat
 import { useKeyboardShortcutSettings } from './hooks/useKeyboardShortcutSettings';
 import { matchesKeyboardShortcut } from '../shared/utils/keyboardShortcuts';
 import { destroyWindowResourcesKeepRecord } from './utils/windowDestruction';
+import type { WindowSwitchHandler, WindowSwitchOptions } from './types/windowSwitch';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
 const STARTUP_MASK_HOLD_MS = 40;
@@ -176,7 +177,7 @@ const MountedTerminalSurface = React.memo(({
   onGroupSwitch: (groupId: string) => void | Promise<void>;
   onReturn: () => void;
   onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   sshEnabled: boolean;
   sshProfiles: SSHProfile[];
   windowId: string;
@@ -247,7 +248,7 @@ const ActiveGroupSurface = React.memo(({
   onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
   onReturn: () => void;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   sshProfiles: SSHProfile[];
 }) => {
   const activeGroup = useWindowStore((state) => (
@@ -300,7 +301,7 @@ const ActiveCanvasSurface = React.memo(({
   onExitWorkspace: () => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
   onStopWorkspace: (canvasWorkspaceId: string) => void | Promise<void>;
-  onWindowSwitch: (windowId: string) => void;
+  onWindowSwitch: WindowSwitchHandler;
   onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
   sshEnabled: boolean;
   sshProfiles: SSHProfile[];
@@ -1299,29 +1300,29 @@ function AppContent() {
     }
   }, [currentActiveCanvasWorkspaceId, currentView, setCanvasWorkspaceStarted, switchToUnifiedView]);
 
-  const handleWindowSwitch = useCallback((windowId: string) => {
+  const handleWindowSwitch = useCallback((windowId: string, options?: WindowSwitchOptions) => {
     setCanvasTerminalReturnTargetId(null);
-    switchToWindow(windowId);
+    switchToWindow(windowId, options);
   }, [switchToWindow]);
 
-  const handleWindowSwitchInCurrentContext = useCallback((windowId: string) => {
+  const handleWindowSwitchInCurrentContext = useCallback((windowId: string, options?: WindowSwitchOptions) => {
     if (canvasTerminalReturnTargetId) {
-      switchToWindow(windowId);
+      switchToWindow(windowId, options);
       return;
     }
 
     setCanvasTerminalReturnTargetId(null);
-    switchToWindow(windowId);
+    switchToWindow(windowId, options);
   }, [canvasTerminalReturnTargetId, switchToWindow]);
 
-  const handleWindowSwitchFromCanvasContext = useCallback((windowId: string) => {
+  const handleWindowSwitchFromCanvasContext = useCallback((windowId: string, options?: WindowSwitchOptions) => {
     setCanvasTerminalReturnTargetId(activeCanvasWorkspaceId ?? currentActiveCanvasWorkspaceId ?? null);
-    switchToWindow(windowId);
+    switchToWindow(windowId, options);
   }, [activeCanvasWorkspaceId, currentActiveCanvasWorkspaceId, switchToWindow]);
 
-  const handleOpenWindowFromCanvas = useCallback((windowId: string) => {
+  const handleOpenWindowFromCanvas = useCallback((windowId: string, options?: WindowSwitchOptions) => {
     setCanvasTerminalReturnTargetId(activeCanvasWorkspaceId ?? currentActiveCanvasWorkspaceId ?? null);
-    switchToWindow(windowId);
+    switchToWindow(windowId, options);
   }, [activeCanvasWorkspaceId, currentActiveCanvasWorkspaceId, switchToWindow]);
 
   const handleCanvasSwitchFromTerminalContext = useCallback(async (canvasWorkspaceId: string) => {

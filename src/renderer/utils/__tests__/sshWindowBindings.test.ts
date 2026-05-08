@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Window, WindowStatus } from '../../types/window';
 import {
+  getStandaloneWindows,
   getOwnedEphemeralSSHWindowIds,
   getSSHSessionOwnerWindowId,
+  resolveStandaloneSSHWindowSwitchTarget,
 } from '../sshWindowBindings';
 
 function createSSHWindow(id: string, options: {
@@ -64,5 +66,42 @@ describe('sshWindowBindings owner resolution', () => {
     });
 
     expect(getOwnedEphemeralSSHWindowIds([ownerWindow, ownedClone, unrelatedClone], ownerWindow.id)).toEqual(['clone-1']);
+  });
+
+  it('includes ssh clone tabs in standalone runtime navigation while excluding canvas-owned windows', () => {
+    const ownerWindow = createSSHWindow('owner');
+    const cloneWindow = createSSHWindow('clone', {
+      ephemeral: true,
+      ownerWindowId: ownerWindow.id,
+    });
+    const canvasOwnedWindow: Window = {
+      ...createSSHWindow('canvas-owned'),
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+    };
+
+    expect(getStandaloneWindows([ownerWindow, cloneWindow, canvasOwnedWindow]).map((window) => window.id)).toEqual([
+      'owner',
+      'clone',
+    ]);
+  });
+
+  it('restores the most recent standalone ssh tab without crossing into canvas-owned windows', () => {
+    const ownerWindow = createSSHWindow('owner');
+    const cloneWindow = createSSHWindow('clone', {
+      ephemeral: true,
+      ownerWindowId: ownerWindow.id,
+    });
+    const canvasOwnedWindow: Window = {
+      ...createSSHWindow('canvas-owned'),
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+    };
+
+    expect(resolveStandaloneSSHWindowSwitchTarget(
+      [ownerWindow, cloneWindow, canvasOwnedWindow],
+      ownerWindow.id,
+      ['canvas-owned', 'clone', 'owner'],
+    )).toBe('clone');
   });
 });

@@ -95,6 +95,29 @@ export function getStandaloneSSHWindowsForTarget(
   });
 }
 
+export function resolveStandaloneSSHWindowSwitchTarget(
+  windows: Window[],
+  targetWindowId: string,
+  mruList: string[],
+): string {
+  const targetWindow = windows.find((window) => window.id === targetWindowId);
+  if (!targetWindow || (targetWindow.ownerType ?? 'standalone') !== 'standalone') {
+    return targetWindowId;
+  }
+
+  const familyWindows = getStandaloneSSHWindowsForTarget(windows, targetWindowId).filter((window) => (
+    (window.ownerType ?? 'standalone') === 'standalone'
+  ));
+  if (familyWindows.length === 0) {
+    return targetWindowId;
+  }
+
+  const familyWindowIds = new Set(familyWindows.map((window) => window.id));
+  const preferredWindowId = mruList.find((windowId) => familyWindowIds.has(windowId));
+
+  return preferredWindowId ?? targetWindowId;
+}
+
 export function buildStandaloneSSHWindowMap(
   windows: Window[],
   profileIds?: Iterable<string>,
@@ -231,8 +254,12 @@ export function getPersistableWindows(windows: Window[]): Window[] {
   return windows.filter((window) => !window.ephemeral);
 }
 
-export function getStandalonePersistableWindows(windows: Window[]): Window[] {
-  return getPersistableWindows(windows).filter((window) => (
+export function getStandaloneWindows(windows: Window[]): Window[] {
+  return windows.filter((window) => (
     (window.ownerType ?? 'standalone') === 'standalone'
   ));
+}
+
+export function getStandalonePersistableWindows(windows: Window[]): Window[] {
+  return getPersistableWindows(getStandaloneWindows(windows));
 }
