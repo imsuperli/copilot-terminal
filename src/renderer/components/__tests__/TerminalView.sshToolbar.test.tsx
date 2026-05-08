@@ -673,7 +673,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(clonedWindow).toMatchObject({
       ephemeral: true,
     });
-    expect(onWindowSwitch).toHaveBeenCalledWith(clonedWindow.id);
+    expect(onWindowSwitch).toHaveBeenCalledWith(clonedWindow.id, { exact: true });
     expect(useWindowStore.getState().windows).toHaveLength(3);
   });
 
@@ -750,7 +750,7 @@ describe('TerminalView SSH toolbar', () => {
 
     expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
-    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1', { exact: true });
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
@@ -800,7 +800,7 @@ describe('TerminalView SSH toolbar', () => {
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     });
 
-    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1', { exact: true });
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
@@ -852,7 +852,7 @@ describe('TerminalView SSH toolbar', () => {
 
     expect(window.electronAPI.closeWindow).not.toHaveBeenCalledWith(cloneWindow.id);
     expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith(cloneWindow.id);
-    expect(onWindowSwitch).toHaveBeenCalledWith(cloneWindow.id);
+    expect(onWindowSwitch).toHaveBeenCalledWith(cloneWindow.id, { exact: true });
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual([cloneWindow.id]);
   });
 
@@ -965,7 +965,7 @@ describe('TerminalView SSH toolbar', () => {
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     });
 
-    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1', { exact: true });
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
@@ -1100,12 +1100,12 @@ describe('TerminalView SSH toolbar', () => {
     });
 
     expect(window.electronAPI.switchToUnifiedView).not.toHaveBeenCalled();
-    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1', { exact: true });
     expect(onReturn).not.toHaveBeenCalled();
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
-  it('destroys the ssh owner tab together with its clone family when its only pane exits', async () => {
+  it('destroys only the ssh owner tab when its only pane exits and keeps clone tabs alive', async () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();
     const onReturn = vi.fn();
@@ -1168,13 +1168,13 @@ describe('TerminalView SSH toolbar', () => {
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-1');
-      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
-      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     });
 
-    expect(onWindowSwitch).toHaveBeenCalledWith('win-local-1');
+    expect(window.electronAPI.closeWindow).not.toHaveBeenCalledWith('win-ssh-2');
+    expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith('win-ssh-2');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-2', { exact: true });
     expect(onReturn).not.toHaveBeenCalled();
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-local-1']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-2', 'win-local-1']);
   });
 
   it('does not leave a placeholder window behind when cloning fails', async () => {
