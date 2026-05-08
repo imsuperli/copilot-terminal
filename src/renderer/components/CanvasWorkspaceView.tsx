@@ -1606,7 +1606,10 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
             </>
           )}
         </div>
-        {onStopWorkspace ? (
+      </div>
+
+      <CanvasArrangeToolbar
+        actions={onStopWorkspace ? (
           <AppTooltip content={t('canvas.stopWorkspace')} placement="toolbar-trailing">
             <button
               type="button"
@@ -1615,15 +1618,12 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
               onClick={() => {
                 void stopWorkspaceRuntime();
               }}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Square size={14} fill="currentColor" />
             </button>
           </AppTooltip>
-        ) : null}
-      </div>
-
-      <CanvasArrangeToolbar
+        ) : undefined}
         blockCount={canvasWorkspace.blocks.length}
         selectedCount={selectedBlockIds.length}
         zoom={canvasWorkspace.viewport.zoom}

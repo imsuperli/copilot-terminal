@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasWorkspaceView } from '../CanvasWorkspaceView';
@@ -239,7 +239,14 @@ describe('CanvasWorkspaceView', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '停止画布' }));
+    const stopButton = screen.getByRole('button', { name: '停止画布' });
+    const toolbar = stopButton.closest('.absolute.right-5.top-4.z-20');
+
+    expect(toolbar).not.toBeNull();
+    expect(toolbar).toContainElement(stopButton);
+    expect(within(toolbar as HTMLElement).getByRole('button', { name: '停止画布' })).toBe(stopButton);
+
+    await user.click(stopButton);
 
     await waitFor(() => {
       expect(onStopWorkspace).toHaveBeenCalledWith('canvas-1');

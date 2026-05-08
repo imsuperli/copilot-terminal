@@ -24,6 +24,7 @@ const toolbarPrimaryButtonClassName = 'border-[rgb(var(--primary))]/30 bg-[rgb(v
 const toolbarDangerButtonClassName = 'border-[rgb(var(--error))]/24 bg-[rgb(var(--error))]/10 text-[rgb(var(--foreground))] hover:bg-[rgb(var(--error))]/16';
 
 interface CanvasArrangeToolbarProps {
+  actions?: React.ReactNode;
   blockCount: number;
   selectedCount: number;
   zoom: number;
@@ -112,6 +113,7 @@ function ZoomPill({
 }
 
 export function CanvasArrangeToolbar({
+  actions,
   blockCount,
   selectedCount,
   zoom,
@@ -152,6 +154,11 @@ export function CanvasArrangeToolbar({
 
   return (
     <div className="absolute right-5 top-4 z-20 flex max-w-[min(76vw,940px)] flex-col items-end gap-2">
+      {actions ? (
+        <div className="flex w-full justify-end">
+          {actions}
+        </div>
+      ) : null}
       <div className={`inline-flex flex-wrap items-center justify-end gap-1.5 px-2 py-2 ${toolbarSurfaceClassName}`}>
         <button
           type="button"
