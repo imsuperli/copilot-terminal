@@ -89,7 +89,6 @@ interface CanvasWorkspaceViewProps {
   onOpenGroup?: (groupId: string) => void;
   renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => React.ReactNode;
   onStopWorkspace?: (canvasWorkspaceId: string) => void | Promise<void>;
-  onExitWorkspace?: () => void | Promise<void>;
 }
 
 type DragState =
@@ -229,13 +228,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   onOpenGroup,
   renderLiveWindow,
   onStopWorkspace,
-  onExitWorkspace,
 }) => {
   const keyboardShortcuts = useKeyboardShortcutSettings();
   const { t, language } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const updateCanvasWorkspace = useWindowStore((state) => state.updateCanvasWorkspace);
-  const removeCanvasWorkspace = useWindowStore((state) => state.removeCanvasWorkspace);
   const addWindow = useWindowStore((state) => state.addWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
@@ -260,7 +257,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [draftBlockTitle, setDraftBlockTitle] = useState('');
   const [workspaceRenameOpen, setWorkspaceRenameOpen] = useState(false);
-  const [workspaceDeleteOpen, setWorkspaceDeleteOpen] = useState(false);
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState(canvasWorkspace.name);
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
@@ -982,13 +978,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     );
   }, [onStopWorkspace, stopWorkspaceRuntime, t, titleBarActionsSlot]);
 
-  const handleWorkspaceDelete = useCallback(async () => {
-    await stopWorkspaceRuntime();
-    removeCanvasWorkspace(canvasWorkspace.id);
-    setWorkspaceDeleteOpen(false);
-    await onExitWorkspace?.();
-  }, [canvasWorkspace.id, onExitWorkspace, removeCanvasWorkspace, stopWorkspaceRuntime]);
-
   const handleCreateWindowBlock = useCallback((payload: {
     kind: 'local' | 'ssh' | 'code' | 'browser' | 'chat';
     name?: string;
@@ -1691,7 +1680,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           setWorkspaceNameDraft(canvasWorkspace.name);
           setWorkspaceRenameOpen(true);
         }}
-        onDeleteWorkspace={() => setWorkspaceDeleteOpen(true)}
       />
 
       <div
@@ -2328,35 +2316,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
               {t('common.save')}
             </button>
           </div>
-        </div>
-      </Dialog>
-
-      <Dialog
-        open={workspaceDeleteOpen}
-        onOpenChange={setWorkspaceDeleteOpen}
-        title={t('canvas.deleteWorkspace')}
-        description={t('canvas.deleteWorkspaceDescription')}
-        contentClassName="!max-w-lg"
-        showCloseButton
-        closeLabel={t('common.close')}
-      >
-        <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => setWorkspaceDeleteOpen(false)}
-            className={idePopupSecondaryButtonClassName}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void handleWorkspaceDelete();
-            }}
-            className={idePopupActionButtonClassName('danger')}
-          >
-            {t('common.delete')}
-          </button>
         </div>
       </Dialog>
 

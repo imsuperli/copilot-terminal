@@ -259,7 +259,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
           disabled={isConnecting}
           className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs ${cardButtonClassName} focus:outline-none whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60 ${
             isWindowRunning
-              ? 'text-[rgb(var(--error))] focus:ring-2 focus:ring-[rgb(var(--error))]'
+              ? '!text-red-500 focus:ring-2 focus:!ring-red-500/45'
               : 'text-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold'
           }`}
           aria-label={isWindowRunning ? t('windowCard.stop') : t('windowCard.start')}

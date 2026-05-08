@@ -168,16 +168,16 @@ describe('CanvasWorkspaceView', () => {
     });
   });
 
-  it('renames and deletes the workspace from canvas mode', async () => {
+  it('renames the workspace from canvas mode without exposing workspace deletion', async () => {
     const user = userEvent.setup();
-    const onExitWorkspace = vi.fn().mockResolvedValue(undefined);
 
     render(
       <CanvasWorkspaceView
         canvasWorkspace={createCanvasWorkspace()}
-        onExitWorkspace={onExitWorkspace}
       />,
     );
+
+    expect(screen.queryByRole('button', { name: '删除画布' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '重命名画布' }));
     const workspaceNameInput = screen.getByLabelText('工作区名称');
@@ -188,14 +188,6 @@ describe('CanvasWorkspaceView', () => {
     await waitFor(() => {
       expect(useWindowStore.getState().getCanvasWorkspaceById('canvas-1')?.name).toBe('Ops Board');
     });
-
-    await user.click(screen.getByRole('button', { name: '删除画布' }));
-    await user.click(screen.getByRole('button', { name: '删除' }));
-
-    await waitFor(() => {
-      expect(useWindowStore.getState().getCanvasWorkspaceById('canvas-1')).toBeUndefined();
-    });
-    expect(onExitWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it('renders a stop button on the header right side and stops the workspace runtime', async () => {

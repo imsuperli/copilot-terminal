@@ -307,7 +307,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
           {(aggregatedStatus === 'running' || aggregatedStatus === 'waiting') && (
             <button
               onClick={(e) => handleButtonClick(e, () => onDestroyAllSessions?.(group))}
-              className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap`}
+              className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs !text-red-500 ${cardButtonClassName} focus:outline-none focus:ring-2 focus:!ring-red-500/45 whitespace-nowrap`}
             >
               <Square size={14} fill="currentColor" />
               <span>全部停止</span>

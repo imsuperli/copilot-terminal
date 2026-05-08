@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, ArchiveRestore, Edit2, MoreHorizontal, Orbit, Square, StickyNote, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Edit2, MoreHorizontal, Orbit, Play, Square, StickyNote, Trash2 } from 'lucide-react';
 import { CanvasWorkspace } from '../../shared/types/canvas';
 import { formatRelativeTime, useI18n } from '../i18n';
 import {
@@ -10,7 +10,6 @@ import {
   IdeMenuItemContent,
 } from './ui/ide-menu';
 import {
-  idePopupActionButtonClassName,
   idePopupInteractiveListCardClassName,
   idePopupListCardFooterClassName,
   idePopupPillClassName,
@@ -40,7 +39,8 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
 }) => {
   const { language, t } = useI18n();
   const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
-  const primaryCardActionClassName = `${idePopupActionButtonClassName('primary')} min-w-0 px-3 py-1.5 text-xs`;
+  const startButtonClassName = `flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap`;
+  const stopButtonClassName = `flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs !text-red-500 ${cardButtonClassName} focus:outline-none focus:ring-2 focus:!ring-red-500/45 whitespace-nowrap`;
 
   const blockSummary = useMemo(() => {
     const noteCount = canvasWorkspace.blocks.filter((block) => block.type === 'note').length;
@@ -181,11 +181,12 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
                   event.stopPropagation();
                   void onStop(canvasWorkspace.id);
                 }}
-                className={`${idePopupTonalButtonClassName} h-8 w-8 p-0 text-red-500`}
-                aria-label={t('terminalView.stop')}
-                title={t('terminalView.stop')}
+                className={stopButtonClassName}
+                aria-label={t('canvas.stopWorkspace')}
+                title={t('canvas.stopWorkspace')}
               >
-                <Square size={13} fill="currentColor" />
+                <Square size={14} fill="currentColor" />
+                <span>{t('windowCard.stop')}</span>
               </button>
             ) : null}
             <button
@@ -194,9 +195,10 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
                 event.stopPropagation();
                 onClick?.(canvasWorkspace.id);
               }}
-              className={primaryCardActionClassName}
+              className={startButtonClassName}
               aria-label={t('canvas.openWorkspace')}
             >
+              <Play size={14} />
               {t('canvas.openWorkspace')}
             </button>
           </div>

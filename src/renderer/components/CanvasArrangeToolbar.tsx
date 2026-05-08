@@ -21,7 +21,6 @@ import { useI18n } from '../i18n';
 const toolbarSurfaceClassName = 'rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] shadow-[0_14px_32px_rgba(0,0,0,0.22)] backdrop-blur';
 const toolbarNeutralButtonClassName = 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_64%,transparent)] text-[rgb(var(--foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]';
 const toolbarPrimaryButtonClassName = 'border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))] hover:bg-[rgb(var(--primary))]/16';
-const toolbarDangerButtonClassName = 'border-[rgb(var(--error))]/24 bg-[rgb(var(--error))]/10 text-[rgb(var(--foreground))] hover:bg-[rgb(var(--error))]/16';
 
 interface CanvasArrangeToolbarProps {
   actions?: React.ReactNode;
@@ -45,7 +44,6 @@ interface CanvasArrangeToolbarProps {
   onFitToContent: () => void;
   onDeleteSelected: () => void;
   onRenameWorkspace: () => void;
-  onDeleteWorkspace: () => void;
 }
 
 function IconButton({
@@ -134,7 +132,6 @@ export function CanvasArrangeToolbar({
   onFitToContent,
   onDeleteSelected,
   onRenameWorkspace,
-  onDeleteWorkspace,
 }: CanvasArrangeToolbarProps) {
   const { t } = useI18n();
   const [arranging, setArranging] = useState(false);
@@ -258,15 +255,6 @@ export function CanvasArrangeToolbar({
         <IconButton title={t('canvas.renameWorkspace')} onClick={onRenameWorkspace}>
           <PencilLine size={14} />
         </IconButton>
-        <button
-          type="button"
-          onClick={onDeleteWorkspace}
-          aria-label={t('canvas.deleteWorkspace')}
-          title={t('canvas.deleteWorkspace')}
-          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${toolbarDangerButtonClassName}`}
-        >
-          <Trash2 size={14} />
-        </button>
         <ZoomPill
           zoom={zoom}
           onZoomOut={onZoomOut}

@@ -377,7 +377,6 @@ const ActiveCanvasSurface = React.memo(({
                 />
               );
             }}
-            onExitWorkspace={onExitWorkspace}
           />
         </div>
 

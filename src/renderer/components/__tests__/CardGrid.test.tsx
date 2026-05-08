@@ -386,9 +386,34 @@ describe('CardGrid', () => {
     const canvasCard = screen.getByRole('button', { name: /Ops Board/ });
     const openButton = within(canvasCard).getByRole('button', { name: '打开画布' });
 
-    expect(openButton.className).toContain('inline-flex');
-    expect(openButton.className).toContain('border-[rgb(var(--primary))]/72');
-    expect(openButton.className).toContain('bg-[rgb(var(--primary))]');
+    expect(openButton.className).toContain('flex');
+    expect(openButton.className).toContain('text-[rgb(var(--primary))]');
+    expect(openButton.className).toContain('font-semibold');
+    expect(openButton.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('renders a red stop button for started canvas workspaces', async () => {
+    const user = userEvent.setup();
+    const handleStopCanvasWorkspace = vi.fn().mockResolvedValue(undefined);
+    useWindowStore.setState({
+      canvasWorkspaces: [makeCanvasWorkspace()],
+      startedCanvasWorkspaceIds: ['canvas-1'],
+    });
+
+    renderCardGrid({
+      currentTab: 'canvas',
+      onStopCanvasWorkspace: handleStopCanvasWorkspace,
+    });
+
+    const canvasCard = screen.getByRole('button', { name: /Ops Board/ });
+    const stopButton = within(canvasCard).getByRole('button', { name: '停止画布' });
+
+    expect(stopButton.className).toContain('!text-red-500');
+    expect(stopButton.className).toContain('focus:!ring-red-500/45');
+
+    await user.click(stopButton);
+
+    expect(handleStopCanvasWorkspace).toHaveBeenCalledWith('canvas-1');
   });
 
   it('renders the canvas updated timestamp only once per card', () => {
