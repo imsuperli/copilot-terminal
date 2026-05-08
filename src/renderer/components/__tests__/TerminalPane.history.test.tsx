@@ -53,6 +53,18 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks, requestAnimation
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: vi.fn(function MockTerminal(this: unknown, options?: Record<string, unknown>) {
+    const coreService = {
+      decPrivateModes: {
+        win32InputMode: false,
+      },
+      kittyKeyboard: {
+        flags: 0,
+        mainFlags: 0,
+        altFlags: 0,
+        mainStack: [] as number[],
+        altStack: [] as number[],
+      },
+    };
     const instance = {
       loadAddon: vi.fn(),
       registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
@@ -61,6 +73,29 @@ vi.mock('@xterm/xterm', () => ({
       blur: vi.fn(),
       dispose: vi.fn(),
       write: vi.fn((data: string, callback?: () => void) => {
+        if (data.includes('\u001b[?9001h')) {
+          coreService.decPrivateModes.win32InputMode = true;
+        }
+        if (data.includes('\u001b[?9001l')) {
+          coreService.decPrivateModes.win32InputMode = false;
+        }
+        const kittySetPattern = /\u001b\[=([0-9]+)(?:;([0-9]+))?u/g;
+        let kittySetMatch: RegExpExecArray | null;
+        while ((kittySetMatch = kittySetPattern.exec(data)) !== null) {
+          const flags = Number(kittySetMatch[1]) || 0;
+          const mode = kittySetMatch[2] !== undefined ? Number(kittySetMatch[2]) || 1 : 1;
+          switch (mode) {
+            case 1:
+              coreService.kittyKeyboard.flags = flags;
+              break;
+            case 2:
+              coreService.kittyKeyboard.flags |= flags;
+              break;
+            case 3:
+              coreService.kittyKeyboard.flags &= ~flags;
+              break;
+          }
+        }
         if (data.includes('\u001b[c')) {
           terminalDataCallbacks.forEach((terminalDataCallback) => terminalDataCallback('\u001b[?1;2c'));
         }
@@ -82,18 +117,7 @@ vi.mock('@xterm/xterm', () => ({
         bracketedPasteMode: false,
       },
       _core: {
-        coreService: {
-          decPrivateModes: {
-            win32InputMode: false,
-          },
-          kittyKeyboard: {
-            flags: 0,
-            mainFlags: 0,
-            altFlags: 0,
-            mainStack: [],
-            altStack: [],
-          },
-        },
+        coreService,
       },
       cols: 120,
       rows: 40,
@@ -884,6 +908,120 @@ describe('TerminalPane history replay', () => {
       '\u001b[?5u',
       { source: 'xterm.onData' },
     );
+  });
+
+  it('applies the pane keyboard state snapshot after replaying stale protocol sequences', async () => {
+    const windowId = 'win-keyboard-snapshot';
+    const paneId = 'pane-keyboard-snapshot';
+
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: {
+        chunks: ['before\u001b[?9001h\u001b[=5uafter'],
+        lastSeq: 1,
+        keyboardState: {
+          win32InputMode: false,
+          kittyKeyboard: {
+            flags: 0,
+            mainFlags: 0,
+            altFlags: 0,
+            mainStack: [],
+            altStack: [],
+          },
+        },
+      },
+    });
+
+    render(
+      <TerminalPane
+        windowId={windowId}
+        pane={{
+          id: paneId,
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances[0]?.write).toHaveBeenCalledWith(
+        'before\u001b[?9001h\u001b[=5uafter',
+        expect.any(Function),
+      );
+    });
+
+    await waitFor(() => {
+      expect(terminalInstances[0]._core.coreService.decPrivateModes.win32InputMode).toBe(false);
+    });
+    expect(terminalInstances[0]._core.coreService.kittyKeyboard).toEqual({
+      flags: 0,
+      mainFlags: 0,
+      altFlags: 0,
+      mainStack: [],
+      altStack: [],
+    });
+  });
+
+  it('preserves active pane keyboard protocol state after replaying history', async () => {
+    const windowId = 'win-active-keyboard-snapshot';
+    const paneId = 'pane-active-keyboard-snapshot';
+
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: {
+        chunks: ['prompt\u001b[?9001l\u001b[=0u'],
+        lastSeq: 1,
+        keyboardState: {
+          win32InputMode: true,
+          kittyKeyboard: {
+            flags: 5,
+            mainFlags: 5,
+            altFlags: 3,
+            mainStack: [1],
+            altStack: [2],
+          },
+        },
+      },
+    });
+
+    render(
+      <TerminalPane
+        windowId={windowId}
+        pane={{
+          id: paneId,
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances[0]?.write).toHaveBeenCalledWith(
+        'prompt\u001b[?9001l\u001b[=0u',
+        expect.any(Function),
+      );
+    });
+
+    await waitFor(() => {
+      expect(terminalInstances[0]._core.coreService.decPrivateModes.win32InputMode).toBe(true);
+    });
+    expect(terminalInstances[0]._core.coreService.kittyKeyboard).toEqual({
+      flags: 5,
+      mainFlags: 5,
+      altFlags: 3,
+      mainStack: [1],
+      altStack: [2],
+    });
   });
 
   it('resets pane-local keyboard protocol state before replaying a fresh session', async () => {

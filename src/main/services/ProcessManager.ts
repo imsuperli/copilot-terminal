@@ -19,9 +19,16 @@ import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../shared/types/ssh';
+import type { PtyKeyboardProtocolState } from '../../shared/types/electron-api';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
+import {
+  cloneKeyboardProtocolState,
+  createDefaultKeyboardProtocolState,
+  type TrackedKeyboardProtocolState,
+  updateKeyboardProtocolStateFromOutput,
+} from './ptyKeyboardProtocolState';
 import { resolveNodePath } from '../utils/node-path';
 import { resolveShellProgram } from '../utils/shell';
 import { chatDebugError, chatDebugInfo, previewText } from '../utils/chatDebugLog';
@@ -45,6 +52,7 @@ type PaneHistoryBuffer = {
   totalLength: number;
   nextSeq: number;
   lastSeq: number;
+  keyboardState: TrackedKeyboardProtocolState;
 };
 
 // 灏濊瘯瀵煎叆 node-pty锛屽鏋滃け璐ュ垯浣跨敤 mock
@@ -779,18 +787,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return buffer ? buffer.length > 0 : false;
   }
 
-  getPtyHistory(paneId: string): { chunks: string[]; lastSeq: number } {
+  getPtyHistory(paneId: string): { chunks: string[]; lastSeq: number; keyboardState: PtyKeyboardProtocolState } {
     const history = this.paneHistoryBuffers.get(paneId);
     if (!history) {
       return {
         chunks: [],
         lastSeq: 0,
+        keyboardState: cloneKeyboardProtocolState(createDefaultKeyboardProtocolState()),
       };
     }
 
     return {
       chunks: history.entries.map((entry) => entry.data),
       lastSeq: history.lastSeq,
+      keyboardState: cloneKeyboardProtocolState(history.keyboardState),
     };
   }
 
@@ -1658,6 +1668,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       totalLength: 0,
       nextSeq: 1,
       lastSeq: 0,
+      keyboardState: createDefaultKeyboardProtocolState(),
     });
   }
 
@@ -1671,12 +1682,14 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       totalLength: 0,
       nextSeq: 1,
       lastSeq: 0,
+      keyboardState: createDefaultKeyboardProtocolState(),
     };
 
     const seq = history.nextSeq++;
     history.entries.push({ seq, data });
     history.totalLength += data.length;
     history.lastSeq = seq;
+    updateKeyboardProtocolStateFromOutput(history.keyboardState, data);
 
     while (
       history.entries.length > this.PANE_HISTORY_CHUNK_LIMIT

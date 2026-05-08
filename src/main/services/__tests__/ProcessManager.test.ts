@@ -23,6 +23,17 @@ function makeMockPtyProcess(pid = 4321) {
   };
 }
 
+const defaultKeyboardProtocolState = {
+  win32InputMode: false,
+  kittyKeyboard: {
+    flags: 0,
+    mainFlags: 0,
+    altFlags: 0,
+    mainStack: [],
+    altStack: [],
+  },
+};
+
 describe('ProcessManager', () => {
   let processManager: ProcessManager;
   const testWorkingDir = tmpdir(); // Use real temp directory
@@ -448,6 +459,7 @@ describe('ProcessManager', () => {
         expect(processManager.getPtyHistory('pane-history')).toEqual({
           chunks: ['first-output'],
           lastSeq: 1,
+          keyboardState: defaultKeyboardProtocolState,
         });
 
         dataListeners.length = 0;
@@ -461,12 +473,14 @@ describe('ProcessManager', () => {
         expect(processManager.getPtyHistory('pane-history')).toEqual({
           chunks: [],
           lastSeq: 0,
+          keyboardState: defaultKeyboardProtocolState,
         });
 
         dataListeners.forEach((listener) => listener('second-output'));
         expect(processManager.getPtyHistory('pane-history')).toEqual({
           chunks: ['second-output'],
           lastSeq: 1,
+          keyboardState: defaultKeyboardProtocolState,
         });
       } finally {
         spawnSpy.mockRestore();
@@ -502,6 +516,7 @@ describe('ProcessManager', () => {
         expect(processManager.getPtyHistory('pane-history-exit')).toEqual({
           chunks: ['stale-output'],
           lastSeq: 1,
+          keyboardState: defaultKeyboardProtocolState,
         });
 
         exitHandler?.({ exitCode: 255 });
@@ -509,6 +524,98 @@ describe('ProcessManager', () => {
         expect(processManager.getPtyHistory('pane-history-exit')).toEqual({
           chunks: [],
           lastSeq: 0,
+          keyboardState: defaultKeyboardProtocolState,
+        });
+      } finally {
+        spawnSpy.mockRestore();
+      }
+    });
+
+    it('tracks keyboard protocol state independently of replayable history chunks', async () => {
+      const ptyModule = getPtyModule();
+      const dataListeners: Array<(data: string) => void> = [];
+
+      const spawnSpy = vi.spyOn(ptyModule, 'spawn');
+      spawnSpy.mockImplementation(() => ({
+        ...makeMockPtyProcess(4327),
+        onData: vi.fn((handler: (data: string) => void) => {
+          dataListeners.push(handler);
+          return { dispose: vi.fn() };
+        }),
+      }) as any);
+
+      try {
+        await processManager.spawnTerminal({
+          workingDirectory: testWorkingDir,
+          windowId: 'win-keyboard-history',
+          paneId: 'pane-keyboard-history',
+        });
+
+        dataListeners.forEach((listener) => {
+          listener('\u001b[?9001h\u001b[=5u\u001b[>3u');
+          listener('\u001b[<1u\u001b[?9001l\u001b[=0u');
+        });
+
+        expect(processManager.getPtyHistory('pane-keyboard-history')).toEqual({
+          chunks: ['\u001b[?9001h\u001b[=5u\u001b[>3u', '\u001b[<1u\u001b[?9001l\u001b[=0u'],
+          lastSeq: 2,
+          keyboardState: defaultKeyboardProtocolState,
+        });
+
+        dataListeners.forEach((listener) => {
+          listener('\u001b[?900');
+          listener('1h\u001b[=');
+          listener('5');
+          listener('u');
+        });
+
+        expect(processManager.getPtyHistory('pane-keyboard-history')).toEqual({
+          chunks: [
+            '\u001b[?9001h\u001b[=5u\u001b[>3u',
+            '\u001b[<1u\u001b[?9001l\u001b[=0u',
+            '\u001b[?900',
+            '1h\u001b[=',
+            '5',
+            'u',
+          ],
+          lastSeq: 6,
+          keyboardState: {
+            win32InputMode: true,
+            kittyKeyboard: {
+              flags: 5,
+              mainFlags: 0,
+              altFlags: 0,
+              mainStack: [],
+              altStack: [],
+            },
+          },
+        });
+
+        dataListeners.forEach((listener) => {
+          listener('\u001b[=7u\u001b[?1049h\u001b[=3u\u001b[?1049l');
+        });
+
+        expect(processManager.getPtyHistory('pane-keyboard-history')).toEqual({
+          chunks: [
+            '\u001b[?9001h\u001b[=5u\u001b[>3u',
+            '\u001b[<1u\u001b[?9001l\u001b[=0u',
+            '\u001b[?900',
+            '1h\u001b[=',
+            '5',
+            'u',
+            '\u001b[=7u\u001b[?1049h\u001b[=3u\u001b[?1049l',
+          ],
+          lastSeq: 7,
+          keyboardState: {
+            win32InputMode: true,
+            kittyKeyboard: {
+              flags: 7,
+              mainFlags: 7,
+              altFlags: 3,
+              mainStack: [],
+              altStack: [],
+            },
+          },
         });
       } finally {
         spawnSpy.mockRestore();

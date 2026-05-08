@@ -5,7 +5,7 @@ import { GripVertical, X } from 'lucide-react';
 import { Pane, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { subscribeToPanePtyData } from '../api/ptyDataBus';
-import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/electron-api';
+import type { PtyDataPayload, PtyHistorySnapshot, PtyKeyboardProtocolState } from '../../shared/types/electron-api';
 import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/terminalFonts';
 import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { installTerminalImeFix, type ImeCompositionState } from '../utils/terminalImeFix';
@@ -185,6 +185,7 @@ function extractPtyHistorySnapshot(response: unknown): PtyHistorySnapshot {
       return {
         chunks: (data as { chunks: unknown[] }).chunks.filter((chunk): chunk is string => typeof chunk === 'string'),
         lastSeq: (data as { lastSeq: number }).lastSeq,
+        keyboardState: extractKeyboardProtocolState(data),
       };
     }
 
@@ -199,6 +200,53 @@ function extractPtyHistorySnapshot(response: unknown): PtyHistorySnapshot {
   return {
     chunks: [],
     lastSeq: 0,
+  };
+}
+
+function extractKeyboardProtocolState(data: unknown): PtyKeyboardProtocolState | undefined {
+  if (!data || typeof data !== 'object' || !('keyboardState' in data)) {
+    return undefined;
+  }
+
+  const keyboardState = (data as { keyboardState?: unknown }).keyboardState;
+  if (!keyboardState || typeof keyboardState !== 'object') {
+    return undefined;
+  }
+
+  const kittyKeyboard = (keyboardState as { kittyKeyboard?: unknown }).kittyKeyboard;
+  if (!kittyKeyboard || typeof kittyKeyboard !== 'object') {
+    return undefined;
+  }
+
+  const state = keyboardState as { win32InputMode?: unknown };
+  const kitty = kittyKeyboard as {
+    flags?: unknown;
+    mainFlags?: unknown;
+    altFlags?: unknown;
+    mainStack?: unknown;
+    altStack?: unknown;
+  };
+
+  if (
+    typeof state.win32InputMode !== 'boolean'
+    || typeof kitty.flags !== 'number'
+    || typeof kitty.mainFlags !== 'number'
+    || typeof kitty.altFlags !== 'number'
+    || !Array.isArray(kitty.mainStack)
+    || !Array.isArray(kitty.altStack)
+  ) {
+    return undefined;
+  }
+
+  return {
+    win32InputMode: state.win32InputMode,
+    kittyKeyboard: {
+      flags: kitty.flags,
+      mainFlags: kitty.mainFlags,
+      altFlags: kitty.altFlags,
+      mainStack: kitty.mainStack.filter((entry): entry is number => typeof entry === 'number'),
+      altStack: kitty.altStack.filter((entry): entry is number => typeof entry === 'number'),
+    },
   };
 }
 
@@ -230,21 +278,40 @@ type TerminalWithKeyboardState = Terminal & {
 };
 
 function resetTerminalKeyboardProtocolState(terminal: Terminal): void {
+  applyTerminalKeyboardProtocolState(terminal, {
+    win32InputMode: false,
+    kittyKeyboard: {
+      flags: 0,
+      mainFlags: 0,
+      altFlags: 0,
+      mainStack: [],
+      altStack: [],
+    },
+  });
+}
+
+function applyTerminalKeyboardProtocolState(terminal: Terminal, state: PtyKeyboardProtocolState | undefined): void {
+  if (!state) {
+    return;
+  }
+
   const coreState = (terminal as TerminalWithKeyboardState)._core?.coreService;
   if (!coreState) {
     return;
   }
 
   if (coreState.decPrivateModes) {
-    coreState.decPrivateModes.win32InputMode = false;
+    coreState.decPrivateModes.win32InputMode = state.win32InputMode;
   }
 
   if (coreState.kittyKeyboard) {
-    coreState.kittyKeyboard.flags = 0;
-    coreState.kittyKeyboard.mainFlags = 0;
-    coreState.kittyKeyboard.altFlags = 0;
+    coreState.kittyKeyboard.flags = state.kittyKeyboard.flags;
+    coreState.kittyKeyboard.mainFlags = state.kittyKeyboard.mainFlags;
+    coreState.kittyKeyboard.altFlags = state.kittyKeyboard.altFlags;
     coreState.kittyKeyboard.mainStack.length = 0;
+    coreState.kittyKeyboard.mainStack.push(...state.kittyKeyboard.mainStack);
     coreState.kittyKeyboard.altStack.length = 0;
+    coreState.kittyKeyboard.altStack.push(...state.kittyKeyboard.altStack);
   }
 }
 
@@ -1141,6 +1208,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       ) || hasCompletedReplayForCurrentSessionRef.current;
       const shouldSuppressReplayProtocolReplies = hasCompletedReplayForCurrentSession && !resetTerminal;
       let shouldResumePtyWrites = false;
+      let replayKeyboardState: PtyKeyboardProtocolState | undefined;
 
       if (resetTerminal && terminalRef.current) {
         clearQueuedOutput();
@@ -1155,6 +1223,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         }
 
         const historySnapshot = extractPtyHistorySnapshot(response);
+        replayKeyboardState = historySnapshot.keyboardState;
         lastAppliedSeqRef.current = historySnapshot.lastSeq;
         const replayData = shouldSuppressReplayProtocolReplies
           ? stripReplayProtocolQueries(historySnapshot.chunks.join(''))
@@ -1177,6 +1246,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           return;
         }
 
+        applyTerminalKeyboardProtocolState(terminal, replayKeyboardState);
         isHistoryLoadedRef.current = true;
         hasCompletedReplayForCurrentSessionRef.current = true;
         if (sessionKey) {

@@ -1607,9 +1607,21 @@ export interface PtyDataPayload {
   seq?: number;
 }
 
+export interface PtyKeyboardProtocolState {
+  win32InputMode: boolean;
+  kittyKeyboard: {
+    flags: number;
+    mainFlags: number;
+    altFlags: number;
+    mainStack: number[];
+    altStack: number[];
+  };
+}
+
 export interface PtyHistorySnapshot {
   chunks: string[];
   lastSeq: number;
+  keyboardState?: PtyKeyboardProtocolState;
 }
 
 export interface RestoreResultPayload {
