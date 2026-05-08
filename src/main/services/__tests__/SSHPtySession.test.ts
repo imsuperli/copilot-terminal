@@ -104,7 +104,7 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Last login\r\n');
     await vi.advanceTimersByTimeAsync(40);
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- '/srv/app'\rstty echo\r",
+      "cd -- '/srv/app'; stty echo\r",
     );
 
     session.kill();
@@ -158,7 +158,7 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- ~/\"workspace with spaces\"\rstty echo\r",
+      "cd -- ~/\"workspace with spaces\"; stty echo\r",
     );
   });
 
@@ -261,7 +261,7 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- ~/\"de/de/win/de/co/de/co\"\rstty echo\r",
+      "cd -- ~/\"de/de/win/de/co/de/co\"; stty echo\r",
     );
   });
 
@@ -315,7 +315,59 @@ describe('SSHPtySession', () => {
       echo: false,
     }));
     expect(channel.write).toHaveBeenCalledWith(
-      "printf test\rstty echo\r",
+      "printf test; stty echo\r",
+    );
+  });
+
+  it('combines remote cwd setup and startup command into a single shell submission', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('LANG', '');
+    vi.stubEnv('LC_CTYPE', '');
+    vi.stubEnv('LC_ALL', '');
+    const channel = createMockChannel();
+    const openShell = vi.fn().mockResolvedValue(channel);
+
+    await SSHPtySession.create({
+      pid: 2210,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+        remoteCwd: '/srv/app',
+        command: 'printf test',
+      },
+      connectionPool: {
+        acquire: vi.fn().mockResolvedValue({
+          connection: {
+            openShell,
+            listPortForwards: vi.fn().mockReturnValue([]),
+            addPortForward: vi.fn(),
+            removePortForward: vi.fn(),
+            listSftpDirectory: vi.fn(),
+            downloadSftpFile: vi.fn(),
+            uploadSftpFiles: vi.fn(),
+          },
+          release: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any,
+    });
+
+    channel.emit('data', 'Welcome\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(channel.write).toHaveBeenCalledWith(
+      "cd -- '/srv/app'; printf test; stty echo\r",
     );
   });
 

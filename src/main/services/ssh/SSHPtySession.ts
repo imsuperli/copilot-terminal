@@ -424,11 +424,11 @@ export class SSHPtySession implements IPty {
       return;
     }
 
-    const commands = buildShellInitializationCommands(this.ssh);
+    const commandLine = buildShellInitializationCommandLine(this.ssh);
 
-    if (commands.length > 0) {
+    if (commandLine) {
       this.shellInitialized = true;
-      this.channel.write(`${commands.join('\r')}\rstty echo\r`);
+      this.channel.write(`${commandLine}\r`);
     }
   }
 
@@ -497,6 +497,15 @@ function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   }
 
   return commands;
+}
+
+function buildShellInitializationCommandLine(ssh: SSHSessionConfig): string | null {
+  const commands = buildShellInitializationCommands(ssh);
+  if (commands.length === 0) {
+    return null;
+  }
+
+  return [...commands, 'stty echo'].join('; ');
 }
 
 function normalizeRemoteCwdForShellInitialization(value: string | undefined): string | undefined {
