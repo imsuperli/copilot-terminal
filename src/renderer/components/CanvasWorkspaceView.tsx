@@ -1969,9 +1969,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                               </div>
                               {outputPreview ? (
                                 <div className="line-clamp-3 break-words whitespace-pre-wrap">{outputPreview}</div>
-                              ) : (
-                                <div className="line-clamp-3">{t('canvas.windowOpenHint')}</div>
-                              )}
+                              ) : null}
                             </div>
                           )
                         ) : (
