@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasWorkspaceView } from '../CanvasWorkspaceView';
+import { CustomTitleBar } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
 import { createSinglePaneWindow, getAllPanes } from '../../utils/layoutHelpers';
 import { WindowStatus, type Window } from '../../types/window';
@@ -233,18 +234,21 @@ describe('CanvasWorkspaceView', () => {
     });
 
     render(
-      <CanvasWorkspaceView
-        canvasWorkspace={canvasWorkspace}
-        onStopWorkspace={onStopWorkspace}
-      />,
+      <>
+        <CustomTitleBar title="Incident Map" />
+        <CanvasWorkspaceView
+          canvasWorkspace={canvasWorkspace}
+          onStopWorkspace={onStopWorkspace}
+        />
+      </>,
     );
 
     const stopButton = screen.getByRole('button', { name: '停止画布' });
-    const toolbar = stopButton.closest('.absolute.right-5.top-4.z-20');
+    const titleBarSlot = screen.getByTestId('custom-titlebar-actions-slot');
 
-    expect(toolbar).not.toBeNull();
-    expect(toolbar).toContainElement(stopButton);
-    expect(within(toolbar as HTMLElement).getByRole('button', { name: '停止画布' })).toBe(stopButton);
+    expect(titleBarSlot).toContainElement(stopButton);
+    expect(within(titleBarSlot).getByRole('button', { name: '停止画布' })).toBe(stopButton);
+    expect(titleBarSlot.nextElementSibling).toHaveAttribute('aria-label', 'Minimize');
 
     await user.click(stopButton);
 

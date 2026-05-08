@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Activity, Link2, MonitorSmartphone, Save, Square, StickyNote } from 'lucide-react';
 import { AppLanguage } from '../../shared/i18n';
 import {
@@ -62,6 +63,7 @@ import { CanvasBlockChrome } from './CanvasBlockChrome';
 import { CanvasCreateBlockDialog } from './CanvasCreateBlockDialog';
 import { CanvasMinimap } from './CanvasMinimap';
 import { CanvasWindowPickerDialog } from './CanvasWindowPickerDialog';
+import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 import { Dialog } from './ui/Dialog';
 import { AppTooltip } from './ui/AppTooltip';
 import {
@@ -72,6 +74,7 @@ import {
 } from './ui/ide-popup';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useKeyboardShortcutSettings } from '../hooks/useKeyboardShortcutSettings';
+import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { destroyWindowResourcesAndRemoveRecord } from '../utils/windowDestruction';
 
 const LazyQuickSwitcher = React.lazy(async () => ({
@@ -261,6 +264,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState(canvasWorkspace.name);
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
+  const [titleBarActionsSlot, setTitleBarActionsSlot] = useState<HTMLElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({
     w: typeof window === 'undefined' ? 1280 : window.innerWidth,
     h: typeof window === 'undefined' ? 720 : window.innerHeight,
@@ -398,6 +402,26 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   useEffect(() => {
     setWorkspaceNameDraft(canvasWorkspace.name);
   }, [canvasWorkspace.name]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const syncSlot = () => {
+      const nextSlot = document.getElementById(CUSTOM_TITLEBAR_ACTIONS_SLOT_ID);
+      setTitleBarActionsSlot((currentSlot) => (
+        currentSlot === nextSlot ? currentSlot : nextSlot
+      ));
+    };
+
+    syncSlot();
+    window.addEventListener('resize', syncSlot);
+
+    return () => {
+      window.removeEventListener('resize', syncSlot);
+    };
+  }, []);
 
   useEffect(() => {
     if (editingBlockId && !canvasWorkspace.blocks.some((block) => block.id === editingBlockId)) {
@@ -927,6 +951,36 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   const stopWorkspaceRuntime = useCallback(async () => {
     await onStopWorkspace?.(canvasWorkspace.id);
   }, [canvasWorkspace.id, onStopWorkspace]);
+
+  const titleBarActions = useMemo(() => {
+    if (!onStopWorkspace || !titleBarActionsSlot) {
+      return null;
+    }
+
+    return createPortal(
+      <div
+        data-testid="canvas-titlebar-actions"
+        className="pointer-events-auto flex h-8 items-center justify-end gap-1 px-1.5"
+      >
+        <AppTooltip content={t('canvas.stopWorkspace')} placement="toolbar-trailing">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('canvas.stopWorkspace')}
+            title={t('canvas.stopWorkspace')}
+            onMouseDown={preventMouseButtonFocus}
+            onClick={() => {
+              void stopWorkspaceRuntime();
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+          >
+            <Square size={14} fill="currentColor" />
+          </button>
+        </AppTooltip>
+      </div>,
+      titleBarActionsSlot,
+    );
+  }, [onStopWorkspace, stopWorkspaceRuntime, t, titleBarActionsSlot]);
 
   const handleWorkspaceDelete = useCallback(async () => {
     await stopWorkspaceRuntime();
@@ -1591,6 +1645,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--card))_82%,transparent)_100%)]">
+      {titleBarActions}
       <div className="pointer-events-none absolute inset-0 opacity-[0.28]" style={{ background: 'radial-gradient(circle at top, rgb(var(--primary) / 0.14), transparent 30%)' }} />
       <div className="absolute left-5 top-4 z-20 flex max-w-[calc(100%-2.5rem)] items-center gap-3">
         <div className="pointer-events-none flex items-center gap-3 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-4 py-2 text-sm text-[rgb(var(--muted-foreground))] shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur">
@@ -1609,21 +1664,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       </div>
 
       <CanvasArrangeToolbar
-        actions={onStopWorkspace ? (
-          <AppTooltip content={t('canvas.stopWorkspace')} placement="toolbar-trailing">
-            <button
-              type="button"
-              aria-label={t('canvas.stopWorkspace')}
-              title={t('canvas.stopWorkspace')}
-              onClick={() => {
-                void stopWorkspaceRuntime();
-              }}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
-            >
-              <Square size={14} fill="currentColor" />
-            </button>
-          </AppTooltip>
-        ) : undefined}
         blockCount={canvasWorkspace.blocks.length}
         selectedCount={selectedBlockIds.length}
         zoom={canvasWorkspace.viewport.zoom}
