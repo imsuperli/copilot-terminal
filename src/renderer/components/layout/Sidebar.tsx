@@ -110,6 +110,7 @@ export function Sidebar({
   const sidebarInputClass = `${idePopupInputClassName} rounded-md px-2 py-1.5 text-[rgb(var(--foreground))] focus:ring-1 focus:ring-[rgb(var(--ring))] focus:border-transparent`;
   const sidebarInlineInputClass = `${idePopupInputClassName} rounded px-1.5 py-0.5 text-sm focus:border-[rgb(var(--ring))] focus:ring-0`;
   const sidebarIconButtonClass = 'rounded transition-colors text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]';
+  const sidebarTabIconSlotClass = 'inline-flex h-6 w-6 shrink-0 items-center justify-center';
 
   // 从 settings 同步分类数据
   useEffect(() => {
@@ -352,7 +353,9 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <Terminal className="h-4 w-4" />
+              <span aria-hidden="true" className={sidebarTabIconSlotClass}>
+                <Terminal className="h-4 w-4 shrink-0" />
+              </span>
               <span>{t('sidebar.tab.active')}</span>
               {activeCount > 0 && (
                 <span className="ml-auto text-xs">{activeCount}</span>
@@ -368,7 +371,9 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <TerminalTypeLogo variant="local" size="xs" />
+              <span aria-hidden="true" className={sidebarTabIconSlotClass}>
+                <TerminalTypeLogo variant="local" size="xs" />
+              </span>
               <span>{t('sidebar.tab.local')}</span>
               {localCount > 0 && (
                 <span className="ml-auto text-xs">{localCount}</span>
@@ -384,7 +389,9 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <TerminalTypeLogo variant="ssh" size="xs" />
+              <span aria-hidden="true" className={sidebarTabIconSlotClass}>
+                <TerminalTypeLogo variant="ssh" size="xs" />
+              </span>
               <span>{t('sidebar.tab.ssh')}</span>
               {sshCount > 0 && (
                 <span className="ml-auto text-xs">{sshCount}</span>
@@ -399,7 +406,9 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <Orbit className="h-4 w-4" />
+              <span aria-hidden="true" className={sidebarTabIconSlotClass}>
+                <Orbit className="h-4 w-4 shrink-0" />
+              </span>
               <span>{t('sidebar.tab.canvas')}</span>
               {canvasCount > 0 && (
                 <span className="ml-auto text-xs">{canvasCount}</span>
@@ -414,7 +423,9 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <Archive className="h-4 w-4" />
+              <span aria-hidden="true" className={sidebarTabIconSlotClass}>
+                <Archive className="h-4 w-4 shrink-0" />
+              </span>
               <span>{t('sidebar.tab.archived')}</span>
               {archivedCount > 0 && (
                 <span className="ml-auto text-xs">{archivedCount}</span>
@@ -428,7 +439,9 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <Grid className="h-4 w-4" />
+              <span aria-hidden="true" className={sidebarTabIconSlotClass}>
+                <Grid className="h-4 w-4 shrink-0" />
+              </span>
               <span>{t('sidebar.tab.all')}</span>
               {allCount > 0 && (
                 <span className="ml-auto text-xs">{allCount}</span>

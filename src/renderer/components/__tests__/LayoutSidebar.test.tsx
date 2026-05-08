@@ -72,6 +72,23 @@ describe('Layout Sidebar', () => {
     expect(mockCreateWindowDialog).not.toHaveBeenCalled();
   });
 
+  it('uses a consistent icon slot for built-in sidebar tabs', () => {
+    render(
+      <Sidebar
+        currentTab="active"
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        onTabChange={vi.fn()}
+        sshEnabled
+      />,
+    );
+
+    for (const name of ['工作区', '本地终端', '远程终端', '画布', '归档终端', '全部终端']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.querySelector('.h-6.w-6.shrink-0.items-center.justify-center')).not.toBeNull();
+    }
+  });
+
   it('deletes active window records when clearing the workspace tab', async () => {
     const user = userEvent.setup();
     const activeWindow = createWindowWithStatus('active-a', WindowStatus.Running);
