@@ -240,7 +240,7 @@ describe('Terminal Sidebar', () => {
     ]);
   });
 
-  it('shows ssh clone tabs in the terminal sidebar and keeps them visible after the owner closes', () => {
+  it('shows only one sidebar item for an ssh clone family and keeps a representative after the owner closes', () => {
     const onWindowSelect = vi.fn();
 
     const ownerWindow = {
@@ -266,11 +266,11 @@ describe('Terminal Sidebar', () => {
     });
 
     const { rerender } = render(
-      <Sidebar activeWindowId={ownerWindow.id} onWindowSelect={onWindowSelect} />,
+      <Sidebar activeWindowId={cloneWindow.id} onWindowSelect={onWindowSelect} />,
     );
 
-    expect(screen.getByText('Remote Owner')).toBeInTheDocument();
     expect(screen.getByText('Remote Clone')).toBeInTheDocument();
+    expect(screen.queryByText('Remote Owner')).not.toBeInTheDocument();
 
     act(() => {
       useWindowStore.setState({

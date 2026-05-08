@@ -260,6 +260,60 @@ export function getStandaloneWindows(windows: Window[]): Window[] {
   ));
 }
 
+export function getStandaloneSidebarWindows(
+  windows: Window[],
+  activeWindowId: string | null,
+  mruList: string[],
+): Window[] {
+  const standaloneWindows = getStandaloneWindows(windows);
+  const representatives = new Map<string, Window>();
+  const orderedKeys: string[] = [];
+  const mruIndexByWindowId = new Map(mruList.map((windowId, index) => [windowId, index]));
+
+  const shouldReplaceRepresentative = (current: Window, candidate: Window): boolean => {
+    const currentIsActive = current.id === activeWindowId;
+    const candidateIsActive = candidate.id === activeWindowId;
+    if (candidateIsActive !== currentIsActive) {
+      return candidateIsActive;
+    }
+
+    const currentIsPersistable = !current.ephemeral;
+    const candidateIsPersistable = !candidate.ephemeral;
+    if (candidateIsPersistable !== currentIsPersistable) {
+      return candidateIsPersistable;
+    }
+
+    const currentMruIndex = mruIndexByWindowId.get(current.id) ?? Number.POSITIVE_INFINITY;
+    const candidateMruIndex = mruIndexByWindowId.get(candidate.id) ?? Number.POSITIVE_INFINITY;
+    if (candidateMruIndex !== currentMruIndex) {
+      return candidateMruIndex < currentMruIndex;
+    }
+
+    return false;
+  };
+
+  for (const window of standaloneWindows) {
+    const representativeKey = getWindowKind(window) === 'ssh'
+      ? `ssh-family:${getSSHSessionOwnerWindowId(window) ?? window.id}`
+      : `window:${window.id}`;
+
+    const currentRepresentative = representatives.get(representativeKey);
+    if (!currentRepresentative) {
+      representatives.set(representativeKey, window);
+      orderedKeys.push(representativeKey);
+      continue;
+    }
+
+    if (shouldReplaceRepresentative(currentRepresentative, window)) {
+      representatives.set(representativeKey, window);
+    }
+  }
+
+  return orderedKeys
+    .map((key) => representatives.get(key))
+    .filter((window): window is Window => Boolean(window));
+}
+
 export function getStandalonePersistableWindows(windows: Window[]): Window[] {
   return getPersistableWindows(getStandaloneWindows(windows));
 }

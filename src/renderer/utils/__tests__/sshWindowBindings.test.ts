@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Window, WindowStatus } from '../../types/window';
 import {
+  getStandaloneSidebarWindows,
   getStandaloneWindows,
   getOwnedEphemeralSSHWindowIds,
   getSSHSessionOwnerWindowId,
@@ -84,6 +85,31 @@ describe('sshWindowBindings owner resolution', () => {
       'owner',
       'clone',
     ]);
+  });
+
+  it('returns a single sidebar representative for one ssh clone family and prefers the active clone', () => {
+    const ownerWindow = createSSHWindow('owner');
+    const cloneWindow = createSSHWindow('clone', {
+      ephemeral: true,
+      ownerWindowId: ownerWindow.id,
+    });
+
+    expect(getStandaloneSidebarWindows(
+      [ownerWindow, cloneWindow],
+      cloneWindow.id,
+      [cloneWindow.id, ownerWindow.id],
+    ).map((window) => window.id)).toEqual(['clone']);
+  });
+
+  it('keeps separate sidebar representatives for independent ssh windows on the same target', () => {
+    const firstWindow = createSSHWindow('first');
+    const secondWindow = createSSHWindow('second');
+
+    expect(getStandaloneSidebarWindows(
+      [firstWindow, secondWindow],
+      secondWindow.id,
+      [secondWindow.id, firstWindow.id],
+    ).map((window) => window.id)).toEqual(['first', 'second']);
   });
 
   it('restores the most recent standalone ssh tab without crossing into canvas-owned windows', () => {

@@ -15,7 +15,7 @@ import type { WindowGroup } from '../../shared/types/window-group';
 import type { CanvasWorkspace } from '../../shared/types/canvas';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { SidebarToggleIcon } from './icons/SidebarToggleIcon';
-import { getStandaloneWindows } from '../utils/sshWindowBindings';
+import { getStandaloneSidebarWindows } from '../utils/sshWindowBindings';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -131,6 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const groups = useWindowStore((state) => state.groups);
   const canvasWorkspaces = useWindowStore((state) => state.canvasWorkspaces);
   const startedCanvasWorkspaceIds = useWindowStore((state) => state.startedCanvasWorkspaceIds);
+  const mruList = useWindowStore((state) => state.mruList);
   const terminalSidebarFilter = useWindowStore((state) => state.terminalSidebarFilter);
   const setTerminalSidebarFilter = useWindowStore((state) => state.setTerminalSidebarFilter);
 
@@ -144,12 +145,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   const activeWindows = useMemo(
-    () => getStandaloneWindows(windows).filter((window) => !window.archived),
-    [windows],
+    () => getStandaloneSidebarWindows(
+      windows.filter((window) => !window.archived),
+      activeWindowId,
+      mruList,
+    ),
+    [activeWindowId, mruList, windows],
   );
   const archivedWindows = useMemo(
-    () => getStandaloneWindows(windows).filter((window) => window.archived),
-    [windows],
+    () => getStandaloneSidebarWindows(
+      windows.filter((window) => window.archived),
+      activeWindowId,
+      mruList,
+    ),
+    [activeWindowId, mruList, windows],
   );
   const activeGroups = useMemo(
     () => groups.filter((group) => !group.archived),
