@@ -81,6 +81,11 @@ app.setName(APP_DISPLAY_NAME);
 migrateLegacyUserDataDirectory();
 app.setPath('userData', path.join(app.getPath('appData'), USER_DATA_DIR_NAME));
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let statusPoller: StatusPoller | null = null;
@@ -121,6 +126,26 @@ const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
 // 退出标志，防止重复执行退出逻辑
 let isQuitting = false;
+
+function bringMainWindowToFront(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+
+  mainWindow.focus();
+}
+
+app.on('second-instance', () => {
+  bringMainWindowToFront();
+});
 
 function registerBrowserWebviewGuards(): void {
   app.on('web-contents-created', (_event, contents) => {
@@ -478,412 +503,414 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-app.whenReady().then(async () => {
-  // 注册 app-image:// 协议处理器
-  protocol.handle('app-image', (request) => {
-    const filePath = normalizeImagePath(request.url);
-    if (!filePath) {
-      return new Response('Image path is missing', { status: 404 });
-    }
-
-    const fileUrl = toFileUrl(filePath);
-    return net.fetch(fileUrl);
-  });
-
-  registerBrowserWebviewGuards();
-
-  // 强制使用暗色主题（包括标题栏）
-  nativeTheme.themeSource = 'dark';
-
-  // 初始化 WorkspaceManager
-  workspaceManager = new WorkspaceManagerImpl();
-
-  // 崩溃恢复
-  await workspaceManager.recoverFromCrash();
-
-  // 初始化 AutoSaveManager
-  autoSaveManager = new AutoSaveManagerImpl();
-
-  // 初始化 SSH 基础设施
-  sshProfileStore = new SSHProfileStore();
-  sshVaultService = new SSHVaultService();
-  sshKnownHostsStore = new SSHKnownHostsStore();
-  chatProviderVaultService = new ChatProviderVaultService();
-  sshHostKeyPromptService = new ElectronSSHHostKeyPromptService({
-    getMainWindow: () => mainWindow,
-  });
-
-  // 初始化 ProcessManager
-  processManager = new ProcessManager(() => currentWorkspace?.settings ?? null);
-  processManager.setSSHKnownHostsStore(sshKnownHostsStore);
-  processManager.setSSHHostKeyPromptService(sshHostKeyPromptService);
-  processManager.setZmodemDialogHandlers({
-    selectSendFiles: async () => {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return null;
+if (hasSingleInstanceLock) {
+  app.whenReady().then(async () => {
+    // 注册 app-image:// 协议处理器
+    protocol.handle('app-image', (request) => {
+      const filePath = normalizeImagePath(request.url);
+      if (!filePath) {
+        return new Response('Image path is missing', { status: 404 });
       }
 
-      const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ['openFile', 'multiSelections'],
-      });
+      const fileUrl = toFileUrl(filePath);
+      return net.fetch(fileUrl);
+    });
 
-      if (result.canceled || result.filePaths.length === 0) {
-        return null;
-      }
+    registerBrowserWebviewGuards();
 
-      return result.filePaths;
-    },
-    chooseSavePath: async (suggestedName: string) => {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return null;
-      }
+    // 强制使用暗色主题（包括标题栏）
+    nativeTheme.themeSource = 'dark';
 
-      const result = await dialog.showSaveDialog(mainWindow, {
-        defaultPath: suggestedName,
-      });
+    // 初始化 WorkspaceManager
+    workspaceManager = new WorkspaceManagerImpl();
 
-      if (result.canceled || !result.filePath) {
-        return null;
-      }
+    // 崩溃恢复
+    await workspaceManager.recoverFromCrash();
 
-      return result.filePath;
-    },
-  });
+    // 初始化 AutoSaveManager
+    autoSaveManager = new AutoSaveManagerImpl();
 
-  processManager.warmupConPtyDll().catch((error) => {
-    console.error('[Main] ConPTY DLL warmup failed:', error);
-  });
+    // 初始化 SSH 基础设施
+    sshProfileStore = new SSHProfileStore();
+    sshVaultService = new SSHVaultService();
+    sshKnownHostsStore = new SSHKnownHostsStore();
+    chatProviderVaultService = new ChatProviderVaultService();
+    sshHostKeyPromptService = new ElectronSSHHostKeyPromptService({
+      getMainWindow: () => mainWindow,
+    });
 
-  // 初始化 TmuxCompatService（内部会创建 TmuxRpcServer）
-  tmuxCompatService = new TmuxCompatService({
-    processManager: processManager as any,
-    getWindowStore: () => currentWorkspace ?? { windows: [] },
-    updateWindowStore: (updater: (state: any) => void) => {
-      if (currentWorkspace) {
-        updater(currentWorkspace);
-      }
-    },
-    onPaneProcessStarted: ({ windowId, paneId, pid }) => {
-      statusPoller?.addPane(windowId, paneId, pid);
-    },
-    onPaneProcessStopped: ({ paneId }) => {
-      statusPoller?.removePane(paneId);
-    },
-    onPaneData: ({ windowId, paneId, data, seq }) => {
-      forwardPtyData({ windowId, paneId, data, seq });
-    },
-    debug: process.env.AUSOME_TMUX_DEBUG === '1',
-  });
-
-  // 将 tmuxCompatService 注入 ProcessManager（解决循环依赖）
-  processManager.setTmuxCompatService(tmuxCompatService);
-
-  // 监听 TmuxCompatService 事件并转发到渲染进程
-  tmuxCompatService.on('pane-title-changed', (data: any) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('tmux:pane-title-changed', data);
-    }
-  });
-
-  tmuxCompatService.on('pane-style-changed', (data: any) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('tmux:pane-style-changed', data);
-    }
-  });
-
-  tmuxCompatService.on('window-synced', (data: any) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('tmux:window-synced', data);
-    }
-  });
-
-  tmuxCompatService.on('window-removed', (data: any) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('tmux:window-removed', data);
-    }
-  });
-
-  // 初始化 PtySubscriptionManager
-  ptySubscriptionManager = new PtySubscriptionManager();
-
-  // 初始化 ShutdownManager
-  shutdownManager = new ShutdownManager();
-
-  // 初始化 FileWatcherService（通用文件监听服务）
-  fileWatcherService = new FileWatcherService();
-  codeProjectIndexService = new CodeProjectIndexService(
-    path.join(app.getPath('userData'), 'code-index'),
-    (payload) => {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
-      }
-
-      mainWindow.webContents.send('code-pane-index-progress', payload);
-    },
-    {
-      enableWatcher: false,
-    },
-  );
-  codeFileService = new CodeFileService(codeProjectIndexService);
-  codeGitService = new CodeGitService();
-  codeGitOperationService = new CodeGitOperationService();
-  codeGitHistoryService = new CodeGitHistoryService();
-  codeGitBlameService = new CodeGitBlameService();
-  codePaneWatcherService = new CodePaneWatcherService(
-    () => mainWindow,
-    (rootPath, changes) => {
-      if (!codeProjectIndexService) {
-        return;
-      }
-
-      void codeProjectIndexService.notifyChanges(rootPath, changes).catch((error) => {
-        console.error('[CodePaneWatcherService] Failed to forward index changes:', error);
-      });
-    },
-  );
-  const pluginDataPath = path.join(app.getPath('userData'), 'plugins');
-  const pluginRegistryStore = new PluginRegistryStore({
-    filePath: path.join(pluginDataPath, 'registry.json'),
-  });
-  const pluginCatalogService = new PluginCatalogService({});
-  const pluginInstallerService = new PluginInstallerService({
-    baseDir: pluginDataPath,
-    registryStore: pluginRegistryStore,
-  });
-  pluginManager = new PluginManager({
-    registryStore: pluginRegistryStore,
-    catalogService: pluginCatalogService,
-    installerService: pluginInstallerService,
-  });
-  sessionAggregationService = new SessionAggregationService();
-  taskArtifactService = new TaskArtifactService();
-  browserSyncService = new BrowserSyncService();
-  mcpCapabilityService = new McpCapabilityService(() => getAgentController()?.getMcpHub() ?? null);
-  const languagePluginResolver = new LanguagePluginResolver({
-    registryStore: pluginRegistryStore,
-  });
-  const languageWorkspaceService = new LanguageWorkspaceService({
-    emitState: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-language-workspace-changed', payload);
-      }
-    },
-  });
-  const languageServerSupervisor = new LanguageServerSupervisor({
-    runtimeRootPath: path.join(pluginDataPath, 'runtime'),
-    emitDiagnostics: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-diagnostics-changed', payload);
-      }
-    },
-    emitRuntimeState: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('plugin-runtime-state-changed', payload);
-      }
-    },
-    workspaceService: languageWorkspaceService,
-  });
-  const pluginCapabilityRuntimeService = new PluginCapabilityRuntimeService({
-    registryStore: pluginRegistryStore,
-    codeFileService,
-    runtimeRootPath: path.join(pluginDataPath, 'runtime'),
-    emitRuntimeState: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('plugin-runtime-state-changed', payload);
-      }
-    },
-  });
-  languageFeatureService = new LanguageFeatureService({
-    codeFileService,
-    resolver: languagePluginResolver,
-    supervisor: languageServerSupervisor,
-    pluginRuntimeService: pluginCapabilityRuntimeService,
-    workspaceService: languageWorkspaceService,
-  });
-  languageWorkspaceHostService = new LanguageWorkspaceHostService({
-    languageFeatureService,
-    languagePluginResolver,
-    getCurrentWorkspace: () => currentWorkspace,
-  });
-  codeRefactorService = new CodeRefactorService({
-    codeFileService,
-    languageFeatureService,
-  });
-  codeRunProfileService = new CodeRunProfileService({
-    emitSessionChanged: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-run-session-changed', payload);
-      }
-    },
-    emitSessionOutput: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-run-session-output', payload);
-      }
-    },
-  });
-  languageProjectContributionService = new LanguageProjectContributionService({
-    codeFileService,
-    runProfileService: codeRunProfileService,
-  });
-  codeTestService = new CodeTestService({
-    runProfileService: codeRunProfileService,
-    pluginRuntimeService: pluginCapabilityRuntimeService,
-  });
-  debugAdapterSupervisor = new DebugAdapterSupervisor({
-    runProfileService: codeRunProfileService,
-    emitSessionChanged: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-debug-session-changed', payload);
-      }
-    },
-    emitSessionOutput: (payload) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-debug-session-output', payload);
-      }
-    },
-    pluginRuntimeService: pluginCapabilityRuntimeService,
-  });
-
-  // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
-  initProjectConfigWatcher(fileWatcherService);
-
-  const syncProjectConfigWatchers = async () => {
-    if (!currentWorkspace) {
-      return;
-    }
-
-    const activeWindowIds = new Set(currentWorkspace.windows.map((window) => window.id));
-    const windowsToWatch = currentWorkspace.windows.map((window) => ({
-      id: window.id,
-      cwd: getWindowWorkingDirectory(window),
-    }));
-
-    for (const watchedWindowId of projectConfigWatcher.getWatchedWindowIds()) {
-      if (!activeWindowIds.has(watchedWindowId)) {
-        projectConfigWatcher.stopWatching(watchedWindowId);
-      }
-    }
-
-    for (const { id, cwd } of windowsToWatch) {
-      if (!activeWindowIds.has(id) || !cwd) {
-        projectConfigWatcher.stopWatching(id);
-        continue;
-      }
-
-      await projectConfigWatcher.startWatching(id, cwd, (updatedConfig) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('project-config-updated', {
-            windowId: id,
-            projectConfig: updatedConfig,
-          });
+    // 初始化 ProcessManager
+    processManager = new ProcessManager(() => currentWorkspace?.settings ?? null);
+    processManager.setSSHKnownHostsStore(sshKnownHostsStore);
+    processManager.setSSHHostKeyPromptService(sshHostKeyPromptService);
+    processManager.setZmodemDialogHandlers({
+      selectSendFiles: async () => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return null;
         }
-      });
-    }
-  };
 
-  createWindow();
-
-  // 初始化 StatusPoller、ViewSwitcher 和 GitBranchWatcher（需要 mainWindow 已创建）
-  if (mainWindow) {
-    statusPoller = new StatusPoller(processManager.getStatusDetector(), mainWindow);
-    statusPoller.startPolling();
-    viewSwitcher = new ViewSwitcherImpl(mainWindow);
-
-    // 初始化 GitBranchWatcher（基于 FileWatcherService）
-    gitBranchWatcher = new GitBranchWatcher(fileWatcherService);
-
-    // 初始化 WorkspaceRestorer
-    // workspaceRestorer = new WorkspaceRestorerImpl(processManager, mainWindow);
-  }
-
-  // 创建 handler 上下文并注册所有 IPC handlers（必须在所有服务初始化后）
-  const handlerContext: HandlerContext = {
-    mainWindow,
-    processManager,
-    statusPoller,
-    viewSwitcher,
-    workspaceManager,
-    autoSaveManager,
-    ptySubscriptionManager,
-    gitBranchWatcher,
-    tmuxCompatService,
-    sshProfileStore,
-    sshVaultService,
-    sshKnownHostsStore,
-    chatProviderVaultService,
-    codeFileService,
-    codeGitService,
-    codeGitBlameService,
-    codeGitHistoryService,
-    codeGitOperationService,
-    codeProjectIndexService,
-    codePaneWatcherService,
-    codeRefactorService,
-    codeRunProfileService,
-    codeTestService,
-    debugAdapterSupervisor,
-    languageFeatureService,
-    languageProjectContributionService,
-    languageWorkspaceHostService,
-    pluginManager,
-    sessionAggregationService,
-    taskArtifactService,
-    browserSyncService,
-    mcpCapabilityService,
-    currentWorkspace,
-    getMainWindow: () => mainWindow,
-    getCurrentWorkspace: () => currentWorkspace,
-    setCurrentWorkspace: (workspace) => { currentWorkspace = workspace; },
-    syncProjectConfigWatchers,
-  };
-  registerAllHandlers(handlerContext);
-
-  // 加载工作区并恢复窗口
-  try {
-    const workspace = await workspaceManager.loadWorkspace();
-    currentWorkspace = workspace;
-    await syncProjectConfigWatchers();
-    // 启动自动保存
-    if (autoSaveManager && workspaceManager) {
-      autoSaveManager.startAutoSave(workspaceManager, () => {
-        // 返回当前工作区状态（必须同步返回，所以依赖缓存的 currentWorkspace）
-        if (!currentWorkspace) {
-          throw new Error('Current workspace not available');
-        }
-        return currentWorkspace;
-      });
-    }
-
-    // 恢复工作区窗口（不自动启动 PTY 进程）
-    if (mainWindow && workspace.windows.length > 0) {
-      mainWindow.webContents.once('did-finish-load', async () => {
-        // 通知渲染进程工作区已加载（显示为未启动状态，不启动进程）
-        mainWindow?.webContents.send('workspace-loaded', workspace);
-        console.log('[Main] Workspace loaded, windows restored without auto-starting sessions');
-        // 注意：不再为所有窗口启动 git 监听，只在窗口激活时才监听
-      });
-    }
-  } catch (error) {
-    console.error('Failed to load workspace:', error);
-    // 通知渲染进程加载失败
-    if (mainWindow) {
-      mainWindow.webContents.once('did-finish-load', () => {
-        mainWindow?.webContents.send('workspace-restore-error', {
-          error: error instanceof Error ? error.message : String(error),
+        const result = await dialog.showOpenDialog(mainWindow, {
+          properties: ['openFile', 'multiSelections'],
         });
-      });
-    }
-  }
 
-  // macOS 特定: 点击 Dock 图标时重新显示或创建窗口
-  app.on('activate', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-    } else if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+        if (result.canceled || result.filePaths.length === 0) {
+          return null;
+        }
+
+        return result.filePaths;
+      },
+      chooseSavePath: async (suggestedName: string) => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return null;
+        }
+
+        const result = await dialog.showSaveDialog(mainWindow, {
+          defaultPath: suggestedName,
+        });
+
+        if (result.canceled || !result.filePath) {
+          return null;
+        }
+
+        return result.filePath;
+      },
+    });
+
+    processManager.warmupConPtyDll().catch((error) => {
+      console.error('[Main] ConPTY DLL warmup failed:', error);
+    });
+
+    // 初始化 TmuxCompatService（内部会创建 TmuxRpcServer）
+    tmuxCompatService = new TmuxCompatService({
+      processManager: processManager as any,
+      getWindowStore: () => currentWorkspace ?? { windows: [] },
+      updateWindowStore: (updater: (state: any) => void) => {
+        if (currentWorkspace) {
+          updater(currentWorkspace);
+        }
+      },
+      onPaneProcessStarted: ({ windowId, paneId, pid }) => {
+        statusPoller?.addPane(windowId, paneId, pid);
+      },
+      onPaneProcessStopped: ({ paneId }) => {
+        statusPoller?.removePane(paneId);
+      },
+      onPaneData: ({ windowId, paneId, data, seq }) => {
+        forwardPtyData({ windowId, paneId, data, seq });
+      },
+      debug: process.env.AUSOME_TMUX_DEBUG === '1',
+    });
+
+    // 将 tmuxCompatService 注入 ProcessManager（解决循环依赖）
+    processManager.setTmuxCompatService(tmuxCompatService);
+
+    // 监听 TmuxCompatService 事件并转发到渲染进程
+    tmuxCompatService.on('pane-title-changed', (data: any) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tmux:pane-title-changed', data);
+      }
+    });
+
+    tmuxCompatService.on('pane-style-changed', (data: any) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tmux:pane-style-changed', data);
+      }
+    });
+
+    tmuxCompatService.on('window-synced', (data: any) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tmux:window-synced', data);
+      }
+    });
+
+    tmuxCompatService.on('window-removed', (data: any) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tmux:window-removed', data);
+      }
+    });
+
+    // 初始化 PtySubscriptionManager
+    ptySubscriptionManager = new PtySubscriptionManager();
+
+    // 初始化 ShutdownManager
+    shutdownManager = new ShutdownManager();
+
+    // 初始化 FileWatcherService（通用文件监听服务）
+    fileWatcherService = new FileWatcherService();
+    codeProjectIndexService = new CodeProjectIndexService(
+      path.join(app.getPath('userData'), 'code-index'),
+      (payload) => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return;
+        }
+
+        mainWindow.webContents.send('code-pane-index-progress', payload);
+      },
+      {
+        enableWatcher: false,
+      },
+    );
+    codeFileService = new CodeFileService(codeProjectIndexService);
+    codeGitService = new CodeGitService();
+    codeGitOperationService = new CodeGitOperationService();
+    codeGitHistoryService = new CodeGitHistoryService();
+    codeGitBlameService = new CodeGitBlameService();
+    codePaneWatcherService = new CodePaneWatcherService(
+      () => mainWindow,
+      (rootPath, changes) => {
+        if (!codeProjectIndexService) {
+          return;
+        }
+
+        void codeProjectIndexService.notifyChanges(rootPath, changes).catch((error) => {
+          console.error('[CodePaneWatcherService] Failed to forward index changes:', error);
+        });
+      },
+    );
+    const pluginDataPath = path.join(app.getPath('userData'), 'plugins');
+    const pluginRegistryStore = new PluginRegistryStore({
+      filePath: path.join(pluginDataPath, 'registry.json'),
+    });
+    const pluginCatalogService = new PluginCatalogService({});
+    const pluginInstallerService = new PluginInstallerService({
+      baseDir: pluginDataPath,
+      registryStore: pluginRegistryStore,
+    });
+    pluginManager = new PluginManager({
+      registryStore: pluginRegistryStore,
+      catalogService: pluginCatalogService,
+      installerService: pluginInstallerService,
+    });
+    sessionAggregationService = new SessionAggregationService();
+    taskArtifactService = new TaskArtifactService();
+    browserSyncService = new BrowserSyncService();
+    mcpCapabilityService = new McpCapabilityService(() => getAgentController()?.getMcpHub() ?? null);
+    const languagePluginResolver = new LanguagePluginResolver({
+      registryStore: pluginRegistryStore,
+    });
+    const languageWorkspaceService = new LanguageWorkspaceService({
+      emitState: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('code-pane-language-workspace-changed', payload);
+        }
+      },
+    });
+    const languageServerSupervisor = new LanguageServerSupervisor({
+      runtimeRootPath: path.join(pluginDataPath, 'runtime'),
+      emitDiagnostics: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('code-pane-diagnostics-changed', payload);
+        }
+      },
+      emitRuntimeState: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('plugin-runtime-state-changed', payload);
+        }
+      },
+      workspaceService: languageWorkspaceService,
+    });
+    const pluginCapabilityRuntimeService = new PluginCapabilityRuntimeService({
+      registryStore: pluginRegistryStore,
+      codeFileService,
+      runtimeRootPath: path.join(pluginDataPath, 'runtime'),
+      emitRuntimeState: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('plugin-runtime-state-changed', payload);
+        }
+      },
+    });
+    languageFeatureService = new LanguageFeatureService({
+      codeFileService,
+      resolver: languagePluginResolver,
+      supervisor: languageServerSupervisor,
+      pluginRuntimeService: pluginCapabilityRuntimeService,
+      workspaceService: languageWorkspaceService,
+    });
+    languageWorkspaceHostService = new LanguageWorkspaceHostService({
+      languageFeatureService,
+      languagePluginResolver,
+      getCurrentWorkspace: () => currentWorkspace,
+    });
+    codeRefactorService = new CodeRefactorService({
+      codeFileService,
+      languageFeatureService,
+    });
+    codeRunProfileService = new CodeRunProfileService({
+      emitSessionChanged: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('code-pane-run-session-changed', payload);
+        }
+      },
+      emitSessionOutput: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('code-pane-run-session-output', payload);
+        }
+      },
+    });
+    languageProjectContributionService = new LanguageProjectContributionService({
+      codeFileService,
+      runProfileService: codeRunProfileService,
+    });
+    codeTestService = new CodeTestService({
+      runProfileService: codeRunProfileService,
+      pluginRuntimeService: pluginCapabilityRuntimeService,
+    });
+    debugAdapterSupervisor = new DebugAdapterSupervisor({
+      runProfileService: codeRunProfileService,
+      emitSessionChanged: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('code-pane-debug-session-changed', payload);
+        }
+      },
+      emitSessionOutput: (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('code-pane-debug-session-output', payload);
+        }
+      },
+      pluginRuntimeService: pluginCapabilityRuntimeService,
+    });
+
+    // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
+    initProjectConfigWatcher(fileWatcherService);
+
+    const syncProjectConfigWatchers = async () => {
+      if (!currentWorkspace) {
+        return;
+      }
+
+      const activeWindowIds = new Set(currentWorkspace.windows.map((window) => window.id));
+      const windowsToWatch = currentWorkspace.windows.map((window) => ({
+        id: window.id,
+        cwd: getWindowWorkingDirectory(window),
+      }));
+
+      for (const watchedWindowId of projectConfigWatcher.getWatchedWindowIds()) {
+        if (!activeWindowIds.has(watchedWindowId)) {
+          projectConfigWatcher.stopWatching(watchedWindowId);
+        }
+      }
+
+      for (const { id, cwd } of windowsToWatch) {
+        if (!activeWindowIds.has(id) || !cwd) {
+          projectConfigWatcher.stopWatching(id);
+          continue;
+        }
+
+        await projectConfigWatcher.startWatching(id, cwd, (updatedConfig) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('project-config-updated', {
+              windowId: id,
+              projectConfig: updatedConfig,
+            });
+          }
+        });
+      }
+    };
+
+    createWindow();
+
+    // 初始化 StatusPoller、ViewSwitcher 和 GitBranchWatcher（需要 mainWindow 已创建）
+    if (mainWindow) {
+      statusPoller = new StatusPoller(processManager.getStatusDetector(), mainWindow);
+      statusPoller.startPolling();
+      viewSwitcher = new ViewSwitcherImpl(mainWindow);
+
+      // 初始化 GitBranchWatcher（基于 FileWatcherService）
+      gitBranchWatcher = new GitBranchWatcher(fileWatcherService);
+
+      // 初始化 WorkspaceRestorer
+      // workspaceRestorer = new WorkspaceRestorerImpl(processManager, mainWindow);
     }
+
+    // 创建 handler 上下文并注册所有 IPC handlers（必须在所有服务初始化后）
+    const handlerContext: HandlerContext = {
+      mainWindow,
+      processManager,
+      statusPoller,
+      viewSwitcher,
+      workspaceManager,
+      autoSaveManager,
+      ptySubscriptionManager,
+      gitBranchWatcher,
+      tmuxCompatService,
+      sshProfileStore,
+      sshVaultService,
+      sshKnownHostsStore,
+      chatProviderVaultService,
+      codeFileService,
+      codeGitService,
+      codeGitBlameService,
+      codeGitHistoryService,
+      codeGitOperationService,
+      codeProjectIndexService,
+      codePaneWatcherService,
+      codeRefactorService,
+      codeRunProfileService,
+      codeTestService,
+      debugAdapterSupervisor,
+      languageFeatureService,
+      languageProjectContributionService,
+      languageWorkspaceHostService,
+      pluginManager,
+      sessionAggregationService,
+      taskArtifactService,
+      browserSyncService,
+      mcpCapabilityService,
+      currentWorkspace,
+      getMainWindow: () => mainWindow,
+      getCurrentWorkspace: () => currentWorkspace,
+      setCurrentWorkspace: (workspace) => { currentWorkspace = workspace; },
+      syncProjectConfigWatchers,
+    };
+    registerAllHandlers(handlerContext);
+
+    // 加载工作区并恢复窗口
+    try {
+      const workspace = await workspaceManager.loadWorkspace();
+      currentWorkspace = workspace;
+      await syncProjectConfigWatchers();
+      // 启动自动保存
+      if (autoSaveManager && workspaceManager) {
+        autoSaveManager.startAutoSave(workspaceManager, () => {
+          // 返回当前工作区状态（必须同步返回，所以依赖缓存的 currentWorkspace）
+          if (!currentWorkspace) {
+            throw new Error('Current workspace not available');
+          }
+          return currentWorkspace;
+        });
+      }
+
+      // 恢复工作区窗口（不自动启动 PTY 进程）
+      if (mainWindow && workspace.windows.length > 0) {
+        mainWindow.webContents.once('did-finish-load', async () => {
+          // 通知渲染进程工作区已加载（显示为未启动状态，不启动进程）
+          mainWindow?.webContents.send('workspace-loaded', workspace);
+          console.log('[Main] Workspace loaded, windows restored without auto-starting sessions');
+          // 注意：不再为所有窗口启动 git 监听，只在窗口激活时才监听
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load workspace:', error);
+      // 通知渲染进程加载失败
+      if (mainWindow) {
+        mainWindow.webContents.once('did-finish-load', () => {
+          mainWindow?.webContents.send('workspace-restore-error', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    }
+
+    // macOS 特定: 点击 Dock 图标时重新显示或创建窗口
+    app.on('activate', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        bringMainWindowToFront();
+      } else if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
   });
-});
+}
 
 // macOS: ⌘Q 触发 before-quit，标记退出状态以便 close 事件不再隐藏窗口
 app.on('before-quit', () => {
