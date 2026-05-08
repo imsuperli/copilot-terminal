@@ -285,6 +285,77 @@ describe('registerSSHClipboardImageHandlers', () => {
     );
   });
 
+  it('uploads clipboard image for an ephemeral ssh clone tab using the live process registry', async () => {
+    const workspace = createWorkspace({
+      windows: [
+        {
+          id: 'win-ssh-owner',
+          name: 'SSH Owner',
+          activePaneId: 'pane-ssh-owner',
+          createdAt: '2026-04-29T00:00:00.000Z',
+          lastActiveAt: '2026-04-29T00:00:00.000Z',
+          layout: {
+            type: 'pane',
+            id: 'pane-ssh-owner',
+            pane: {
+              id: 'pane-ssh-owner',
+              cwd: '/srv/app',
+              command: '',
+              status: WindowStatus.WaitingForInput,
+              pid: 1001,
+              backend: 'ssh',
+              ssh: {
+                profileId: 'profile-1',
+                remoteCwd: '/srv/app',
+              },
+            },
+          },
+        },
+      ],
+    });
+    mockClipboardReadImage.mockReturnValue(createClipboardImage({ empty: false }));
+    const processManager = {
+      listProcesses: vi.fn().mockReturnValue([
+        {
+          sessionId: 'ssh-session-clone',
+          backend: 'ssh',
+          pid: 2002,
+          status: 'alive',
+          workingDirectory: '/srv/clone',
+          windowId: 'win-ssh-clone',
+          paneId: 'pane-ssh-clone',
+          profileId: 'profile-1',
+        },
+      ]),
+      uploadSSHSftpFiles: vi.fn().mockResolvedValue(1),
+      execSSHCommand: vi.fn(),
+    };
+
+    const ctx = {
+      processManager,
+      workspaceManager: null,
+      getCurrentWorkspace: () => workspace,
+      setCurrentWorkspace: vi.fn(),
+    } as unknown as HandlerContext;
+
+    registerSSHClipboardImageHandlers(ctx);
+    const handler = getRegisteredHandler('try-paste-ssh-clipboard-image');
+
+    const response = await handler({}, { windowId: 'win-ssh-clone', paneId: 'pane-ssh-clone' }) as {
+      success: boolean;
+      data: { handled: boolean; remotePath: string };
+    };
+
+    expect(response.success).toBe(true);
+    expect(response.data.handled).toBe(true);
+    expect(processManager.uploadSSHSftpFiles).toHaveBeenCalledWith(
+      'win-ssh-clone',
+      'pane-ssh-clone',
+      '/srv/clone',
+      [expect.stringMatching(/copilot-clipboard-\d{8}-\d{6}\.png$/)],
+    );
+  });
+
   it('falls back to home directory when current cwd upload fails once', async () => {
     const workspace = createWorkspace();
     mockClipboardReadImage.mockReturnValue(createClipboardImage({ empty: false }));

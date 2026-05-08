@@ -556,6 +556,24 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [destroyRemoteWindows, onReturn, onWindowSwitch, terminalWindow.id]);
 
+  const destroyCurrentSSHWindowFamilyAfterExit = useCallback(async () => {
+    const allWindows = useWindowStore.getState().windows;
+    const familyWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
+    const familyWindowIds = familyWindows.map((window) => window.id);
+    const closingWindowIdSet = new Set(familyWindowIds);
+    const nextWindowId = getNextWindowAfterClose(allWindows, terminalWindow.id, closingWindowIdSet);
+
+    if (nextWindowId) {
+      onWindowSwitch(nextWindowId);
+    }
+
+    await deleteRemoteWindows(familyWindowIds);
+
+    if (!nextWindowId) {
+      onReturn();
+    }
+  }, [deleteRemoteWindows, onReturn, onWindowSwitch, terminalWindow.id]);
+
   const handleDeleteWindow = useCallback(async () => {
     if (isEphemeralRemoteTab) {
       await destroyCurrentEphemeralRemoteWindow();
@@ -601,6 +619,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           void destroyCurrentEphemeralRemoteWindow().catch((error) => {
             console.error('Failed to destroy ephemeral remote window after pane exit:', error);
           });
+        } else if (getPaneBackend(exitingPane) === 'ssh') {
+          void destroyCurrentSSHWindowFamilyAfterExit().catch((error) => {
+            console.error('Failed to destroy ssh window family after pane exit:', error);
+          });
         } else {
           const allWindows = useWindowStore.getState().windows;
           const closingWindowIdSet = new Set([terminalWindow.id]);
@@ -632,6 +654,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       onStopAndRemoveFromGroup,
       isEphemeralRemoteTab,
       destroyCurrentEphemeralRemoteWindow,
+      destroyCurrentSSHWindowFamilyAfterExit,
       closePaneInWindow,
       onWindowSwitch,
       onReturn,

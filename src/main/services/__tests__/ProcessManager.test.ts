@@ -472,6 +472,48 @@ describe('ProcessManager', () => {
         spawnSpy.mockRestore();
       }
     });
+
+    it('clears pane history when the session exits', async () => {
+      const ptyModule = getPtyModule();
+      const dataListeners: Array<(data: string) => void> = [];
+      let exitHandler: ((event: { exitCode: number; signal?: number }) => void) | undefined;
+
+      const spawnSpy = vi.spyOn(ptyModule, 'spawn');
+      spawnSpy.mockImplementation(() => ({
+        ...makeMockPtyProcess(4326),
+        onData: vi.fn((handler: (data: string) => void) => {
+          dataListeners.push(handler);
+          return { dispose: vi.fn() };
+        }),
+        onExit: vi.fn((handler) => {
+          exitHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+      }) as any);
+
+      try {
+        await processManager.spawnTerminal({
+          workingDirectory: testWorkingDir,
+          windowId: 'win-history-exit',
+          paneId: 'pane-history-exit',
+        });
+
+        dataListeners.forEach((listener) => listener('stale-output'));
+        expect(processManager.getPtyHistory('pane-history-exit')).toEqual({
+          chunks: ['stale-output'],
+          lastSeq: 1,
+        });
+
+        exitHandler?.({ exitCode: 255 });
+
+        expect(processManager.getPtyHistory('pane-history-exit')).toEqual({
+          chunks: [],
+          lastSeq: 0,
+        });
+      } finally {
+        spawnSpy.mockRestore();
+      }
+    });
   });
 
   describe('getProcessStatus', () => {

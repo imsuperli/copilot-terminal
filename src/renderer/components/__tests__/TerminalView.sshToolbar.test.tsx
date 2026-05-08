@@ -1105,6 +1105,78 @@ describe('TerminalView SSH toolbar', () => {
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
+  it('destroys the ssh owner tab together with its clone family when its only pane exits', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+    const onReturn = vi.fn();
+    const ownerWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const cloneWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
+    });
+    const fallbackLocalWindow: Window = {
+      id: 'win-local-1',
+      name: 'Fallback Local',
+      activePaneId: 'pane-local-1',
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      layout: {
+        type: 'pane',
+        id: 'pane-local-1',
+        pane: {
+          id: 'pane-local-1',
+          cwd: '/workspace/fallback',
+          command: 'bash',
+          status: WindowStatus.WaitingForInput,
+          pid: 3001,
+          backend: 'local',
+        },
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow, fallbackLocalWindow],
+      activeWindowId: ownerWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValue({ success: true });
+
+    render(
+      <TerminalView
+        window={ownerWindow}
+        onReturn={onReturn}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '模拟窗格退出' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-1');
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
+    });
+
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-local-1');
+    expect(onReturn).not.toHaveBeenCalled();
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-local-1']);
+  });
+
   it('does not leave a placeholder window behind when cloning fails', async () => {
     const user = userEvent.setup();
     const activeWindow = createSSHWindow({

@@ -1630,6 +1630,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.disposePtyDisposables(pid);
     this.ptyOutputBuffers.delete(pid);
     this.ptys.delete(pid);
+    if (processInfo.paneId) {
+      this.clearPtyHistory(processInfo.paneId);
+    }
 
     const paneKey = this.getPaneKey(processInfo.windowId, processInfo.paneId);
     this.paneIndex.delete(paneKey);

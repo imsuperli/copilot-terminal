@@ -10,6 +10,7 @@ import type { Pane, Window, LayoutNode } from '../../shared/types/window';
 import type { Settings, Workspace, SSHClipboardImageUploadLocation } from '../types/workspace';
 import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
+import type { ProcessInfo } from '../types/process';
 
 const DEFAULT_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const DEFAULT_TEMP_REMOTE_CACHE_DIR = '~/.cache/synapse/images';
@@ -18,8 +19,8 @@ export function registerSSHClipboardImageHandlers(ctx: HandlerContext) {
   ipcMain.handle('try-paste-ssh-clipboard-image', async (_event, config: TryPasteSSHClipboardImageConfig) => {
     try {
       const workspace = await ensureWorkspaceLoaded(ctx);
-      const pane = findPaneInWorkspace(workspace.windows, config.windowId, config.paneId);
-      if (!pane || pane.backend !== 'ssh') {
+      const paneContext = findSSHPaneContext(ctx, workspace.windows, config.windowId, config.paneId);
+      if (!paneContext) {
         return successResponse<TryPasteSSHClipboardImageResult>({ handled: false });
       }
 
@@ -49,7 +50,7 @@ export function registerSSHClipboardImageHandlers(ctx: HandlerContext) {
       await fs.writeFile(localPath, pngBuffer);
 
       try {
-        const targetDirectories = await resolveCandidateDirectories(ctx, config, pane, settings);
+        const targetDirectories = await resolveCandidateDirectories(ctx, config, paneContext, settings);
         if (targetDirectories.length === 0) {
           throw new Error('未能解析可用的远端上传目录');
         }
@@ -121,7 +122,7 @@ function buildClipboardImageFileName(): string {
 async function resolveCandidateDirectories(
   ctx: HandlerContext,
   config: TryPasteSSHClipboardImageConfig,
-  pane: Pane,
+  paneContext: SSHPaneContext,
   settings: Settings,
 ): Promise<string[]> {
   const imageSettings = settings.sshClipboardImage;
@@ -139,8 +140,8 @@ async function resolveCandidateDirectories(
     }
     case 'current-working-directory':
     default: {
-      const runtimeCwd = config.runtimeCwd?.trim() || pane.cwd?.trim();
-      const remoteCwd = pane.ssh?.remoteCwd?.trim();
+      const runtimeCwd = config.runtimeCwd?.trim() || paneContext.cwd?.trim();
+      const remoteCwd = paneContext.sshRemoteCwd?.trim();
       return dedupeDirectories([
         runtimeCwd,
         remoteCwd,
@@ -193,6 +194,52 @@ function findPaneInLayout(layout: LayoutNode, paneId: string): Pane | null {
   }
 
   return null;
+}
+
+type SSHPaneContext = {
+  cwd: string;
+  sshRemoteCwd?: string;
+};
+
+function findSSHPaneContext(
+  ctx: HandlerContext,
+  windows: Window[],
+  windowId: string,
+  paneId: string,
+): SSHPaneContext | null {
+  const pane = findPaneInWorkspace(windows, windowId, paneId);
+  if (pane?.backend === 'ssh') {
+    return {
+      cwd: pane.cwd,
+      sshRemoteCwd: pane.ssh?.remoteCwd,
+    };
+  }
+
+  const liveProcess = findLiveSSHProcess(ctx, windowId, paneId);
+  if (!liveProcess) {
+    return null;
+  }
+
+  return {
+    cwd: liveProcess.workingDirectory,
+  };
+}
+
+function findLiveSSHProcess(
+  ctx: HandlerContext,
+  windowId: string,
+  paneId: string,
+): ProcessInfo | null {
+  const processManager = ctx.processManager;
+  if (!processManager || typeof processManager.listProcesses !== 'function') {
+    return null;
+  }
+
+  return processManager.listProcesses().find((processInfo) => (
+    processInfo.windowId === windowId
+    && processInfo.paneId === paneId
+    && processInfo.backend === 'ssh'
+  )) ?? null;
 }
 
 function dedupeDirectories(directories: Array<string | null | undefined>): string[] {
