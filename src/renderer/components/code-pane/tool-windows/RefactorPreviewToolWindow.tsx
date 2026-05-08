@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Check, Eye, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
 import type {
   CodePanePreviewChangeSet,
   CodePanePreviewFileChange,
@@ -17,6 +17,7 @@ import {
   idePopupSubtitleClassName,
   idePopupTitleClassName,
 } from '../../ui/ide-popup';
+import { InlineDiffViewer } from '../InlineDiffViewer';
 
 interface RefactorPreviewToolWindowProps {
   changeSet: CodePanePreviewChangeSet | null;
@@ -285,56 +286,28 @@ export function RefactorPreviewToolWindow({
           )}
         </div>
 
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden">
-          <PreviewPane
-            title={t('codePane.refactorPreviewBefore')}
-            tone="text-[rgb(var(--muted-foreground))]"
-            change={selectedChange}
-            content={selectedChange?.beforeContent ?? ''}
-          />
-          <PreviewPane
-            title={t('codePane.refactorPreviewAfter')}
-            tone="text-emerald-300"
-            change={selectedChange}
-            content={selectedChange?.afterContent ?? ''}
-            borderLeft
-          />
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
+            <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+              {t('codePane.inlineDiff')}
+            </div>
+            {selectedChange && (
+              <div className="rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] font-medium uppercase text-[rgb(var(--muted-foreground))]">
+                {selectedChange.kind}
+              </div>
+            )}
+          </div>
+          <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
+            <InlineDiffViewer
+              beforeContent={selectedChange?.beforeContent}
+              afterContent={selectedChange?.afterContent}
+              maxHeightClassName="max-h-none"
+              emptyLabel={t('codePane.emptyContent')}
+            />
+          </div>
         </div>
       </div>
     </IdePopupShell>
-  );
-}
-
-function PreviewPane({
-  title,
-  tone,
-  change,
-  content,
-  borderLeft,
-}: {
-  title: string;
-  tone: string;
-  change: CodePanePreviewFileChange | null;
-  content: string;
-  borderLeft?: boolean;
-}) {
-  return (
-    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">{title}</div>
-        {change && (
-          <div className={`flex items-center gap-1 text-[10px] ${tone}`}>
-            <Eye size={12} />
-            <span>{change.kind.toUpperCase()}</span>
-          </div>
-        )}
-      </div>
-      <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
-        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
-          {content || '[empty]'}
-        </pre>
-      </div>
-    </div>
   );
 }
 

@@ -168,6 +168,8 @@ function ConflictPane({
   borderLeft?: boolean;
   borderTop?: boolean;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
       <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
@@ -175,7 +177,7 @@ function ConflictPane({
       </div>
       <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
         <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
-          {content || '[empty]'}
+          {content || t('codePane.emptyContent')}
         </pre>
       </div>
     </div>

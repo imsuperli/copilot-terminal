@@ -185,6 +185,7 @@ const RunTargetCard = React.memo(function RunTargetCard({
   vmArgsPlaceholder: string;
 }) {
   const supportsCustomization = Boolean(target.customization);
+  const { t } = useI18n();
 
   return (
     <div className="min-w-[320px] max-w-[360px] rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
@@ -220,7 +221,7 @@ const RunTargetCard = React.memo(function RunTargetCard({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
-        <span className="truncate">{formatLanguageLabel(target.languageId)}</span>
+        <span className="truncate">{formatLanguageLabel(target.languageId, t('codePane.languageUnknown'))}</span>
         <span className="truncate">{target.workingDirectory}</span>
       </div>
 
@@ -265,7 +266,8 @@ const RunSessionRow = React.memo(function RunSessionRow({
   isSelected: boolean;
   onSelectSession: (sessionId: string) => void;
 }) {
-  const tone = getSessionTone(session.state);
+  const { t } = useI18n();
+  const tone = getSessionTone(session.state, t);
 
   return (
     <button
@@ -289,7 +291,7 @@ const RunSessionRow = React.memo(function RunSessionRow({
         </span>
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
-        <span>{formatLanguageLabel(session.languageId)}</span>
+        <span>{formatLanguageLabel(session.languageId, t('codePane.languageUnknown'))}</span>
         <span>{formatSessionTimestamp(session.startedAt)}</span>
       </div>
     </button>
@@ -507,9 +509,9 @@ const LabeledInput = React.memo(function LabeledInput({
   );
 });
 
-function formatLanguageLabel(languageId: string): string {
+function formatLanguageLabel(languageId: string, unknownLabel: string): string {
   if (!languageId) {
-    return 'Language';
+    return unknownLabel;
   }
 
   return `${languageId.slice(0, 1).toUpperCase()}${languageId.slice(1)}`;
@@ -528,36 +530,39 @@ function isSessionActive(session: CodePaneRunSession): boolean {
   return session.state === 'starting' || session.state === 'running';
 }
 
-function getSessionTone(state: CodePaneRunSession['state']): { label: string; className: string } {
+function getSessionTone(
+  state: CodePaneRunSession['state'],
+  t: ReturnType<typeof useI18n>['t'],
+): { label: string; className: string } {
   switch (state) {
     case 'starting':
       return {
-        label: 'START',
+        label: t('codePane.sessionStateStarting'),
         className: 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]',
       };
     case 'running':
       return {
-        label: 'RUN',
+        label: t('codePane.sessionStateRunning'),
         className: 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]',
       };
     case 'passed':
       return {
-        label: 'PASS',
+        label: t('codePane.sessionStatePassed'),
         className: 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]',
       };
     case 'failed':
       return {
-        label: 'FAIL',
+        label: t('codePane.sessionStateFailed'),
         className: 'bg-[rgb(var(--error)/0.14)] text-[rgb(var(--error))]',
       };
     case 'stopped':
       return {
-        label: 'STOP',
+        label: t('codePane.sessionStateStopped'),
         className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
     default:
       return {
-        label: 'RUN',
+        label: t('codePane.sessionStateRunning'),
         className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
   }

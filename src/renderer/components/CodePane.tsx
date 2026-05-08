@@ -162,6 +162,7 @@ import { OutlineToolWindow } from './code-pane/tool-windows/OutlineToolWindow';
 import { ActionConfirmDialog } from './code-pane/ActionConfirmDialog';
 import { ActionInputDialog } from './code-pane/ActionInputDialog';
 import { PathMutationDialog } from './code-pane/PathMutationDialog';
+import { InlineDiffViewer } from './code-pane/InlineDiffViewer';
 import { BlameGutter } from './code-pane/scm/BlameGutter';
 import { CommitWindow } from './code-pane/scm/CommitWindow';
 import { GitToolWindow, type GitToolWindowTab } from './code-pane/tool-windows/GitToolWindow';
@@ -1048,7 +1049,7 @@ const ExplorerTreeRowButton = React.memo(function ExplorerTreeRowButton({
           {isDirectory ? (
             <span
               className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))]"
-              aria-label={row.isExpanded ? 'Collapse' : 'Expand'}
+              aria-label={row.isExpanded ? t('codePane.collapse') : t('codePane.expand')}
               role="button"
               onClick={(event) => {
                 event.preventDefault();
@@ -1323,7 +1324,7 @@ const OpenFileTab = React.memo(function OpenFileTab({
           >
             <FileIcon size={12} className="shrink-0" />
             {isPinned && <Pin size={10} className="shrink-0 text-[rgb(var(--muted-foreground))]" />}
-            {isReadOnly && <Lock size={10} className="shrink-0 text-[rgb(var(--muted-foreground))]" aria-label="read-only" />}
+            {isReadOnly && <Lock size={10} className="shrink-0 text-[rgb(var(--muted-foreground))]" aria-label={t('codePane.readOnly')} />}
             <span className={`truncate ${entryTextClassName}`}>{label}</span>
             {externalChangeType && (
               <span
@@ -4242,12 +4243,12 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
           filePath: group.filePath,
           relativePath,
           problem,
-          tone: getProblemTone(problem.severity),
+          tone: getProblemTone(problem.severity, t),
         });
       }
     }
     return nextEntries;
-  }, [groups, rootPath]);
+  }, [groups, rootPath, t]);
   const visibleEntries = React.useMemo(() => getWindowedListSlice({
     items: flattenedEntries,
     scrollTop: listScrollTop,
@@ -4362,7 +4363,7 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
                     </span>
                   </div>
                   {group.entries.map((problem) => {
-                    const tone = getProblemTone(problem.severity);
+                    const tone = getProblemTone(problem.severity, t);
                     return (
                       <button
                         key={`${group.filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
@@ -5198,16 +5199,19 @@ function getBreakpointGlyphClassName(breakpoint: CodePaneBreakpoint): string {
   return 'code-pane-breakpoint-glyph';
 }
 
-function formatBreakpointHoverMessage(breakpoint: CodePaneBreakpoint): string {
-  const details = [`Breakpoint ${breakpoint.lineNumber}`];
+function formatBreakpointHoverMessage(
+  breakpoint: CodePaneBreakpoint,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  const details = [t('codePane.breakpointHoverLine', { line: breakpoint.lineNumber })];
   if (breakpoint.enabled === false) {
-    details.push('disabled');
+    details.push(t('codePane.breakpointHoverDisabled'));
   }
   if (breakpoint.condition?.trim()) {
-    details.push(`condition: ${breakpoint.condition.trim()}`);
+    details.push(t('codePane.breakpointHoverCondition', { condition: breakpoint.condition.trim() }));
   }
   if (breakpoint.logMessage?.trim()) {
-    details.push(`log: ${breakpoint.logMessage.trim()}`);
+    details.push(t('codePane.breakpointHoverLog', { log: breakpoint.logMessage.trim() }));
   }
   return details.join('\n');
 }
@@ -5942,7 +5946,7 @@ function matchesLanguageWorkspaceRoot(
     || isPathInside(state.projectRoot, rootPath);
 }
 
-function formatLanguageLabel(languageId: string): string {
+function formatLanguageLabel(languageId: string, unknownLabel: string): string {
   switch (languageId) {
     case 'java':
       return 'Java';
@@ -5955,7 +5959,33 @@ function formatLanguageLabel(languageId: string): string {
     case 'go':
       return 'Go';
     default:
-      return languageId ? `${languageId.slice(0, 1).toUpperCase()}${languageId.slice(1)}` : 'Language';
+      return languageId ? `${languageId.slice(0, 1).toUpperCase()}${languageId.slice(1)}` : unknownLabel;
+  }
+}
+
+function formatWorkspacePhaseLabel(
+  phase: CodePaneLanguageWorkspaceState['phase'],
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  switch (phase) {
+    case 'detecting-project':
+      return t('codePane.workspacePhaseDetecting');
+    case 'importing-project':
+      return t('codePane.workspacePhaseImporting');
+    case 'indexing-workspace':
+      return t('codePane.workspacePhaseIndexing');
+    case 'starting-runtime':
+    case 'starting':
+      return t('codePane.workspacePhaseStarting');
+    case 'ready':
+      return t('codePane.workspacePhaseReady');
+    case 'degraded':
+      return t('codePane.workspacePhaseDegraded');
+    case 'error':
+      return t('codePane.workspacePhaseError');
+    case 'idle':
+    default:
+      return t('codePane.workspacePhaseIdle');
   }
 }
 
@@ -6971,22 +7001,17 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
           summary={lineSummary}
           t={t}
         />
-        <div className="grid min-h-0 gap-3 md:grid-cols-2">
-          <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
-            <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-              {t('codePane.externalChangeBefore')}
-            </div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
-              {entry.previousContent ?? t('codePane.externalChangeNoContent')}
-            </pre>
+        <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
+          <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+            {t('codePane.inlineDiff')}
           </div>
-          <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
-            <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-              {t('codePane.externalChangeAfter')}
-            </div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-[rgb(var(--foreground))]">
-              {entry.currentContent ?? t('codePane.externalChangeNoContent')}
-            </pre>
+          <div className="p-3">
+            <InlineDiffViewer
+              beforeContent={entry.previousContent}
+              afterContent={entry.currentContent}
+              maxHeightClassName="max-h-80"
+              emptyLabel={t('codePane.externalChangeNoContent')}
+            />
           </div>
         </div>
       </div>
@@ -7172,20 +7197,50 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
   );
 });
 
-function getProblemTone(severity: number): {
-  label: 'error' | 'warning' | 'info' | 'hint';
+function getProblemTone(severity: number, t: ReturnType<typeof useI18n>['t']): {
+  label: string;
   className: string;
 } {
   if (severity >= 8) {
-    return { label: 'error', className: 'border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] text-[rgb(var(--error))]' };
+    return { label: t('codePane.problemSeverityError'), className: 'border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] text-[rgb(var(--error))]' };
   }
   if (severity >= 4) {
-    return { label: 'warning', className: 'border border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] text-[rgb(var(--warning))]' };
+    return { label: t('codePane.problemSeverityWarning'), className: 'border border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] text-[rgb(var(--warning))]' };
   }
   if (severity >= 2) {
-    return { label: 'info', className: 'border border-[rgb(var(--info))/0.30] bg-[rgb(var(--info))/0.08] text-[rgb(var(--info))]' };
+    return { label: t('codePane.problemSeverityInfo'), className: 'border border-[rgb(var(--info))/0.30] bg-[rgb(var(--info))/0.08] text-[rgb(var(--info))]' };
   }
-  return { label: 'hint', className: 'border border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))]' };
+  return { label: t('codePane.problemSeverityHint'), className: 'border border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))]' };
+}
+
+function normalizeDefinitionLookupPositionForModel(model: MonacoModel, lineNumber: number, column: number) {
+  const candidateColumns = [
+    column,
+    column - 1,
+    column + 1,
+  ];
+  const seenColumns = new Set<number>();
+
+  for (const candidateColumn of candidateColumns) {
+    const normalizedColumn = Math.max(1, candidateColumn);
+    if (seenColumns.has(normalizedColumn)) {
+      continue;
+    }
+    seenColumns.add(normalizedColumn);
+
+    const word = model.getWordAtPosition?.({ lineNumber, column: normalizedColumn });
+    if (!word) {
+      continue;
+    }
+
+    const endInsideWordColumn = Math.max(word.startColumn, word.endColumn - 1);
+    return {
+      lineNumber,
+      column: Math.min(Math.max(normalizedColumn, word.startColumn), endInsideWordColumn),
+    };
+  }
+
+  return { lineNumber, column: Math.max(1, column) };
 }
 
 function compareTextEditsDescending(left: CodePaneTextEdit, right: CodePaneTextEdit): number {
@@ -10040,7 +10095,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedDetails) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Git commit details', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestGitCommitDetails'), {
         meta: commitSha.slice(0, 7),
         fromCache: true,
       });
@@ -10058,7 +10113,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     try {
       const response = await trackRequest(
         requestKey,
-        'Git commit details',
+        t('codePane.requestGitCommitDetails'),
         commitSha.slice(0, 7),
         async () => await window.electronAPI.codePaneGetGitCommitDetails({
           rootPath,
@@ -10102,7 +10157,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedComparison) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Git compare commits', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestGitCompareCommits'), {
         meta: `${baseCommitSha.slice(0, 7)}..${targetCommitSha.slice(0, 7)}`,
         fromCache: true,
       });
@@ -10120,7 +10175,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     try {
       const response = await trackRequest(
         requestKey,
-        'Git compare commits',
+        t('codePane.requestGitCompareCommits'),
         `${baseCommitSha.slice(0, 7)}..${targetCommitSha.slice(0, 7)}`,
         async () => await window.electronAPI.codePaneCompareGitCommits({
           rootPath,
@@ -10164,7 +10219,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const normalizedPersistedBreakpoints = normalizeExceptionBreakpoints(persistedExceptionBreakpoints);
       const syncResponse = await trackRequest(
         requestKey,
-        'Exception breakpoints',
+        t('codePane.requestExceptionBreakpoints'),
         rootPath,
         async () => await dedupeProjectRequest(
           rootPath,
@@ -10194,7 +10249,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedBreakpoints) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Exception breakpoints', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestExceptionBreakpoints'), {
         meta: rootPath,
         fromCache: true,
       });
@@ -10204,7 +10259,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Exception breakpoints',
+      t('codePane.requestExceptionBreakpoints'),
       rootPath,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -10238,7 +10293,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedSnapshots) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Debug sessions', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestDebugSessions'), {
         meta: rootPath,
         fromCache: true,
       });
@@ -10262,7 +10317,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Debug sessions',
+      t('codePane.requestDebugSessions'),
       rootPath,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -10821,24 +10876,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [invalidateDocumentRuntimeCaches]);
 
   const getDefinitionLookupRange = useCallback((model: MonacoModel, lineNumber: number, column: number): MonacoRange => {
-    const word = model.getWordAtPosition?.({ lineNumber, column });
+    const normalizedPosition = normalizeDefinitionLookupPositionForModel(model, lineNumber, column);
+    const word = model.getWordAtPosition?.(normalizedPosition);
     if (!word) {
-      return createFallbackRange(lineNumber, column);
+      return createFallbackRange(normalizedPosition.lineNumber, normalizedPosition.column);
     }
 
     return {
-      startLineNumber: lineNumber,
+      startLineNumber: normalizedPosition.lineNumber,
       startColumn: word.startColumn,
-      endLineNumber: lineNumber,
+      endLineNumber: normalizedPosition.lineNumber,
       endColumn: word.endColumn,
     };
   }, []);
 
+  const normalizeDefinitionLookupPosition = useCallback((model: MonacoModel, lineNumber: number, column: number) => {
+    return normalizeDefinitionLookupPositionForModel(model, lineNumber, column);
+  }, []);
+
   const getDefinitionLookupKey = useCallback((model: MonacoModel, filePath: string, lineNumber: number, column: number) => {
-    const range = getDefinitionLookupRange(model, lineNumber, column);
+    const normalizedPosition = normalizeDefinitionLookupPosition(model, lineNumber, column);
+    const range = getDefinitionLookupRange(model, normalizedPosition.lineNumber, normalizedPosition.column);
     const requestPath = getModelRequestPath(filePath);
     return `${requestPath}:${model.getLanguageId()}:${range.startLineNumber}:${range.startColumn}:${range.endColumn}`;
-  }, [getDefinitionLookupRange, getModelRequestPath]);
+  }, [getDefinitionLookupRange, getModelRequestPath, normalizeDefinitionLookupPosition]);
 
   const lookupDefinitionTarget = useCallback(async (
     model: MonacoModel,
@@ -10850,7 +10911,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     },
   ) => {
     const requestPath = getModelRequestPath(filePath);
-    const requestKey = getDefinitionLookupKey(model, filePath, lineNumber, column);
+    const normalizedPosition = normalizeDefinitionLookupPosition(model, lineNumber, column);
+    const requestKey = getDefinitionLookupKey(
+      model,
+      filePath,
+      normalizedPosition.lineNumber,
+      normalizedPosition.column,
+    );
 
     let pendingLookup = definitionLookupCacheRef.current.get(requestKey);
     if (!pendingLookup) {
@@ -10859,8 +10926,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         filePath: requestPath,
         language: model.getLanguageId(),
         position: {
-          lineNumber,
-          column,
+          lineNumber: normalizedPosition.lineNumber,
+          column: normalizedPosition.column,
         },
       }).then((response): DefinitionLookupResult => {
         if (!response.success) {
@@ -10891,10 +10958,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return {
       requestKey,
-      range: getDefinitionLookupRange(model, lineNumber, column),
+      range: getDefinitionLookupRange(model, normalizedPosition.lineNumber, normalizedPosition.column),
       location: result.location,
     };
-  }, [getDefinitionLookupKey, getDefinitionLookupRange, getModelRequestPath, rootPath, t]);
+  }, [getDefinitionLookupKey, getDefinitionLookupRange, getModelRequestPath, normalizeDefinitionLookupPosition, rootPath, t]);
 
   const clearDefinitionLinkDecoration = useCallback((editorInstance?: MonacoEditor | null) => {
     const targetEditor = editorInstance ?? definitionLinkDecorationEditorRef.current;
@@ -10967,7 +11034,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         options: {
           isWholeLine: true,
           glyphMarginClassName: getBreakpointGlyphClassName(breakpoint),
-          glyphMarginHoverMessage: [{ value: formatBreakpointHoverMessage(breakpoint) }],
+          glyphMarginHoverMessage: [{ value: formatBreakpointHoverMessage(breakpoint, t) }],
         },
       }));
     const currentFrame = debugCurrentFrameRef.current;
@@ -10983,7 +11050,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           isWholeLine: true,
           className: 'code-pane-debug-current-line',
           glyphMarginClassName: 'code-pane-debug-current-glyph',
-          glyphMarginHoverMessage: [{ value: `Paused at ${currentFrame.lineNumber}` }],
+          glyphMarginHoverMessage: [{ value: t('codePane.debugPausedAtLine', { line: currentFrame.lineNumber }) }],
         },
       }]
       : [];
@@ -10993,7 +11060,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       debugDecorationIdsRef.current,
       [...breakpointDecorations, ...currentFrameDecorations],
     );
-  }, [clearDebugDecorations]);
+  }, [clearDebugDecorations, t]);
 
   const updateDefinitionLinkHover = useCallback(async (
     editorInstance: MonacoEditor | null,
@@ -11742,7 +11809,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedConflict) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Git conflict details', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestGitConflictDetails'), {
         meta: getRelativePath(rootPath, filePath) || filePath,
         fromCache: true,
       });
@@ -11761,7 +11828,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setGitConflictError((currentError) => (currentError === null ? currentError : null));
     const response = await trackRequest(
       requestKey,
-      'Git conflict details',
+      t('codePane.requestGitConflictDetails'),
       getRelativePath(rootPath, filePath) || filePath,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -12561,8 +12628,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     mouseMoveListenerRef.current = editorInstance.onMouseMove?.((event: any) => {
       const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
       const hasModifier = isMac
-        ? pointerEvent.metaKey === true && pointerEvent.ctrlKey !== true
-        : pointerEvent.ctrlKey === true && pointerEvent.metaKey !== true;
+        ? pointerEvent.metaKey === true || pointerEvent.ctrlKey === true
+        : pointerEvent.ctrlKey === true || pointerEvent.metaKey === true;
 
       if (!hasModifier || !event.target?.position) {
         clearDefinitionLinkDecoration(editorInstance);
@@ -12636,8 +12703,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const hasModifier = isMac
-        ? pointerEvent.metaKey === true && pointerEvent.ctrlKey !== true
-        : pointerEvent.ctrlKey === true && pointerEvent.metaKey !== true;
+        ? pointerEvent.metaKey === true || pointerEvent.ctrlKey === true
+        : pointerEvent.ctrlKey === true || pointerEvent.metaKey === true;
       const isPrimaryButton = event.event?.leftButton === true
         || pointerEvent.button === 0
         || pointerEvent.buttons === 1;
@@ -13621,7 +13688,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedResult) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Quick documentation', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestQuickDocumentation'), {
         meta: `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
         fromCache: true,
       });
@@ -13638,7 +13705,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     try {
       const response = await trackRequest(
         requestKey,
-        'Quick documentation',
+        t('codePane.requestQuickDocumentation'),
         `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
         async () => await window.electronAPI.codePaneGetHover({
           rootPath,
@@ -13749,7 +13816,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedSymbols) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Document symbols', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestDocumentSymbols'), {
         meta: getRelativePath(rootPath, context.filePath),
         fromCache: true,
       });
@@ -13772,7 +13839,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     try {
       const response = await trackRequest(
         requestKey,
-        'Document symbols',
+        t('codePane.requestDocumentSymbols'),
         getRelativePath(rootPath, context.filePath),
         async () => await window.electronAPI.codePaneGetDocumentSymbols({
           rootPath,
@@ -13837,7 +13904,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedSymbols) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Document symbols', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestDocumentSymbols'), {
         meta: getRelativePath(rootPath, filePath),
         fromCache: true,
       });
@@ -13846,7 +13913,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Document symbols',
+      t('codePane.requestDocumentSymbols'),
       getRelativePath(rootPath, filePath),
       async () => await window.electronAPI.codePaneGetDocumentSymbols({
         rootPath,
@@ -13862,7 +13929,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     return null;
-  }, [getModelRequestPath, getRelativePath, resolveInspectorTargetContext, rootPath, trackRequest]);
+  }, [getModelRequestPath, getRelativePath, resolveInspectorTargetContext, rootPath, t, trackRequest]);
 
   const loadHierarchyRoot = useCallback(async (
     mode: HierarchyMode,
@@ -13888,8 +13955,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestKey = `hierarchy:${mode}:${requestPath}:${context.position.lineNumber}:${context.position.column}`;
     const requestVersion = ++hierarchyRequestIdRef.current;
     const requestLabel = mode.startsWith('call')
-      ? 'Call hierarchy'
-      : 'Type hierarchy';
+      ? t('codePane.requestCallHierarchy')
+      : t('codePane.requestTypeHierarchy');
     const cachedRootNode = runtimeStoreRef.current.getCache<HierarchyTreeNode | null>(
       requestKey,
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
@@ -14095,8 +14162,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     try {
       const requestLabel = selectedHierarchyMode.startsWith('call')
-        ? 'Call hierarchy children'
-        : 'Type hierarchy children';
+        ? t('codePane.requestCallHierarchyChildren')
+        : t('codePane.requestTypeHierarchyChildren');
       const response = selectedHierarchyMode.startsWith('call')
         ? await trackRequest(
           `hierarchy-child:${selectedHierarchyMode}:${nodeKey}`,
@@ -14203,7 +14270,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedSemanticResult) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Semantic tokens', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestSemanticTokens'), {
         meta: getRelativePath(rootPath, context.filePath),
         fromCache: true,
       });
@@ -14233,7 +14300,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     try {
       const response = await trackRequest(
         requestKey,
-        'Semantic tokens',
+        t('codePane.requestSemanticTokens'),
         getRelativePath(rootPath, context.filePath),
         async () => await window.electronAPI.codePaneGetSemanticTokens({
           rootPath,
@@ -15883,7 +15950,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedHistory) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Git history', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestGitHistory'), {
         meta: config.filePath ? getRelativePath(rootPath, config.filePath) : undefined,
         fromCache: true,
       });
@@ -15905,7 +15972,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Git history',
+      t('codePane.requestGitHistory'),
       config.filePath ? getRelativePath(rootPath, config.filePath) : undefined,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -17653,7 +17720,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedTodoItems) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'TODO scan', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestTodoScan'), {
         meta: rootPath,
         fromCache: true,
       });
@@ -17670,7 +17737,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const responses = await trackRequest(
       requestKey,
-      'TODO scan',
+      t('codePane.requestTodoScan'),
       rootPath,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -17679,7 +17746,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           token,
           response: await trackRequest(
             `todo-scan:${rootPath}:${token}`,
-            'TODO scan',
+            t('codePane.requestTodoScan'),
             token,
             async () => await dedupeProjectRequest(
               rootPath,
@@ -17750,7 +17817,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ));
     setTodoError((currentError) => (currentError === firstError ? currentError : firstError));
     setIsTodoLoading((currentLoading) => (currentLoading ? false : currentLoading));
-  }, [rootPath, trackRequest]);
+  }, [rootPath, t, trackRequest]);
 
   const toggleBookmarkAtCursor = useCallback(() => {
     const context = getActiveEditorContext();
@@ -18652,7 +18719,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isRunTargetsLoading) {
       nextTasks.push({
         id: 'run-targets',
-        label: 'Run targets',
+        label: t('codePane.performanceTaskRunTargets'),
         detail: activeFilePath ? getRelativePath(rootPath, activeFilePath) : rootPath,
         status: 'running' as const,
       });
@@ -18660,7 +18727,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isTestsLoading) {
       nextTasks.push({
         id: 'tests',
-        label: 'Test discovery',
+        label: t('codePane.performanceTaskTests'),
         detail: activeFilePath ? getRelativePath(rootPath, activeFilePath) : rootPath,
         status: 'running' as const,
       });
@@ -18668,7 +18735,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isProjectLoading) {
       nextTasks.push({
         id: 'project',
-        label: 'Project model',
+        label: t('codePane.performanceTaskProject'),
         detail: rootPath,
         status: 'running' as const,
       });
@@ -18676,7 +18743,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isDebugDetailsLoading) {
       nextTasks.push({
         id: 'debug-details',
-        label: 'Debug session details',
+        label: t('codePane.performanceTaskDebugDetails'),
         detail: selectedDebugSessionId ?? 'session',
         status: 'running' as const,
       });
@@ -18684,7 +18751,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isTodoLoading) {
       nextTasks.push({
         id: 'todo',
-        label: 'TODO scan',
+        label: t('codePane.performanceTaskTodo'),
         detail: rootPath,
         status: 'running' as const,
       });
@@ -18692,7 +18759,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isGitHistoryLoading) {
       nextTasks.push({
         id: 'git-history',
-        label: 'Git history',
+        label: t('codePane.performanceTaskGitHistory'),
         detail: gitHistory?.targetFilePath ? getRelativePath(rootPath, gitHistory.targetFilePath) : rootPath,
         status: 'running' as const,
       });
@@ -18711,6 +18778,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isTodoLoading,
     rootPath,
     selectedDebugSessionId,
+    t,
   ]);
   const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
   const activeFileDisplayPath = activeFilePath ? getDisplayPath(activeFilePath) : null;
@@ -18730,30 +18798,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
-    const languageLabel = formatLanguageLabel(languageWorkspaceState.languageId);
+    const languageLabel = formatLanguageLabel(languageWorkspaceState.languageId, t('codePane.languageUnknown'));
     const progressText = languageWorkspaceState.progressText || languageWorkspaceState.message;
+    const fallbackPhaseLabel = formatWorkspacePhaseLabel(languageWorkspaceState.phase, t);
 
     switch (languageWorkspaceState.phase) {
       case 'idle':
         return null;
       case 'ready':
-        return `${languageLabel}: ready`;
+        return `${languageLabel}: ${fallbackPhaseLabel}`;
       case 'error':
-        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: error`;
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: ${fallbackPhaseLabel}`;
       case 'importing-project':
-        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: importing project`;
       case 'indexing-workspace':
-        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: indexing workspace`;
       case 'detecting-project':
-        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: detecting project`;
       case 'starting-runtime':
-        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: starting`;
       case 'starting':
       case 'degraded':
       default:
-        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: starting`;
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: ${fallbackPhaseLabel}`;
     }
-  }, [languageWorkspaceState]);
+  }, [languageWorkspaceState, t]);
     const languageStatusTone = useMemo(() => {
     if (!languageWorkspaceState) {
       return null;
@@ -19837,7 +19902,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 >
                   <span
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
-                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    aria-label={isExpanded ? t('codePane.collapse') : t('codePane.expand')}
                     role="button"
                     onClick={(event) => {
                       event.preventDefault();
@@ -19872,7 +19937,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       renderedSections.push(
         <div key={section.id} className="pb-3">
           <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-            {`${t('codePane.externalLibraries')} · ${formatLanguageLabel(section.languageId)}`}
+            {`${t('codePane.externalLibraries')} · ${formatLanguageLabel(section.languageId, t('codePane.languageUnknown'))}`}
           </div>
           {renderedRoots}
         </div>,
@@ -19997,7 +20062,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 >
                   <span
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
-                    aria-label={isRootExpanded ? 'Collapse' : 'Expand'}
+                    aria-label={isRootExpanded ? t('codePane.collapse') : t('codePane.expand')}
                     role="button"
                     onClick={(event) => {
                       event.preventDefault();
@@ -20794,7 +20859,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       symbols: CodePaneWorkspaceSymbol[];
     }>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
     if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Search Everywhere', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestSearchEverywhere'), {
         meta: `${mode}:${trimmedQuery}`,
         fromCache: true,
       });
@@ -20808,7 +20873,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const [fileResponse, symbolResponse] = await Promise.all([
       trackRequest(
         `${requestKey}:files`,
-        'Search Everywhere files',
+        t('codePane.requestSearchEverywhereFiles'),
         trimmedQuery,
         async () => await window.electronAPI.codePaneSearchFiles({
           rootPath,
@@ -20818,7 +20883,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ),
       trackRequest(
         `${requestKey}:symbols`,
-        'Search Everywhere symbols',
+        t('codePane.requestSearchEverywhereSymbols'),
         trimmedQuery,
         async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
           rootPath,
@@ -21393,7 +21458,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedTargets) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Run targets', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestRunTargets'), {
         meta: activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
         fromCache: true,
       });
@@ -21412,7 +21477,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Run targets',
+      t('codePane.requestRunTargets'),
       activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -21463,7 +21528,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedDetails) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Debug session details', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestDebugSessionDetails'), {
         meta: sessionId,
         fromCache: true,
       });
@@ -21477,7 +21542,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsDebugDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     const response = await trackRequest(
       requestKey,
-      'Debug session details',
+      t('codePane.requestDebugSessionDetails'),
       sessionId,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -21498,7 +21563,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       areDebugSessionDetailsEqual(currentDetails, nextDetails) ? currentDetails : nextDetails
     ));
     setIsDebugDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
-  }, [trackRequest]);
+  }, [t, trackRequest]);
 
   useEffect(() => {
     loadDebugSessionDetailsRef.current = loadDebugSessionDetails;
@@ -21514,7 +21579,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedTests) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Test discovery', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestTestDiscovery'), {
         meta: activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
         fromCache: true,
       });
@@ -21533,7 +21598,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Test discovery',
+      t('codePane.requestTestDiscovery'),
       activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -21572,7 +21637,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
       );
       if (cachedContributions) {
-        runtimeStoreRef.current.recordRequest(requestKey, 'Project contribution', {
+        runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestProjectContribution'), {
           meta: rootPath,
           fromCache: true,
         });
@@ -21598,7 +21663,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      refresh ? 'Refresh project model' : 'Project contribution',
+      refresh ? t('codePane.requestRefreshProjectModel') : t('codePane.requestProjectContribution'),
       rootPath,
       async () => await dedupeProjectRequest(
         rootPath,
@@ -22679,7 +22744,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const cacheKey = `${requestKey}:${trimmedQuery}`;
     const cachedResults = runtimeStoreRef.current.getCache<string[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
     if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'File search', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestFileSearch'), {
         meta: trimmedQuery,
         fromCache: true,
       });
@@ -22691,7 +22756,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'File search',
+      t('codePane.requestFileSearch'),
       trimmedQuery,
       async () => await window.electronAPI.codePaneSearchFiles({
         rootPath,
@@ -22724,7 +22789,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const cacheKey = `${requestKey}:${trimmedQuery}`;
     const cachedResults = runtimeStoreRef.current.getCache<CodePaneContentMatch[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
     if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Content search', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestContentSearch'), {
         meta: trimmedQuery,
         fromCache: true,
       });
@@ -22738,7 +22803,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Content search',
+      t('codePane.requestContentSearch'),
       trimmedQuery,
       async () => await window.electronAPI.codePaneSearchContents({
         rootPath,
@@ -22773,7 +22838,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const cacheKey = `${requestKey}:${trimmedQuery}`;
     const cachedResults = runtimeStoreRef.current.getCache<CodePaneWorkspaceSymbol[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
     if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Workspace symbols', {
+      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestWorkspaceSymbols'), {
         meta: trimmedQuery,
         fromCache: true,
       });
@@ -22787,7 +22852,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const response = await trackRequest(
       requestKey,
-      'Workspace symbols',
+      t('codePane.requestWorkspaceSymbols'),
       trimmedQuery,
       async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
         rootPath,

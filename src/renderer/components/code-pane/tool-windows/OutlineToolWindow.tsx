@@ -18,6 +18,8 @@ import {
   idePopupScrollAreaClassName,
 } from '../../ui/ide-popup';
 
+type Translate = ReturnType<typeof useI18n>['t'];
+
 interface OutlineTreeNode {
   id: string;
   symbol: CodePaneDocumentSymbol;
@@ -413,8 +415,9 @@ const OutlineNodeRow = React.memo(function OutlineNodeRow({
   closeOnDoubleClick,
   onSelectNode,
 }: OutlineNodeRowProps) {
+  const { t } = useI18n();
   const hasChildren = node.children.length > 0;
-  const kind = getSymbolKindPresentation(node.symbol.kind);
+  const kind = getSymbolKindPresentation(node.symbol.kind, t);
 
   return (
     <div
@@ -428,7 +431,7 @@ const OutlineNodeRow = React.memo(function OutlineNodeRow({
             onToggleExpanded(node.id);
           }}
           className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
-          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+          aria-label={isExpanded ? t('codePane.collapse') : t('codePane.expand')}
         >
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
@@ -580,35 +583,35 @@ function isLambdaSymbol(symbol: CodePaneDocumentSymbol): boolean {
   return name.includes('<lambda>') || detail.includes('=>');
 }
 
-function getSymbolKindPresentation(kind: number): {
+function getSymbolKindPresentation(kind: number, t: Translate): {
   label: string;
   shortLabel: string;
   tone: 'red' | 'amber' | 'sky' | 'emerald' | 'violet' | 'zinc';
 } {
   switch (kind) {
     case 5:
-      return { label: 'class', shortLabel: 'c', tone: 'sky' };
+      return { label: t('codePane.symbolKindClass'), shortLabel: 'c', tone: 'sky' };
     case 6:
-      return { label: 'method', shortLabel: 'm', tone: 'red' };
+      return { label: t('codePane.symbolKindMethod'), shortLabel: 'm', tone: 'red' };
     case 7:
-      return { label: 'property', shortLabel: 'p', tone: 'emerald' };
+      return { label: t('codePane.symbolKindProperty'), shortLabel: 'p', tone: 'emerald' };
     case 8:
-      return { label: 'field', shortLabel: 'f', tone: 'amber' };
+      return { label: t('codePane.symbolKindField'), shortLabel: 'f', tone: 'amber' };
     case 9:
-      return { label: 'constructor', shortLabel: 'c', tone: 'violet' };
+      return { label: t('codePane.symbolKindConstructor'), shortLabel: 'c', tone: 'violet' };
     case 10:
-      return { label: 'enum', shortLabel: 'e', tone: 'amber' };
+      return { label: t('codePane.symbolKindEnum'), shortLabel: 'e', tone: 'amber' };
     case 11:
-      return { label: 'interface', shortLabel: 'i', tone: 'emerald' };
+      return { label: t('codePane.symbolKindInterface'), shortLabel: 'i', tone: 'emerald' };
     case 12:
-      return { label: 'function', shortLabel: 'f', tone: 'red' };
+      return { label: t('codePane.symbolKindFunction'), shortLabel: 'f', tone: 'red' };
     case 13:
-      return { label: 'variable', shortLabel: 'v', tone: 'amber' };
+      return { label: t('codePane.symbolKindVariable'), shortLabel: 'v', tone: 'amber' };
     case 23:
-      return { label: 'struct', shortLabel: 's', tone: 'violet' };
+      return { label: t('codePane.symbolKindStruct'), shortLabel: 's', tone: 'violet' };
     case 24:
-      return { label: 'event', shortLabel: 'e', tone: 'sky' };
+      return { label: t('codePane.symbolKindEvent'), shortLabel: 'e', tone: 'sky' };
     default:
-      return { label: 'symbol', shortLabel: 's', tone: 'zinc' };
+      return { label: t('codePane.symbolKindSymbol'), shortLabel: 's', tone: 'zinc' };
   }
 }

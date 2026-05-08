@@ -188,6 +188,8 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
   onClose,
   closeOnDoubleClick,
 }: HierarchyNodeRowProps) {
+  const { t } = useI18n();
+
   return (
     <div>
       <div
@@ -201,7 +203,7 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
               onToggleNode(node.key);
             }}
             className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
-            aria-label={node.isExpanded ? 'Collapse' : 'Expand'}
+            aria-label={node.isExpanded ? t('codePane.collapse') : t('codePane.expand')}
           >
             {node.isLoading ? (
               <Loader2 size={11} className="animate-spin" />
@@ -245,7 +247,7 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
               </span>
             ) : (
               <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-                hierarchy
+                {t('codePane.hierarchyTab')}
               </span>
             )}
           </div>

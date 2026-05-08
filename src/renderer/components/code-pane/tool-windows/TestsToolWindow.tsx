@@ -255,7 +255,8 @@ const TestSessionRow = React.memo(function TestSessionRow({
   isSelected: boolean;
   onSelectSession: (sessionId: string) => void;
 }) {
-  const tone = getSessionTone(session.state);
+  const { t } = useI18n();
+  const tone = getSessionTone(session.state, t);
 
   return (
     <button
@@ -503,31 +504,34 @@ function isSessionActive(session: CodePaneRunSession): boolean {
   return session.state === 'starting' || session.state === 'running';
 }
 
-function getSessionTone(state: CodePaneRunSession['state']): { label: string; className: string } {
+function getSessionTone(
+  state: CodePaneRunSession['state'],
+  t: ReturnType<typeof useI18n>['t'],
+): { label: string; className: string } {
   switch (state) {
     case 'starting':
       return {
-        label: 'START',
+        label: t('codePane.sessionStateStarting'),
         className: 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]',
       };
     case 'running':
       return {
-        label: 'RUN',
+        label: t('codePane.sessionStateRunning'),
         className: 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]',
       };
     case 'passed':
       return {
-        label: 'PASS',
+        label: t('codePane.sessionStatePassed'),
         className: 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]',
       };
     case 'failed':
       return {
-        label: 'FAIL',
+        label: t('codePane.sessionStateFailed'),
         className: 'bg-[rgb(var(--error)/0.14)] text-[rgb(var(--error))]',
       };
     case 'stopped':
       return {
-        label: 'STOP',
+        label: t('codePane.sessionStateStopped'),
         className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
     default:

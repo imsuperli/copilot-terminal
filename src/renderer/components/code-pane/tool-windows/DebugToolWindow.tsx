@@ -212,6 +212,9 @@ const DebugSessionRow = React.memo(function DebugSessionRow({
   isSelected: boolean;
   onSelectSession: (sessionId: string) => void;
 }) {
+  const { t } = useI18n();
+  const tone = getSessionTone(session.state);
+
   return (
     <button
       type="button"
@@ -229,8 +232,8 @@ const DebugSessionRow = React.memo(function DebugSessionRow({
           <div className="truncate text-xs font-medium">{session.label}</div>
           <div className="mt-1 truncate text-[10px] text-[rgb(var(--muted-foreground))]">{session.detail}</div>
         </div>
-        <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${getSessionTone(session.state)}`}>
-          {session.state.toUpperCase()}
+        <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${tone}`}>
+          {getSessionStateLabel(session.state, t)}
         </span>
       </div>
     </button>
@@ -301,9 +304,14 @@ const ExceptionBreakpointRow = React.memo(function ExceptionBreakpointRow({
   breakpoint: CodePaneExceptionBreakpoint;
   onSetExceptionBreakpoint: (breakpointId: CodePaneExceptionBreakpoint['id'], enabled: boolean) => void | Promise<void>;
 }) {
+  const { t } = useI18n();
+  const label = breakpoint.id === 'all' && !breakpoint.label.trim()
+    ? t('codePane.debugExceptionAll')
+    : breakpoint.label;
+
   return (
     <label className={`flex items-center justify-between text-xs text-[rgb(var(--foreground))] ${DEBUG_CARD_CLASS_NAME}`}>
-      <span>{breakpoint.label}</span>
+      <span>{label}</span>
       <input
         type="checkbox"
         checked={breakpoint.enabled}
@@ -894,6 +902,25 @@ function getSessionTone(state: CodePaneDebugSession['state']): string {
     case 'starting':
     default:
       return 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]';
+  }
+}
+
+function getSessionStateLabel(
+  state: CodePaneDebugSession['state'],
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  switch (state) {
+    case 'paused':
+      return t('codePane.debugSessionStatePaused');
+    case 'running':
+      return t('codePane.debugSessionStateRunning');
+    case 'error':
+      return t('codePane.debugSessionStateError');
+    case 'stopped':
+      return t('codePane.debugSessionStateStopped');
+    case 'starting':
+    default:
+      return t('codePane.debugSessionStateStarting');
   }
 }
 

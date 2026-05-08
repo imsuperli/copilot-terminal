@@ -327,7 +327,9 @@ const CommitWindowEntryCard = React.memo(function CommitWindowEntryCard({
             onToggleSelectedPath(entry.path);
           }}
           className={`mt-0.5 shrink-0 ${getCommitSelectionIndicatorClassName(isChecked)}`}
-          aria-label={`${isChecked ? 'unselect' : 'select'} ${entry.path}`}
+          aria-label={isChecked
+            ? t('codePane.gitUnselectPath', { path: entry.path })
+            : t('codePane.gitSelectPath', { path: entry.path })}
         >
           <Check size={11} />
         </button>
@@ -674,7 +676,9 @@ export const CommitWindow = React.memo(function CommitWindow({
             <button
               type="button"
               aria-pressed={allGroupEntriesSelected}
-              aria-label={`${allGroupEntriesSelected ? 'unselect' : 'select'} group ${group.label}`}
+              aria-label={allGroupEntriesSelected
+                ? t('codePane.gitUnselectGroup', { group: group.label })
+                : t('codePane.gitSelectGroup', { group: group.label })}
               onClick={() => {
                 toggleSelectedGroup(group.entries);
               }}

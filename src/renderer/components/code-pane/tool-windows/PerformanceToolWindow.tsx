@@ -25,6 +25,8 @@ import {
   idePopupTitleClassName,
 } from '../../ui/ide-popup';
 
+type Translate = ReturnType<typeof useI18n>['t'];
+
 interface PerformanceTask {
   id: string;
   label: string;
@@ -60,6 +62,11 @@ export function PerformanceToolWindow({
   ), [runtimeStore, runtimeStoreVersion]);
   const runningRequests = requests.filter((request) => request.status === 'running');
   const recentRequests = requests.slice(0, 20);
+  const languageWorkspaceMessage = languageWorkspaceState
+    ? languageWorkspaceState.progressText
+      ?? languageWorkspaceState.message
+      ?? formatWorkspacePhaseLabel(languageWorkspaceState.phase, t)
+    : null;
 
   return (
     <IdePopupShell className="flex h-full min-h-0 flex-col">
@@ -118,7 +125,7 @@ export function PerformanceToolWindow({
               <div className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                 <div className="font-medium text-[rgb(var(--foreground))]">{t('codePane.performanceLanguageImport')}</div>
                 <div className="mt-1 text-[11px] text-[rgb(var(--muted-foreground))]">
-                  {languageWorkspaceState.progressText ?? languageWorkspaceState.message ?? languageWorkspaceState.phase}
+                  {languageWorkspaceMessage}
                 </div>
               </div>
             )}
@@ -193,7 +200,7 @@ export function PerformanceToolWindow({
                               ? 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]'
                               : 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]'
                       }`}>
-                        {request.status}
+                        {formatRequestStatus(request.status, t)}
                       </div>
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
@@ -212,4 +219,44 @@ export function PerformanceToolWindow({
       </div>
     </IdePopupShell>
   );
+}
+
+function formatRequestStatus(status: 'running' | 'completed' | 'error' | 'cancelled', t: Translate): string {
+  switch (status) {
+    case 'completed':
+      return t('codePane.requestStatusCompleted');
+    case 'error':
+      return t('codePane.requestStatusError');
+    case 'cancelled':
+      return t('codePane.requestStatusCancelled');
+    case 'running':
+    default:
+      return t('codePane.requestStatusRunning');
+  }
+}
+
+function formatWorkspacePhaseLabel(
+  phase: CodePaneLanguageWorkspaceState['phase'],
+  t: Translate,
+): string {
+  switch (phase) {
+    case 'detecting-project':
+      return t('codePane.workspacePhaseDetecting');
+    case 'importing-project':
+      return t('codePane.workspacePhaseImporting');
+    case 'indexing-workspace':
+      return t('codePane.workspacePhaseIndexing');
+    case 'starting-runtime':
+    case 'starting':
+      return t('codePane.workspacePhaseStarting');
+    case 'ready':
+      return t('codePane.workspacePhaseReady');
+    case 'degraded':
+      return t('codePane.workspacePhaseDegraded');
+    case 'error':
+      return t('codePane.workspacePhaseError');
+    case 'idle':
+    default:
+      return t('codePane.workspacePhaseIdle');
+  }
 }
