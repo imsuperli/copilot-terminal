@@ -938,25 +938,28 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             {availableCatalogEntries.map((entry) => (
               <div
                 key={entry.id}
-                className={`${sectionClassName} transition-colors hover:border-[rgb(var(--primary))]`}
+                className={`${sectionClassName} !p-4 transition-colors hover:border-[rgb(var(--primary))]`}
               >
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-[rgb(var(--foreground))]">{entry.name}</h3>
+                      <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{entry.name}</h3>
                       <span className={badgeClassName}>
                         {entry.publisher}
+                      </span>
+                      <span className={badgeClassName}>
+                        {t('settings.plugins.labels.latestVersion')}: {entry.latestVersion}
                       </span>
                       <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                         {t('settings.plugins.badges.marketplace')}
                       </span>
                     </div>
                     {(entry.description || entry.summary) && (
-                      <p className="mt-3 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">
+                      <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-5 text-[rgb(var(--muted-foreground))]">
                         {entry.description ?? entry.summary}
                       </p>
                     )}
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                       {(entry.languages ?? []).map((language) => (
                         <span
                           key={`${entry.id}:${language}`}
@@ -980,12 +983,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                     </button>
                   </div>
                 </div>
-
-                <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                  <InfoTile label={t('settings.plugins.labels.latestVersion')} value={entry.latestVersion} />
-                  <InfoTile label={t('settings.plugins.labels.platforms')} value={String(entry.platforms.length)} />
-                  <InfoTile label={t('settings.plugins.labels.homepage')} value={entry.homepage ?? '--'} mono />
-                </div>
               </div>
             ))}
           </div>
@@ -994,23 +991,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     </div>
   );
 };
-
-function InfoTile({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className={idePopupSubtlePanelClassName}>
-      <div className="text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">{label}</div>
-      <div className={`mt-2 break-all text-sm text-[rgb(var(--foreground))] ${mono ? 'font-mono' : ''}`}>{value}</div>
-    </div>
-  );
-}
 
 function SectionLoadingState({ label }: { label: string }) {
   return (
