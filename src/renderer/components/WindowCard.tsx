@@ -379,9 +379,9 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
       {/* 底部按钮栏 - 两行布局 */}
       <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 flex-col gap-1.5 px-4 py-2`}>
-        {/* 第一行：启动/销毁按钮（左侧） + 操作按钮（右侧） */}
+        {/* 第一行：启动/停止按钮（左侧） + 操作按钮（右侧） */}
         <div className="flex items-center justify-between">
-          {/* 左侧：启动/销毁按钮 */}
+          {/* 左侧：启动/停止按钮 */}
           <div>
             {aggregatedStatus === WindowStatus.Completed && (
               <Tooltip.Provider>

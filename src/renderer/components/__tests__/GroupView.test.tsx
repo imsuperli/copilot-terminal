@@ -104,7 +104,7 @@ describe('GroupView', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '销毁全部' }));
+    await user.click(screen.getByRole('button', { name: '停止全部' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(runningWindow.id);
@@ -223,7 +223,7 @@ describe('GroupView', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '销毁全部' }));
+    await user.click(screen.getByRole('button', { name: '停止全部' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);

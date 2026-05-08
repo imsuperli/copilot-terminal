@@ -190,7 +190,7 @@ describe('WindowCard', () => {
     const user = userEvent.setup();
     render(<WindowCard window={createWindow()} onClick={onClick} onDestroySession={onDestroySession} />);
 
-    const stopButton = screen.getByRole('button', { name: '销毁' });
+    const stopButton = screen.getByRole('button', { name: '停止' });
     expect(stopButton.querySelector('svg')).toHaveClass('text-red-500');
 
     await user.click(stopButton);

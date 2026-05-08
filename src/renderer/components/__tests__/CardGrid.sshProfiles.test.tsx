@@ -303,7 +303,7 @@ describe('CardGrid SSH profile cards', () => {
     });
 
     expect(screen.queryByText('Hidden runtime window')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '销毁' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument();
     expect(screen.queryByText('运行中')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }));
@@ -456,7 +456,7 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    await user.click(screen.getByRole('button', { name: '销毁' }));
+    await user.click(screen.getByRole('button', { name: '停止' }));
 
     await waitFor(() => {
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
@@ -484,7 +484,7 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    await user.click(screen.getByRole('button', { name: '销毁' }));
+    await user.click(screen.getByRole('button', { name: '停止' }));
 
     await waitFor(() => {
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
@@ -493,7 +493,7 @@ describe('CardGrid SSH profile cards', () => {
     });
 
     expect(screen.getByRole('button', { name: '启动' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '销毁' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '停止' })).not.toBeInTheDocument();
   });
 
   it('switches back to the unified view when destroying the currently active bound SSH runtime window from the card', async () => {
@@ -511,7 +511,7 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    await user.click(screen.getByRole('button', { name: '销毁' }));
+    await user.click(screen.getByRole('button', { name: '停止' }));
 
     await waitFor(() => {
       expect(window.electronAPI.switchToUnifiedView).toHaveBeenCalledTimes(1);

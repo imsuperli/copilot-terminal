@@ -293,7 +293,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
 
       {/* 底部按钮栏 - 单行布局 */}
       <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 items-center justify-between gap-1.5 px-4 py-2`}>
-        {/* 左侧：启动/销毁按钮 */}
+        {/* 左侧：启动/停止按钮 */}
         <div>
           {aggregatedStatus === 'completed' && (
             <button
@@ -310,7 +310,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
               className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap`}
             >
               <Square size={14} fill="currentColor" />
-              <span>全部销毁</span>
+              <span>全部停止</span>
             </button>
           )}
         </div>

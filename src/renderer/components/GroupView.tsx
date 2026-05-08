@@ -459,7 +459,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         </AppTooltip>
 
         <AppTooltip
-          content="销毁全部"
+          content="停止全部"
           delayDuration={200}
           placement="toolbar-trailing"
         >
@@ -468,7 +468,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
             tabIndex={-1}
             onMouseDown={preventMouseButtonFocus}
             onClick={handleDestroyAll}
-            aria-label="销毁全部"
+            aria-label="停止全部"
             className={`${toolbarButtonBaseClassName} cursor-pointer text-red-400 hover:border-red-400/45 hover:bg-red-500/[0.12] hover:text-red-300`}
           >
             <Square size={14} fill="currentColor" />

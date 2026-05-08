@@ -106,9 +106,9 @@ vi.mock('../../i18n', () => ({
         case 'common.close':
           return '关闭';
         case 'common.destroy':
-          return '销毁';
+          return '停止';
         case 'terminalView.stop':
-          return '销毁';
+          return '停止';
         case 'terminalView.restart':
           return '重启';
         case 'terminalView.start':
@@ -744,7 +744,7 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH B' }) });
-    await user.click(screen.getAllByText('销毁')[0]);
+    await user.click(screen.getAllByText('停止')[0]);
 
     expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
@@ -791,7 +791,7 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     await user.hover(screen.getByRole('button', { name: 'Prod SSH B' }));
-    await user.click(screen.getByRole('button', { name: '销毁 worker' }));
+    await user.click(screen.getByRole('button', { name: '停止 worker' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
@@ -841,7 +841,7 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     await user.hover(screen.getByRole('button', { name: 'Prod SSH A' }));
-    await user.click(screen.getByRole('button', { name: '销毁 app' }));
+    await user.click(screen.getByRole('button', { name: '停止 app' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);
@@ -904,7 +904,7 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     await user.hover(screen.getByRole('button', { name: 'Prod SSH A' }));
-    await user.click(screen.getByRole('button', { name: '销毁 app' }));
+    await user.click(screen.getByRole('button', { name: '停止 app' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);
@@ -956,7 +956,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByRole('button', { name: '归档' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重启' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '销毁' }));
+    await user.click(screen.getByRole('button', { name: '停止' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
@@ -1032,7 +1032,7 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '销毁' }));
+    await user.click(screen.getByRole('button', { name: '停止' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');

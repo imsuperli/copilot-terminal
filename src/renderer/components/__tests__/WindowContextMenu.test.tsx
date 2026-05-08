@@ -30,11 +30,11 @@ describe('WindowContextMenu', () => {
       </WindowContextMenu>
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
-    expect(screen.getByText('销毁窗口')).toBeInTheDocument()
+    expect(screen.getByText('停止窗口')).toBeInTheDocument()
     expect(screen.getByText('删除窗口')).toBeInTheDocument()
   })
 
-  it('should call onClose when 销毁窗口 is clicked', async () => {
+  it('should call onClose when 停止窗口 is clicked', async () => {
     const user = userEvent.setup()
     render(
       <WindowContextMenu {...defaultProps}>
@@ -42,7 +42,7 @@ describe('WindowContextMenu', () => {
       </WindowContextMenu>
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
-    await user.click(screen.getByText('销毁窗口'))
+    await user.click(screen.getByText('停止窗口'))
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -67,7 +67,7 @@ describe('WindowContextMenu', () => {
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
 
-    const closeItem = screen.getByRole('menuitem', { name: '销毁窗口' })
+    const closeItem = screen.getByRole('menuitem', { name: '停止窗口' })
     const deleteItem = screen.getByRole('menuitem', { name: '删除窗口' })
 
     // Radix UI focuses the menu container first; ArrowDown moves focus to first item
@@ -91,13 +91,13 @@ describe('WindowContextMenu', () => {
       </WindowContextMenu>
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
-    expect(screen.getByText('销毁窗口')).toBeInTheDocument()
+    expect(screen.getByText('停止窗口')).toBeInTheDocument()
 
     await user.keyboard('{Escape}')
-    expect(screen.queryByText('销毁窗口')).not.toBeInTheDocument()
+    expect(screen.queryByText('停止窗口')).not.toBeInTheDocument()
   })
 
-  it('should trigger onClose when Enter pressed on 销毁窗口', async () => {
+  it('should trigger onClose when Enter pressed on 停止窗口', async () => {
     const user = userEvent.setup()
     render(
       <WindowContextMenu {...defaultProps}>
@@ -106,7 +106,7 @@ describe('WindowContextMenu', () => {
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
 
-    const closeItem = screen.getByRole('menuitem', { name: '销毁窗口' })
+    const closeItem = screen.getByRole('menuitem', { name: '停止窗口' })
     closeItem.focus()
     await user.keyboard('{Enter}')
 
