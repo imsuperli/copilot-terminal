@@ -62,7 +62,7 @@
     --appearance-titlebar-backdrop-filter: none;
     --appearance-remote-tab-active-background: rgb(var(--card));
     --appearance-remote-tab-hover-background: rgb(var(--accent));
-    --appearance-remote-tab-separator-color: rgba(var(--border), 0.72);
+    --appearance-remote-tab-separator-color: rgb(var(--border) / 0.72);
     --appearance-main-surface-background: transparent;
     --appearance-sidebar-surface-background: rgba(var(--sidebar), 0.85);
     --appearance-pane-background: rgba(var(--terminal-background-rgb), 0);

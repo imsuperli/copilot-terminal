@@ -568,7 +568,7 @@ function resolveTitlebarBackground(appearance: AppearanceSettings, opacity: numb
     return 'rgb(var(--titlebar))';
   }
 
-  return `rgba(var(--titlebar), ${opacity.toFixed(3)})`;
+  return `rgb(var(--titlebar) / ${opacity.toFixed(3)})`;
 }
 
 function resolveTitlebarBackdropFilter(appearance: AppearanceSettings): string {
@@ -595,7 +595,7 @@ function resolveRunningAccentRgb(appearance: AppearanceSettings): string {
 function resolveRemoteTabActiveBackground(appearance: AppearanceSettings): string {
   if (hasImageBackdrop(appearance)) {
     const opacity = appearance.readabilityMode === 'readability' ? 0.88 : appearance.readabilityMode === 'immersive' ? 0.66 : 0.76;
-    return `rgba(var(--titlebar), ${opacity.toFixed(3)})`;
+    return `rgb(var(--titlebar) / ${opacity.toFixed(3)})`;
   }
 
   return 'rgb(var(--card))';
@@ -604,7 +604,7 @@ function resolveRemoteTabActiveBackground(appearance: AppearanceSettings): strin
 function resolveRemoteTabHoverBackground(appearance: AppearanceSettings): string {
   if (hasImageBackdrop(appearance)) {
     const opacity = appearance.readabilityMode === 'readability' ? 0.74 : appearance.readabilityMode === 'immersive' ? 0.52 : 0.62;
-    return `rgba(var(--titlebar), ${opacity.toFixed(3)})`;
+    return `rgb(var(--titlebar) / ${opacity.toFixed(3)})`;
   }
 
   return 'rgb(var(--accent))';
@@ -612,12 +612,12 @@ function resolveRemoteTabHoverBackground(appearance: AppearanceSettings): string
 
 function resolveRemoteTabSeparatorColor(appearance: AppearanceSettings): string {
   if (hasImageBackdrop(appearance)) {
-    return 'rgba(var(--titlebar-foreground), 0.18)';
+    return 'rgb(var(--titlebar-foreground) / 0.18)';
   }
 
   return appearance.skin.presetId === 'paper'
-    ? 'rgba(var(--border), 0.92)'
-    : 'rgba(var(--border), 0.72)';
+    ? 'rgb(var(--border) / 0.92)'
+    : 'rgb(var(--border) / 0.72)';
 }
 
 function resolvePaneOpacity(appearance: AppearanceSettings): number {
@@ -880,10 +880,10 @@ function resolveSidebarSurfaceBackground(appearance: AppearanceSettings, paneStr
   }
 
   if (hasImageBackdrop(appearance)) {
-    return 'rgba(var(--sidebar), 0.85)';
+    return 'rgb(var(--sidebar) / 0.85)';
   }
 
-  return 'rgba(var(--sidebar), 0.85)';
+  return 'rgb(var(--sidebar) / 0.85)';
 }
 
 function clampOpacity(value: number, min: number, max: number): number {

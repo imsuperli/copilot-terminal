@@ -22,7 +22,7 @@ describe('renderer appearance utilities', () => {
     expect(style.getPropertyValue('--appearance-skin-motion-opacity')).toBe('0');
     expect(style.getPropertyValue('--appearance-remote-tab-active-background')).toBe('rgb(var(--card))');
     expect(style.getPropertyValue('--appearance-remote-tab-hover-background')).toBe('rgb(var(--accent))');
-    expect(style.getPropertyValue('--appearance-remote-tab-separator-color')).toBe('rgba(var(--border), 0.72)');
+    expect(style.getPropertyValue('--appearance-remote-tab-separator-color')).toBe('rgb(var(--border) / 0.72)');
     expect(style.getPropertyValue('--appearance-pane-hover-scrim-opacity')).toBe('0.035');
     expect(style.getPropertyValue('--appearance-pane-window-inactive-scrim-opacity')).toBe('0.110');
     expect(style.getPropertyValue('--appearance-pane-inactive-scrim-opacity')).toBe('0.180');

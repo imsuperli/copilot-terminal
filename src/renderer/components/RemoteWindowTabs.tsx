@@ -95,7 +95,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     type="button"
                     aria-label={window.name}
                     onClick={() => onWindowSelect(window.id)}
-                    className={`relative z-[1] flex h-full w-full min-w-0 items-center px-3 text-left focus:outline-none transition-colors ${
+                    className={`relative z-[1] flex h-full w-full min-w-0 items-center px-3 text-left focus:outline-none transition-colors ${isWindowHeader ? 'pr-9' : ''} ${
                       window.isActive
                         ? 'text-[rgb(var(--titlebar-foreground))]'
                         : 'text-[rgb(var(--titlebar-muted))] hover:text-[rgb(var(--titlebar-foreground))]'
@@ -106,11 +106,6 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                         {window.primaryText}
                       </div>
                     </div>
-                    {isWindowHeader && (
-                      <span className="ml-3 flex h-4 w-4 shrink-0 items-center justify-center text-[13px] leading-none text-inherit opacity-80 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                        <span aria-hidden="true">&times;</span>
-                      </span>
-                    )}
                   </button>
                 </AppTooltip>
                 {isFloating && (
@@ -131,15 +126,15 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                         event.stopPropagation();
                         onWindowClose(window.id);
                       }}
-                      className="absolute inset-y-0 right-2 z-[2] flex w-5 items-center justify-center rounded-sm text-[13px] leading-none text-[rgb(var(--titlebar-muted))] opacity-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:text-[rgb(var(--titlebar-foreground))]"
+                      className="absolute inset-y-0 right-2 z-[2] flex w-5 items-center justify-center rounded-sm text-[rgb(var(--titlebar-muted))] opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:text-[rgb(var(--titlebar-foreground))]"
                     >
-                      <span aria-hidden="true">&times;</span>
+                      <X aria-hidden="true" size={12} strokeWidth={1.9} />
                     </button>
                     {!window.isActive && !remoteWindows[index + 1]?.isActive && index < remoteWindows.length - 1 && (
                       <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute right-0 top-1/2 h-3 -translate-y-1/2 border-r"
-                        style={{ borderColor: 'var(--appearance-remote-tab-separator-color)' }}
+                        className="pointer-events-none absolute right-0 top-1/2 h-3 w-px -translate-y-1/2"
+                        style={{ backgroundColor: 'var(--appearance-remote-tab-separator-color)' }}
                       />
                     )}
                   </>
