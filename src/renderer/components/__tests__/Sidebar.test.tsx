@@ -240,7 +240,7 @@ describe('Terminal Sidebar', () => {
     ]);
   });
 
-  it('does not show ephemeral ssh clone tabs in the terminal sidebar', () => {
+  it('shows ssh clone tabs in the terminal sidebar and keeps them visible after the owner closes', () => {
     const onWindowSelect = vi.fn();
 
     const ownerWindow = {
@@ -253,6 +253,10 @@ describe('Terminal Sidebar', () => {
       ephemeral: true,
       sshTabOwnerWindowId: ownerWindow.id,
     };
+    const survivingClone = {
+      ...cloneWindow,
+      sshTabOwnerWindowId: cloneWindow.id,
+    };
 
     useWindowStore.setState({
       windows: [ownerWindow, cloneWindow],
@@ -261,12 +265,27 @@ describe('Terminal Sidebar', () => {
       terminalSidebarFilter: 'all',
     });
 
-    render(
+    const { rerender } = render(
       <Sidebar activeWindowId={ownerWindow.id} onWindowSelect={onWindowSelect} />,
     );
 
     expect(screen.getByText('Remote Owner')).toBeInTheDocument();
-    expect(screen.queryByText('Remote Clone')).not.toBeInTheDocument();
+    expect(screen.getByText('Remote Clone')).toBeInTheDocument();
+
+    act(() => {
+      useWindowStore.setState({
+        windows: [survivingClone],
+        activeWindowId: survivingClone.id,
+        mruList: [survivingClone.id],
+      });
+    });
+
+    rerender(
+      <Sidebar activeWindowId={survivingClone.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getByText('Remote Clone')).toBeInTheDocument();
+    expect(screen.queryByText('Remote Owner')).not.toBeInTheDocument();
   });
 
   it('uses a stable scroll region when expanded and hides scrollbar occupancy when collapsed', () => {

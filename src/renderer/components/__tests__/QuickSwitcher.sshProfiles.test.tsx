@@ -157,6 +157,41 @@ describe('QuickSwitcher SSH profile bindings', () => {
     });
   });
 
+  it('shows an ssh clone tab in quick switcher because clone tabs are peer runtime tabs', async () => {
+    const profile = createSSHProfile();
+    const ownerWindow = createStandaloneSSHWindow(profile, {
+      id: 'ssh-window-owner',
+      name: 'Owner runtime window',
+    });
+    const cloneWindow = createStandaloneSSHWindow(profile, {
+      id: 'ssh-window-clone',
+      name: 'Clone runtime window',
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindow.id,
+    });
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      groups: [],
+    });
+
+    render(
+      <QuickSwitcher
+        isOpen
+        currentWindowId={cloneWindow.id}
+        onClose={() => {}}
+        onSelect={() => {}}
+        sshProfiles={[profile]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Prod Bastion').length).toBeGreaterThanOrEqual(2);
+    });
+
+    expect(screen.getAllByText('root@10.0.0.21:22 | /srv/app')).toHaveLength(2);
+  });
+
   it('does not select or close when there are no filtered results', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();

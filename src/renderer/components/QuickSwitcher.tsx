@@ -10,7 +10,7 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { CanvasWorkspace } from '../../shared/types/canvas';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
-import { getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
+import { getStandaloneSSHProfileId, getStandaloneWindows } from '../utils/sshWindowBindings';
 import { useI18n } from '../i18n';
 import type { SSHProfile } from '../../shared/types/ssh';
 import { getAllWindowIds } from '../utils/groupLayoutHelpers';
@@ -126,7 +126,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
     () => new Map(sshProfiles.map((profile) => [profile.id, profile])),
     [sshProfiles],
   );
-  const visibleWindows = useMemo(() => getPersistableWindows(windows), [windows]);
+  const visibleWindows = useMemo(() => getStandaloneWindows(windows), [windows]);
   const preparedWindows = useMemo(() => (
     visibleWindows.map((window) => {
       const panes = getAllPanes(window.layout);

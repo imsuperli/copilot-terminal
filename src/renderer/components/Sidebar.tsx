@@ -15,7 +15,7 @@ import type { WindowGroup } from '../../shared/types/window-group';
 import type { CanvasWorkspace } from '../../shared/types/canvas';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { SidebarToggleIcon } from './icons/SidebarToggleIcon';
-import { getPersistableWindows } from '../utils/sshWindowBindings';
+import { getStandaloneWindows } from '../utils/sshWindowBindings';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -144,11 +144,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   const activeWindows = useMemo(
-    () => getPersistableWindows(windows).filter((window) => !window.archived),
+    () => getStandaloneWindows(windows).filter((window) => !window.archived),
     [windows],
   );
   const archivedWindows = useMemo(
-    () => getPersistableWindows(windows).filter((window) => window.archived),
+    () => getStandaloneWindows(windows).filter((window) => window.archived),
     [windows],
   );
   const activeGroups = useMemo(
