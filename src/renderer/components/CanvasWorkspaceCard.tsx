@@ -165,9 +165,6 @@ export const CanvasWorkspaceCard = React.memo<CanvasWorkspaceCardProps>(({
               <span>{t('canvas.noteBlocks', { count: blockSummary.noteCount })}</span>
             </div>
           </div>
-          <div className="mt-auto pt-4 text-xs text-[rgb(var(--muted-foreground))]">
-            {t('canvas.updatedAt', { time: updatedAt })}
-          </div>
         </div>
       </div>
 

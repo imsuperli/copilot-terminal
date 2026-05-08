@@ -110,6 +110,7 @@ function renderCardGrid(props: React.ComponentProps<typeof CardGrid> = {}) {
 describe('CardGrid', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
     dropZoneProps.length = 0;
     useWindowStore.setState({
       windows: [],
@@ -388,5 +389,23 @@ describe('CardGrid', () => {
     expect(openButton.className).toContain('inline-flex');
     expect(openButton.className).toContain('border-[rgb(var(--primary))]/72');
     expect(openButton.className).toContain('bg-[rgb(var(--primary))]');
+  });
+
+  it('renders the canvas updated timestamp only once per card', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-08T13:00:00.000Z'));
+
+    useWindowStore.setState({
+      canvasWorkspaces: [
+        makeCanvasWorkspace({
+          updatedAt: '2026-05-08T00:00:00.000Z',
+        }),
+      ],
+    });
+
+    renderCardGrid({ currentTab: 'canvas' });
+
+    const canvasCard = screen.getByRole('button', { name: /Ops Board/ });
+    expect(within(canvasCard).getAllByText('最近更新：13 小时前')).toHaveLength(1);
   });
 });
