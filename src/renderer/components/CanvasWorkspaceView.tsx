@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Link2, MonitorSmartphone, Save, StickyNote } from 'lucide-react';
+import { Activity, Link2, MonitorSmartphone, Save, Square, StickyNote } from 'lucide-react';
 import { AppLanguage } from '../../shared/i18n';
 import {
   CanvasActivityEvent,
@@ -63,6 +63,7 @@ import { CanvasCreateBlockDialog } from './CanvasCreateBlockDialog';
 import { CanvasMinimap } from './CanvasMinimap';
 import { CanvasWindowPickerDialog } from './CanvasWindowPickerDialog';
 import { Dialog } from './ui/Dialog';
+import { AppTooltip } from './ui/AppTooltip';
 import {
   idePopupActionButtonClassName,
   idePopupCardClassName,
@@ -1591,18 +1592,35 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
   return (
     <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--card))_82%,transparent)_100%)]">
       <div className="pointer-events-none absolute inset-0 opacity-[0.28]" style={{ background: 'radial-gradient(circle at top, rgb(var(--primary) / 0.14), transparent 30%)' }} />
-      <div className="pointer-events-none absolute left-5 top-4 z-20 flex items-center gap-3 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-4 py-2 text-sm text-[rgb(var(--muted-foreground))] shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur">
-        <span className="font-medium text-[rgb(var(--foreground))]">{canvasWorkspace.name}</span>
-        <span className="text-[rgb(var(--muted-foreground))]">·</span>
-        <span>{t('canvas.blockCount', { count: canvasWorkspace.blocks.length })}</span>
-        <span className="text-[rgb(var(--muted-foreground))]">·</span>
-        <span>{formatRelativeTime(canvasWorkspace.updatedAt, language as AppLanguage)}</span>
-        {selectedBlockIds.length > 0 && (
-          <>
-            <span className="text-[rgb(var(--muted-foreground))]">·</span>
-            <span>{t('canvas.selectionCount', { count: selectedBlockIds.length })}</span>
-          </>
-        )}
+      <div className="absolute left-5 top-4 z-20 flex max-w-[calc(100%-2.5rem)] items-center gap-3">
+        <div className="pointer-events-none flex items-center gap-3 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-4 py-2 text-sm text-[rgb(var(--muted-foreground))] shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur">
+          <span className="font-medium text-[rgb(var(--foreground))]">{canvasWorkspace.name}</span>
+          <span className="text-[rgb(var(--muted-foreground))]">·</span>
+          <span>{t('canvas.blockCount', { count: canvasWorkspace.blocks.length })}</span>
+          <span className="text-[rgb(var(--muted-foreground))]">·</span>
+          <span>{formatRelativeTime(canvasWorkspace.updatedAt, language as AppLanguage)}</span>
+          {selectedBlockIds.length > 0 && (
+            <>
+              <span className="text-[rgb(var(--muted-foreground))]">·</span>
+              <span>{t('canvas.selectionCount', { count: selectedBlockIds.length })}</span>
+            </>
+          )}
+        </div>
+        {onStopWorkspace ? (
+          <AppTooltip content={t('canvas.stopWorkspace')} placement="toolbar-trailing">
+            <button
+              type="button"
+              aria-label={t('canvas.stopWorkspace')}
+              title={t('canvas.stopWorkspace')}
+              onClick={() => {
+                void stopWorkspaceRuntime();
+              }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+            >
+              <Square size={14} fill="currentColor" />
+            </button>
+          </AppTooltip>
+        ) : null}
       </div>
 
       <CanvasArrangeToolbar
@@ -1634,10 +1652,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           setWorkspaceRenameOpen(true);
         }}
         onDeleteWorkspace={() => setWorkspaceDeleteOpen(true)}
-        onStopWorkspace={() => {
-          void stopWorkspaceRuntime();
-        }}
-        canStopWorkspace={canvasOwnedWindows.length > 0}
       />
 
       <div

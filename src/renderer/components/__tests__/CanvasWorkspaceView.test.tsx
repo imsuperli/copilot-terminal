@@ -84,6 +84,19 @@ function createSshWindow(): Window {
   };
 }
 
+function createCanvasOwnedWindow(): Window {
+  const windowItem = createSinglePaneWindow('Canvas Worker', '/srv/canvas', 'bash');
+  windowItem.id = 'canvas-owned-1';
+  windowItem.activePaneId = windowItem.layout.id;
+  windowItem.ownerType = 'canvas-owned';
+  windowItem.ownerCanvasWorkspaceId = 'canvas-1';
+  if (windowItem.layout.type === 'pane') {
+    windowItem.layout.pane.status = WindowStatus.Running;
+    windowItem.layout.pane.pid = 202;
+  }
+  return windowItem;
+}
+
 describe('CanvasWorkspaceView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -182,6 +195,55 @@ describe('CanvasWorkspaceView', () => {
       expect(useWindowStore.getState().getCanvasWorkspaceById('canvas-1')).toBeUndefined();
     });
     expect(onExitWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a stop button on the header right side and stops the workspace runtime', async () => {
+    const user = userEvent.setup();
+    const onStopWorkspace = vi.fn().mockResolvedValue(undefined);
+    const canvasWorkspace = {
+      ...createCanvasWorkspace(),
+      blocks: [
+        ...createCanvasWorkspace().blocks,
+        {
+          id: 'window-canvas-owned',
+          type: 'window' as const,
+          windowId: 'canvas-owned-1',
+          x: 820,
+          y: 40,
+          width: 360,
+          height: 220,
+          zIndex: 4,
+          label: 'Canvas Worker',
+        },
+      ],
+      nextZIndex: 5,
+    };
+
+    useWindowStore.setState({
+      windows: [
+        useWindowStore.getState().getWindowById('terminal-1')!,
+        useWindowStore.getState().getWindowById('terminal-2')!,
+        createCanvasOwnedWindow(),
+      ],
+      canvasWorkspaces: [canvasWorkspace],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: null,
+      activeGroupId: null,
+      groups: [],
+    });
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={canvasWorkspace}
+        onStopWorkspace={onStopWorkspace}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '停止画布' }));
+
+    await waitFor(() => {
+      expect(onStopWorkspace).toHaveBeenCalledWith('canvas-1');
+    });
   });
 
   it('creates a new local terminal block from the canvas toolbar', async () => {
