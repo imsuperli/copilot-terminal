@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Window, WindowStatus } from '../../types/window';
 import {
+  buildStandaloneSSHWindowMap,
   getStandaloneSidebarWindows,
+  getStandaloneSSHWindowsForTarget,
   getStandaloneWindows,
   getOwnedEphemeralSSHWindowIds,
   getSSHSessionOwnerWindowId,
@@ -129,5 +131,36 @@ describe('sshWindowBindings owner resolution', () => {
       ownerWindow.id,
       ['canvas-owned', 'clone', 'owner'],
     )).toBe('clone');
+  });
+
+  it('does not let canvas-owned ssh windows represent standalone ssh profile runtime', () => {
+    const ownerWindow = createSSHWindow('owner');
+    const canvasOwnedWindow: Window = {
+      ...createSSHWindow('canvas-owned'),
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+      lastActiveAt: '2026-04-27T01:00:00.000Z',
+    };
+
+    expect(buildStandaloneSSHWindowMap([ownerWindow, canvasOwnedWindow])['profile-1']?.id).toBe('owner');
+  });
+
+  it('keeps canvas-owned ssh windows out of standalone remote tab families', () => {
+    const ownerWindow = createSSHWindow('owner');
+    const secondStandaloneWindow = createSSHWindow('second-standalone');
+    const canvasOwnedWindow: Window = {
+      ...createSSHWindow('canvas-owned'),
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+    };
+
+    expect(getStandaloneSSHWindowsForTarget(
+      [ownerWindow, secondStandaloneWindow, canvasOwnedWindow],
+      ownerWindow.id,
+    ).map((window) => window.id)).toEqual(['owner', 'second-standalone']);
+    expect(getStandaloneSSHWindowsForTarget(
+      [ownerWindow, secondStandaloneWindow, canvasOwnedWindow],
+      canvasOwnedWindow.id,
+    )).toEqual([]);
   });
 });

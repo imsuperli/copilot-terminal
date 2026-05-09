@@ -58,7 +58,7 @@ import {
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
 import {
-  getPersistableWindows,
+  getStandalonePersistableWindows,
   getSSHSessionOwnerWindowId,
   getStandaloneSSHWindowsForTarget,
   isEphemeralSSHCloneWindow,
@@ -125,7 +125,7 @@ function getNextWindowAfterClose(
     return adjacentRemoteWindowId;
   }
 
-  return getPersistableWindows(windows).find((window) => (
+  return getStandalonePersistableWindows(windows).find((window) => (
     !window.archived
     && !excludedWindowIds.has(window.id)
     && hasAnyLiveTerminalSession(window)

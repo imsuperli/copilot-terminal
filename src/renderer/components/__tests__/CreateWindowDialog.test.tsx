@@ -317,6 +317,41 @@ describe('CreateWindowDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('marks local windows created for a canvas as canvas-owned before adding them to the store', async () => {
+    const user = userEvent.setup()
+    const onLocalWindowCreated = vi.fn()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        availableTabs={['local']}
+        initialTab="local"
+        initialWorkingDirectory="/canvas/project"
+        localWindowOwnerCanvasWorkspaceId="canvas-1"
+        onLocalWindowCreated={onLocalWindowCreated}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(mockElectronAPI.validatePath).toHaveBeenCalledWith('/canvas/project')
+    })
+
+    await user.click(screen.getByRole('button', { name: /创建/ }))
+
+    await waitFor(() => {
+      expect(onLocalWindowCreated).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'window-1',
+        ownerType: 'canvas-owned',
+        ownerCanvasWorkspaceId: 'canvas-1',
+      }))
+    })
+    expect(useWindowStore.getState().getWindowById('window-1')).toMatchObject({
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+    })
+  })
+
   it('filters out ssh tab from constrained canvas flow when ssh is disabled', async () => {
     render(
       <CreateWindowDialog

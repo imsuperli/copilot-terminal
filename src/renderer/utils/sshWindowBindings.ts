@@ -80,10 +80,14 @@ export function getStandaloneSSHWindowsForTarget(
   targetWindowId: string,
 ): Window[] {
   const targetWindow = windows.find((window) => window.id === targetWindowId);
+  if (!targetWindow || !isStandaloneWindow(targetWindow)) {
+    return [];
+  }
+
   const targetKey = targetWindow ? getStandaloneSSHTargetKey(targetWindow) : null;
 
   return windows.filter((window) => {
-    if (window.archived || getWindowKind(window) !== 'ssh') {
+    if (window.archived || !isStandaloneWindow(window) || getWindowKind(window) !== 'ssh') {
       return false;
     }
 
@@ -126,7 +130,7 @@ export function buildStandaloneSSHWindowMap(
   const nextMap: Record<string, Window> = {};
 
   for (const window of windows) {
-    if (window.archived || window.ephemeral) {
+    if (window.archived || window.ephemeral || !isStandaloneWindow(window)) {
       continue;
     }
 
@@ -236,6 +240,10 @@ export function getSSHSessionFamilyWindows(
   },
 ): Window[] {
   const targetWindow = windows.find((window) => window.id === targetWindowId);
+  if (!targetWindow || !isStandaloneWindow(targetWindow)) {
+    return [];
+  }
+
   const targetKey = targetWindow ? getStandaloneSSHTargetKey(targetWindow) : null;
   const includeArchived = options?.includeArchived ?? false;
 
@@ -245,6 +253,7 @@ export function getSSHSessionFamilyWindows(
 
   return windows.filter((window) => (
     (includeArchived || !window.archived)
+    && isStandaloneWindow(window)
     && getWindowKind(window) === 'ssh'
     && getStandaloneSSHTargetKey(window) === targetKey
   ));
@@ -254,10 +263,12 @@ export function getPersistableWindows(windows: Window[]): Window[] {
   return windows.filter((window) => !window.ephemeral);
 }
 
+export function isStandaloneWindow(window: Window): boolean {
+  return (window.ownerType ?? 'standalone') === 'standalone';
+}
+
 export function getStandaloneWindows(windows: Window[]): Window[] {
-  return windows.filter((window) => (
-    (window.ownerType ?? 'standalone') === 'standalone'
-  ));
+  return windows.filter((window) => isStandaloneWindow(window));
 }
 
 export function getStandaloneSidebarWindows(

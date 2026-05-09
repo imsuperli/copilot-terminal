@@ -86,6 +86,29 @@ function createSshWindow(): Window {
   };
 }
 
+const sshProfile = {
+  id: 'profile-1',
+  name: 'Prod SSH',
+  host: '10.0.0.20',
+  port: 22,
+  user: 'root',
+  auth: 'password' as const,
+  privateKeys: [],
+  keepaliveInterval: 30,
+  keepaliveCountMax: 3,
+  readyTimeout: null,
+  verifyHostKeys: true,
+  x11: false,
+  skipBanner: false,
+  agentForward: false,
+  warnOnClose: true,
+  reuseSession: true,
+  forwardedPorts: [],
+  tags: [],
+  createdAt: '2026-05-03T00:00:00.000Z',
+  updatedAt: '2026-05-03T00:00:00.000Z',
+};
+
 function createCanvasOwnedWindow(): Window {
   const windowItem = createSinglePaneWindow('Canvas Worker', '/srv/canvas', 'bash');
   windowItem.id = 'canvas-owned-1';
@@ -122,6 +145,37 @@ describe('CanvasWorkspaceView', () => {
       activeGroupId: null,
       groups: [],
     });
+  });
+
+  it('does not offer canvas-owned runtime windows as existing terminal references', async () => {
+    const user = userEvent.setup();
+    const canvasOwnedWindow = createCanvasOwnedWindow();
+
+    useWindowStore.setState({
+      windows: [
+        useWindowStore.getState().getWindowById('terminal-1')!,
+        useWindowStore.getState().getWindowById('terminal-2')!,
+        canvasOwnedWindow,
+      ],
+      canvasWorkspaces: [createCanvasWorkspace()],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: null,
+      activeGroupId: null,
+      groups: [],
+    });
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /引用终端/i }));
+    await user.click(screen.getByRole('button', { name: '选择终端' }));
+
+    expect(await screen.findByRole('button', { name: /Terminal Beta/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Canvas Worker/i })).not.toBeInTheDocument();
   });
 
   it('renames a note block from the canvas chrome', async () => {
@@ -266,6 +320,43 @@ describe('CanvasWorkspaceView', () => {
     await waitFor(() => {
       const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
       expect(updated?.blocks.filter((block) => block.type === 'window')).toHaveLength(3);
+    });
+  });
+
+  it('marks ssh terminal blocks created inside the canvas as canvas-owned', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={createCanvasWorkspace()}
+        sshProfiles={[sshProfile]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '添加内容' }));
+    await user.click(screen.getByRole('button', { name: /SSH 终端/i }));
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      expect(updated?.blocks.filter((block) => block.type === 'window')).toHaveLength(3);
+    });
+
+    const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+    const createdBlock = updated?.blocks.find((block) => (
+      block.type === 'window'
+      && block.windowId !== 'terminal-1'
+      && block.windowId !== 'missing-terminal'
+    ));
+    expect(createdBlock?.type).toBe('window');
+    if (createdBlock?.type !== 'window') {
+      throw new Error('expected created window block');
+    }
+
+    expect(useWindowStore.getState().getWindowById(createdBlock.windowId)).toMatchObject({
+      ownerType: 'canvas-owned',
+      ownerCanvasWorkspaceId: 'canvas-1',
+      kind: 'ssh',
     });
   });
 

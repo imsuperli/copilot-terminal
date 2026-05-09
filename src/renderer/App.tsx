@@ -50,7 +50,7 @@ import {
 } from './utils/sshPasswordPrompt';
 import { APP_NOTICE_EVENT, type AppNoticeEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
-import { isEphemeralSSHCloneWindow } from './utils/sshWindowBindings';
+import { isEphemeralSSHCloneWindow, isStandaloneWindow } from './utils/sshWindowBindings';
 import {
   createMountedTerminalObservationSnapshot,
   logMountedTerminalObservation,
@@ -85,7 +85,12 @@ const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
 
 function findReusableSSHWindow(windows: Window[], profileId: string, groupedWindowIds: Set<string>): Window | null {
   const matchedWindows = windows.filter((window) => {
-    if (window.archived || isEphemeralSSHCloneWindow(window) || groupedWindowIds.has(window.id)) {
+    if (
+      window.archived
+      || !isStandaloneWindow(window)
+      || isEphemeralSSHCloneWindow(window)
+      || groupedWindowIds.has(window.id)
+    ) {
       return false;
     }
 
@@ -1236,14 +1241,20 @@ function AppContent() {
         }));
       }
 
-      addWindow(response.data);
+      const canvasOwnedWindow: Window = {
+        ...response.data,
+        ownerType: 'canvas-owned',
+        ownerCanvasWorkspaceId: canvasCreateContextWorkspaceId,
+      };
+
+      addWindow(canvasOwnedWindow);
       const latestWorkspace = useWindowStore.getState().getCanvasWorkspaceById(canvasCreateContextWorkspaceId);
       if (latestWorkspace) {
         const offsetIndex = latestWorkspace.blocks.filter((block) => block.type === 'window').length;
         useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
           blocks: [
             ...latestWorkspace.blocks,
-            createCanvasWindowBlock(response.data, offsetIndex, latestWorkspace.nextZIndex, latestWorkspace.blocks),
+            createCanvasWindowBlock(canvasOwnedWindow, offsetIndex, latestWorkspace.nextZIndex, latestWorkspace.blocks),
           ],
           nextZIndex: latestWorkspace.nextZIndex + 1,
         });
@@ -1394,11 +1405,24 @@ function AppContent() {
       return;
     }
 
+    const canvasOwnedWindow: Window = windowItem.ownerType === 'canvas-owned'
+      && windowItem.ownerCanvasWorkspaceId === canvasCreateContextWorkspaceId
+      ? windowItem
+      : {
+          ...windowItem,
+          ownerType: 'canvas-owned',
+          ownerCanvasWorkspaceId: canvasCreateContextWorkspaceId,
+        };
+
+    if (canvasOwnedWindow !== windowItem) {
+      useWindowStore.getState().syncWindow(canvasOwnedWindow);
+    }
+
     const offsetIndex = workspace.blocks.filter((block) => block.type === 'window').length;
     useWindowStore.getState().updateCanvasWorkspace(canvasCreateContextWorkspaceId, {
       blocks: [
         ...workspace.blocks,
-        createCanvasWindowBlock(windowItem, offsetIndex, workspace.nextZIndex, workspace.blocks),
+        createCanvasWindowBlock(canvasOwnedWindow, offsetIndex, workspace.nextZIndex, workspace.blocks),
       ],
       nextZIndex: workspace.nextZIndex + 1,
     });
@@ -1794,6 +1818,7 @@ function AppContent() {
         onCanvasWorkspaceCreated={handleCanvasWorkspaceCreated}
         onSSHProfileSaved={handleSSHProfileSaved}
         onSSHProfileConnect={handleConnectSSHProfileIntoCanvas}
+        localWindowOwnerCanvasWorkspaceId={canvasCreateContextWorkspaceId}
         sshSubmitMode={canvasCreateContextWorkspaceId ? 'saveAndConnect' : 'save'}
       />
 

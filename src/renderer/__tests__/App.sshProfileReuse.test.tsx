@@ -156,6 +156,9 @@ describe('App SSH profile reuse', () => {
     useWindowStore.setState({
       windows: [createSSHWindow('profile-1')],
       groups: [],
+      canvasWorkspaces: [],
+      activeCanvasWorkspaceId: null,
+      startedCanvasWorkspaceIds: [],
       activeWindowId: null,
       activeGroupId: null,
       customCategories: [],

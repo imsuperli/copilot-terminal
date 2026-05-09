@@ -60,6 +60,7 @@ import { createChatConversationHistoryId } from '../utils/chatHistory';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
+import { isStandaloneWindow } from '../utils/sshWindowBindings';
 import { CanvasArrangeToolbar } from './CanvasArrangeToolbar';
 import { CanvasBlockChrome } from './CanvasBlockChrome';
 import { CanvasCreateBlockDialog } from './CanvasCreateBlockDialog';
@@ -354,7 +355,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         .map((block) => block.windowId),
     );
 
-    return windows.filter((windowItem) => !windowItem.archived && !linkedWindowIds.has(windowItem.id));
+    return windows.filter((windowItem) => (
+      !windowItem.archived
+      && isStandaloneWindow(windowItem)
+      && !linkedWindowIds.has(windowItem.id)
+    ));
   }, [canvasWorkspace.blocks, windows]);
 
   const canvasOwnedWindows = useMemo(() => (
@@ -376,7 +381,11 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         .map((block) => block.windowId),
     );
 
-    return windows.filter((windowItem) => !windowItem.archived && !linkedWindowIds.has(windowItem.id));
+    return windows.filter((windowItem) => (
+      !windowItem.archived
+      && isStandaloneWindow(windowItem)
+      && !linkedWindowIds.has(windowItem.id)
+    ));
   }, [canvasWorkspace.blocks, relinkingBlockId, windows]);
 
   useEffect(() => {
