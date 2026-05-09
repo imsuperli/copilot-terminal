@@ -16,7 +16,7 @@ import type { SSHProfile } from '../../shared/types/ssh';
 import { getPaneBackend, getWindowKind, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
-import type { Pane } from '../types/window';
+import type { Pane, Window } from '../types/window';
 import { getAllPanes, getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusLabelKey } from '../utils/statusHelpers';
 import {
@@ -58,6 +58,8 @@ import {
 } from '../utils/chatContext';
 import { createChatConversationHistoryId } from '../utils/chatHistory';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { startWindowPanes } from '../utils/paneSessionActions';
+import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import { CanvasArrangeToolbar } from './CanvasArrangeToolbar';
 import { CanvasBlockChrome } from './CanvasBlockChrome';
 import { CanvasCreateBlockDialog } from './CanvasCreateBlockDialog';
@@ -218,6 +220,24 @@ function findCanvasWindowBlockByWindowId(
   }
 
   return null;
+}
+
+function getTerminalPanesForCanvasWindow(windowItem: Window): Pane[] {
+  return getAllPanes(windowItem.layout).filter((pane) => isTerminalPane(pane));
+}
+
+function canRenderCanvasLiveWindow(windowItem: Window): boolean {
+  const terminalPanes = getTerminalPanesForCanvasWindow(windowItem);
+  if (terminalPanes.length === 0) {
+    return true;
+  }
+
+  return terminalPanes.some((pane) => !isInactiveTerminalPaneStatus(pane.status));
+}
+
+function hasOnlyInactiveTerminalPanes(windowItem: Window): boolean {
+  const terminalPanes = getTerminalPanesForCanvasWindow(windowItem);
+  return terminalPanes.length > 0 && terminalPanes.every((pane) => isInactiveTerminalPaneStatus(pane.status));
 }
 
 export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
@@ -430,23 +450,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     }
   }, [canvasWorkspace.blocks, editingBlockId, relinkingBlockId]);
 
-  useEffect(() => {
-    const node = canvasRef.current;
-    if (!node) {
-      return;
-    }
-
-    const syncSize = () => {
-      const rect = node.getBoundingClientRect();
-      setCanvasSize({ w: rect.width, h: rect.height });
-    };
-
-    syncSize();
-    const observer = new ResizeObserver(syncSize);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
   const persistWorkspace = useCallback((
     compute: (current: CanvasWorkspace) => Partial<CanvasWorkspace> | null,
   ): CanvasWorkspace | null => {
@@ -463,6 +466,59 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     updateCanvasWorkspace(canvasWorkspace.id, updates);
     return { ...current, ...updates };
   }, [canvasWorkspace.id, updateCanvasWorkspace]);
+
+  useEffect(() => {
+    const inactiveLiveBlockIds = canvasWorkspace.blocks
+      .filter((block): block is CanvasWindowBlock => block.type === 'window' && block.displayMode === 'live')
+      .filter((block) => {
+        const linkedWindow = windowsById.get(block.windowId);
+        return linkedWindow ? hasOnlyInactiveTerminalPanes(linkedWindow) : false;
+      })
+      .map((block) => block.id);
+
+    if (inactiveLiveBlockIds.length === 0) {
+      return;
+    }
+
+    const inactiveLiveBlockIdSet = new Set(inactiveLiveBlockIds);
+    persistWorkspace((current) => {
+      let didChange = false;
+      const nextBlocks = current.blocks.map((block) => {
+        if (
+          block.type === 'window'
+          && block.displayMode === 'live'
+          && inactiveLiveBlockIdSet.has(block.id)
+        ) {
+          didChange = true;
+          return {
+            ...block,
+            displayMode: 'summary' as const,
+          };
+        }
+
+        return block;
+      });
+
+      return didChange ? { blocks: nextBlocks } : null;
+    });
+  }, [canvasWorkspace.blocks, persistWorkspace, windowsById]);
+
+  useEffect(() => {
+    const node = canvasRef.current;
+    if (!node) {
+      return;
+    }
+
+    const syncSize = () => {
+      const rect = node.getBoundingClientRect();
+      setCanvasSize({ w: rect.width, h: rect.height });
+    };
+
+    syncSize();
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const createCanvasEvent = useCallback((
     type: CanvasActivityEvent['type'],
@@ -856,6 +912,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     const targetWindowId = targetBlock && targetBlock.type === 'window'
       ? targetBlock.windowId
       : undefined;
+    const targetWindow = targetWindowId ? windowsById.get(targetWindowId) : undefined;
+
+    if (displayMode === 'live' && targetWindow) {
+      void startWindowPanes(targetWindow, updatePane).catch((error) => {
+        console.error(`Failed to start canvas live window ${targetWindow.id}:`, error);
+      });
+    }
 
     persistWorkspace((current) => ({
       blocks: current.blocks.map((block) => {
@@ -892,7 +955,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
         },
       );
     }
-  }, [canvasWorkspace.blocks, createCanvasEvent, persistWorkspace, t, windowsById]);
+  }, [canvasWorkspace.blocks, createCanvasEvent, persistWorkspace, t, updatePane, windowsById]);
 
   const deleteBlocks = useCallback((blockIds: string[]) => {
     if (blockIds.length === 0) {
@@ -1936,7 +1999,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                   onRemove={() => deleteBlocks([block.id])}
                 >
                   {block.type === 'window' ? (
-                    block.displayMode === 'live' && linkedWindow ? (
+                    block.displayMode === 'live' && linkedWindow && canRenderCanvasLiveWindow(linkedWindow) ? (
                       <div className="flex h-full min-h-0 flex-col">
                         <div className="flex items-center justify-between border-b border-[rgb(var(--border))] px-4 py-2 text-xs text-[rgb(var(--muted-foreground))]">
                           <span className="truncate">{workingDirectory || t('canvas.unnamedWindow')}</span>

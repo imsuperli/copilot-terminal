@@ -99,6 +99,8 @@ describe('ChatSettingsTab', () => {
           ],
           activeProviderId: expect.any(String),
           defaultSystemPrompt: '',
+          workspaceInstructions: '',
+          contextFilePaths: [],
           enableCommandSecurity: true,
         },
       });
@@ -176,6 +178,8 @@ describe('ChatSettingsTab', () => {
           ],
           activeProviderId: expect.any(String),
           defaultSystemPrompt: '',
+          workspaceInstructions: '',
+          contextFilePaths: [],
           enableCommandSecurity: true,
         },
       });
@@ -397,8 +401,44 @@ describe('ChatSettingsTab', () => {
           activeProviderId: 'provider-1',
           enableCommandSecurity: false,
           defaultSystemPrompt: 'You are a careful ops assistant.',
+          workspaceInstructions: '',
+          contextFilePaths: [],
         },
       });
     });
+  });
+
+  it('uses the appearance-aware native select style for the active provider dropdown', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    const activeProviderSelect = await screen.findByLabelText('默认 Provider');
+
+    expect(activeProviderSelect).toHaveClass('appearance-auto');
   });
 });

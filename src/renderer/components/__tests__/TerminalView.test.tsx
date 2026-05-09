@@ -79,11 +79,20 @@ vi.mock('../RemoteWindowTabs', () => ({
 }));
 
 vi.mock('../SplitLayout', () => ({
-  SplitLayout: (props: { activePaneId?: string; onPaneClose?: (paneId: string) => void }) => (
+  SplitLayout: (props: {
+    activePaneId?: string;
+    onPaneClose?: (paneId: string) => void;
+    onPaneExit?: (paneId: string) => void;
+  }) => (
     <div data-testid="split-layout">
       {props.onPaneClose && props.activePaneId ? (
         <button type="button" aria-label="close-active-pane" onClick={() => props.onPaneClose?.(props.activePaneId!)}>
           close-active-pane
+        </button>
+      ) : null}
+      {props.onPaneExit && props.activePaneId ? (
+        <button type="button" aria-label="exit-active-pane" onClick={() => props.onPaneExit?.(props.activePaneId!)}>
+          exit-active-pane
         </button>
       ) : null}
     </div>
@@ -600,6 +609,43 @@ describe('TerminalView', () => {
 
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
     expect(screen.getByTestId('split-layout')).toBeInTheDocument();
+  });
+
+  it('keeps canvas embedded pane exits inside the canvas instead of switching views', async () => {
+    const currentWindow = createLocalWindow(WindowStatus.Running);
+    const onReturn = vi.fn();
+    const onWindowSwitch = vi.fn();
+
+    useWindowStore.setState({
+      windows: [currentWindow],
+      activeWindowId: currentWindow.id,
+      mruList: [currentWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={currentWindow}
+        onReturn={onReturn}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+        embedded
+        canvasEmbedded
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'exit-active-pane' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);
+    });
+
+    expect(onReturn).not.toHaveBeenCalled();
+    expect(onWindowSwitch).not.toHaveBeenCalled();
+    const destroyedWindow = useWindowStore.getState().getWindowById(currentWindow.id);
+    expect(destroyedWindow?.layout.type === 'pane' && destroyedWindow.layout.pane.status).toBe(WindowStatus.Completed);
   });
 
   it('keeps remote tabs visible for embedded ssh windows even when inactive', () => {
@@ -1150,7 +1196,7 @@ describe('TerminalView', () => {
         await vi.advanceTimersByTimeAsync(100);
       });
 
-      expect(onWindowSwitch).toHaveBeenCalledWith(runningWindow.id);
+      expect(onWindowSwitch).toHaveBeenCalledWith(runningWindow.id, { exact: true });
       expect(onWindowSwitch).not.toHaveBeenCalledWith(pausedWindow.id);
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
 
@@ -1225,7 +1271,7 @@ describe('TerminalView', () => {
         await vi.advanceTimersByTimeAsync(100);
       });
 
-      expect(onWindowSwitch).toHaveBeenCalledWith(runningWindow.id);
+      expect(onWindowSwitch).toHaveBeenCalledWith(runningWindow.id, { exact: true });
       expect(onWindowSwitch).not.toHaveBeenCalledWith(pausedWindow.id);
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);

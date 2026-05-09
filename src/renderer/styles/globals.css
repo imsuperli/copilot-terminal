@@ -78,6 +78,11 @@
     --appearance-card-surface-bottom: rgba(var(--terminal-background-rgb), 0.24);
     --appearance-card-hover-surface-top: rgba(var(--terminal-background-rgb), 0.2);
     --appearance-card-hover-surface-bottom: rgba(var(--terminal-background-rgb), 0.3);
+    --appearance-native-control-color-scheme: dark;
+    --appearance-native-option-background: rgb(var(--card));
+    --appearance-native-option-foreground: rgb(var(--foreground));
+    --appearance-native-option-active-background: rgb(var(--primary));
+    --appearance-native-option-active-foreground: rgb(var(--primary-foreground));
 
     --terminal-black: #0c0c0c;
     --terminal-red: #c50f1f;
@@ -146,6 +151,23 @@
 /* Keep Radix popper portals above pane chrome and Monaco overlays. */
 [data-radix-popper-content-wrapper] {
   z-index: 10000 !important;
+}
+
+select {
+  color-scheme: var(--appearance-native-control-color-scheme, dark);
+}
+
+select option {
+  background-color: var(--appearance-native-option-background, rgb(var(--card)));
+  color: var(--appearance-native-option-foreground, rgb(var(--foreground)));
+}
+
+select option:checked,
+select option:hover,
+select option:focus {
+  background: var(--appearance-native-option-active-background, rgb(var(--primary)));
+  background-color: var(--appearance-native-option-active-background, rgb(var(--primary)));
+  color: var(--appearance-native-option-active-foreground, rgb(var(--primary-foreground)));
 }
 
 /* Let the global skin show through Monaco instead of Monaco repainting an opaque workbench. */

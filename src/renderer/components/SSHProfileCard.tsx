@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { Archive, ArchiveRestore, Copy, Edit2, KeyRound, Link2, LockKeyhole, Play, ShieldCheck, Square, Trash2 } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Archive, ArchiveRestore, Copy, Edit2, KeyRound, Link2, LockKeyhole, MoreHorizontal, Play, ShieldCheck, Square, Trash2 } from 'lucide-react';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
@@ -8,6 +9,12 @@ import { getStatusColorValue, getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n } from '../i18n';
 import { StatusDot } from './StatusDot';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import {
+  ideMenuContentClassName,
+  ideMenuDangerItemClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+} from './ui/ide-menu';
 import {
   idePopupInteractiveListCardClassName,
   idePopupListCardFooterClassName,
@@ -171,13 +178,78 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-          {runtimeStatus && (
-            <StatusDot
-              status={runtimeStatus}
+            {runtimeStatus && (
+              <StatusDot
+                status={runtimeStatus}
                 size="md"
                 title={statusTooltip ?? undefined}
               />
             )}
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('common.more')}
+                  onClick={(event) => event.stopPropagation()}
+                  className={`flex h-8 w-8 items-center justify-center ${cardButtonClassName}`}
+                >
+                  <MoreHorizontal size={15} />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  className={ideMenuContentClassName}
+                  side="bottom"
+                  align="end"
+                  sideOffset={6}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {window && (
+                    !window.archived ? (
+                      <DropdownMenu.Item
+                        className={ideMenuItemClassName}
+                        onSelect={() => onArchiveWindow?.(window)}
+                        aria-label={t('terminalView.archive')}
+                      >
+                        <IdeMenuItemContent icon={<Archive size={14} />} label={t('terminalView.archive')} />
+                      </DropdownMenu.Item>
+                    ) : (
+                      <DropdownMenu.Item
+                        className={ideMenuItemClassName}
+                        onSelect={() => onUnarchiveWindow?.(window)}
+                        aria-label={t('windowCard.unarchive')}
+                      >
+                        <IdeMenuItemContent icon={<ArchiveRestore size={14} />} label={t('windowCard.unarchive')} />
+                      </DropdownMenu.Item>
+                    )
+                  )}
+
+                  <DropdownMenu.Item
+                    className={ideMenuItemClassName}
+                    onSelect={() => onDuplicate?.(profile)}
+                    aria-label={t('sshProfileCard.duplicate')}
+                  >
+                    <IdeMenuItemContent icon={<Copy size={14} />} label={t('sshProfileCard.duplicate')} />
+                  </DropdownMenu.Item>
+
+                  <DropdownMenu.Item
+                    className={ideMenuItemClassName}
+                    onSelect={() => onEdit?.(profile)}
+                    aria-label={t('sshProfileCard.edit')}
+                  >
+                    <IdeMenuItemContent icon={<Edit2 size={14} />} label={t('sshProfileCard.edit')} />
+                  </DropdownMenu.Item>
+
+                  <DropdownMenu.Item
+                    className={ideMenuDangerItemClassName}
+                    onSelect={() => onDelete?.(profile)}
+                    aria-label={t('sshProfileCard.deleteCard')}
+                  >
+                    <IdeMenuItemContent icon={<Trash2 size={14} />} label={t('sshProfileCard.deleteCard')} />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
         </div>
 
@@ -273,127 +345,6 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                 : t('windowCard.start')}
           </span>
         </button>
-
-        <div className="flex items-center gap-1.5">
-          {window && (
-            !window.archived ? (
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={(event) => handleButtonClick(event, () => onArchiveWindow?.(window))}
-                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                      aria-label={t('terminalView.archive')}
-                    >
-                      <Archive size={16} />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className={tooltipClassName}
-                      side="top"
-                      sideOffset={5}
-                    >
-                      {t('windowCard.archive')}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            ) : (
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={(event) => handleButtonClick(event, () => onUnarchiveWindow?.(window))}
-                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                      aria-label={t('windowCard.unarchive')}
-                    >
-                      <ArchiveRestore size={16} />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className={tooltipClassName}
-                      side="top"
-                      sideOffset={5}
-                    >
-                      {t('windowCard.unarchive')}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            )
-          )}
-
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(event) => handleButtonClick(event, () => onDuplicate?.(profile))}
-                  className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                  aria-label={t('sshProfileCard.duplicate')}
-                >
-                  <Copy size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className={tooltipClassName}
-                  side="top"
-                  sideOffset={5}
-                >
-                  {t('sshProfileCard.duplicate')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(event) => handleButtonClick(event, () => onEdit?.(profile))}
-                  className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                  aria-label={t('sshProfileCard.edit')}
-                >
-                  <Edit2 size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className={tooltipClassName}
-                  side="top"
-                  sideOffset={5}
-                >
-                  {t('sshProfileCard.edit')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-
-          <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                <button
-                  onClick={(event) => handleButtonClick(event, () => onDelete?.(profile))}
-                  className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]`}
-                  aria-label={t('sshProfileCard.deleteCard')}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                    className={tooltipClassName}
-                    side="top"
-                    sideOffset={5}
-                  >
-                  {t('sshProfileCard.deleteCard')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        </div>
       </div>
     </div>
   );

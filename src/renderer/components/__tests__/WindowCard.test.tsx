@@ -252,6 +252,7 @@ describe('WindowCard', () => {
   });
 
   it('renders archive, edit and delete actions', async () => {
+    const user = userEvent.setup();
     render(<WindowCard window={createWindow()} />);
 
     await waitFor(() => {
@@ -259,8 +260,14 @@ describe('WindowCard', () => {
     });
 
     const card = screen.getByRole('button', { name: /Test Window/ });
-    expect(within(card).getByRole('button', { name: '归档窗口' })).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: '编辑' })).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: '删除窗口' })).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: '归档窗口' })).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: '编辑' })).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: '删除窗口' })).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: '更多' }));
+
+    expect(await screen.findByRole('menuitem', { name: '归档窗口' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '编辑' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '删除窗口' })).toBeInTheDocument();
   });
 });

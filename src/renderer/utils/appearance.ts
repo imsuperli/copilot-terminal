@@ -343,6 +343,11 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   rootStyle.setProperty('--appearance-card-surface-bottom', rgbaWithTerminalBackground(cardBottomOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-top', rgbaWithTerminalBackground(cardHoverTopOpacity));
   rootStyle.setProperty('--appearance-card-hover-surface-bottom', rgbaWithTerminalBackground(cardHoverBottomOpacity));
+  rootStyle.setProperty('--appearance-native-control-color-scheme', resolveNativeControlColorScheme(appearance));
+  rootStyle.setProperty('--appearance-native-option-background', resolveNativeOptionBackground(appearance));
+  rootStyle.setProperty('--appearance-native-option-foreground', 'rgb(var(--foreground))');
+  rootStyle.setProperty('--appearance-native-option-active-background', 'rgb(var(--primary))');
+  rootStyle.setProperty('--appearance-native-option-active-foreground', 'rgb(var(--primary-foreground))');
   rootStyle.setProperty(
     '--appearance-main-surface-background',
     resolveMainSurfaceBackground(appearance, paneStrongOpacity),
@@ -864,6 +869,24 @@ function resolveCardOpacity(appearance: AppearanceSettings): number {
   }
 
   return clampOpacity(baseOpacity, 0.08, 0.64);
+}
+
+function resolveNativeControlColorScheme(appearance: AppearanceSettings): string {
+  return appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)
+    ? 'light'
+    : 'dark';
+}
+
+function resolveNativeOptionBackground(appearance: AppearanceSettings): string {
+  if (appearance.skin.presetId === 'paper' && !hasImageBackdrop(appearance)) {
+    return 'rgb(var(--card))';
+  }
+
+  if (hasImageBackdrop(appearance)) {
+    return 'rgb(var(--background))';
+  }
+
+  return 'rgb(var(--card))';
 }
 
 function resolveMainSurfaceBackground(appearance: AppearanceSettings, paneStrongOpacity: number): string {

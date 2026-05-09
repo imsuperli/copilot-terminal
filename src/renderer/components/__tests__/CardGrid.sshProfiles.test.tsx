@@ -113,6 +113,14 @@ function renderCardGrid(props: ComponentProps<typeof CardGrid>) {
   );
 }
 
+async function openSSHProfileCardMenu(
+  user: ReturnType<typeof userEvent.setup>,
+  cardName = 'Prod Bastion root@10.0.0.21:22',
+) {
+  const card = screen.getByRole('button', { name: cardName });
+  await user.click(within(card).getByRole('button', { name: '更多' }));
+}
+
 function createCanvasWorkspace(overrides: Partial<CanvasWorkspace> = {}): CanvasWorkspace {
   return {
     id: 'canvas-1',
@@ -185,7 +193,8 @@ describe('CardGrid SSH profile cards', () => {
 
     expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
 
-    await user.click(screen.getByRole('button', { name: '复制 SSH 配置' }));
+    await openSSHProfileCardMenu(user);
+    await user.click(await screen.findByRole('menuitem', { name: '复制 SSH 配置' }));
 
     expect(onDuplicateSSHProfile).toHaveBeenCalledWith(profile);
   });
@@ -260,7 +269,8 @@ describe('CardGrid SSH profile cards', () => {
     expect(screen.getByText('2 个转发')).toBeInTheDocument();
   });
 
-  it('does not render the in-use badge and keeps profile deletion available', () => {
+  it('does not render the in-use badge and keeps profile deletion available', async () => {
+    const user = userEvent.setup();
     const profile = createSSHProfile();
 
     renderCardGrid({
@@ -268,7 +278,9 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    expect(screen.getByRole('button', { name: '删除 SSH 卡片' })).toBeEnabled();
+    await openSSHProfileCardMenu(user);
+
+    expect(await screen.findByRole('menuitem', { name: '删除 SSH 卡片' })).toBeEnabled();
     expect(screen.queryByText(/已被 .* 个窗口使用/)).not.toBeInTheDocument();
   });
 
@@ -413,7 +425,8 @@ describe('CardGrid SSH profile cards', () => {
       </DndProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: '归档窗口' }));
+    await openSSHProfileCardMenu(user);
+    await user.click(await screen.findByRole('menuitem', { name: '归档窗口' }));
 
     await waitFor(() => {
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
@@ -436,7 +449,9 @@ describe('CardGrid SSH profile cards', () => {
     );
 
     expect(await screen.findByText('Hidden runtime window')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: '取消归档' })).toBeInTheDocument();
+    const archivedCard = screen.getByRole('button', { name: /Hidden runtime window/ });
+    await user.click(within(archivedCard).getByRole('button', { name: '更多' }));
+    expect(await screen.findByRole('menuitem', { name: '取消归档' })).toBeInTheDocument();
   });
 
   it('destroys a bound SSH runtime window together with its owned ephemeral clones', async () => {
@@ -536,7 +551,8 @@ describe('CardGrid SSH profile cards', () => {
       onDeleteSSHProfile,
     });
 
-    await user.click(screen.getByRole('button', { name: '删除 SSH 卡片' }));
+    await openSSHProfileCardMenu(user);
+    await user.click(await screen.findByRole('menuitem', { name: '删除 SSH 卡片' }));
 
     expect(screen.getByText('确定要删除 SSH 卡片 “Prod Bastion” 吗？此操作会同时删除关联的 1 个终端窗口、SSH 配置和已保存的凭据。')).toBeInTheDocument();
 
@@ -591,7 +607,8 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    await user.click(screen.getByRole('button', { name: '删除 SSH 卡片' }));
+    await openSSHProfileCardMenu(user);
+    await user.click(await screen.findByRole('menuitem', { name: '删除 SSH 卡片' }));
 
     expect(screen.getByText('当前还有 1 个其他窗口在使用这条 SSH 配置，暂时不能删除该卡片。请先处理这些窗口。')).toBeInTheDocument();
     const dialog = screen.getByRole('dialog');
@@ -642,7 +659,8 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    await user.click(screen.getByRole('button', { name: '删除 SSH 卡片' }));
+    await openSSHProfileCardMenu(user);
+    await user.click(await screen.findByRole('menuitem', { name: '删除 SSH 卡片' }));
 
     expect(screen.queryByText('当前还有 1 个其他窗口在使用这条 SSH 配置，暂时不能删除该卡片。请先处理这些窗口。')).not.toBeInTheDocument();
     const dialog = screen.getByRole('dialog');

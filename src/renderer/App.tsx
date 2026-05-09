@@ -1281,7 +1281,30 @@ function AppContent() {
     await switchToCanvasView(canvasWorkspaceId);
   }, [setCanvasWorkspaceStarted, switchToCanvasView]);
 
+  const resetCanvasLiveBlocks = useCallback((canvasWorkspaceId: string) => {
+    const workspace = useWindowStore.getState().getCanvasWorkspaceById(canvasWorkspaceId);
+    if (!workspace) {
+      return;
+    }
+
+    const nextBlocks = workspace.blocks.map((block) => (
+      block.type === 'window' && block.displayMode === 'live'
+        ? { ...block, displayMode: 'summary' as const }
+        : block
+    ));
+    const didChange = nextBlocks.some((block, index) => block !== workspace.blocks[index]);
+    if (!didChange) {
+      return;
+    }
+
+    useWindowStore.getState().updateCanvasWorkspace(canvasWorkspaceId, {
+      blocks: nextBlocks,
+    });
+  }, []);
+
   const handleStopCanvasWorkspace = useCallback(async (canvasWorkspaceId: string) => {
+    resetCanvasLiveBlocks(canvasWorkspaceId);
+
     const ownedWindows = useWindowStore.getState().windows.filter((windowItem) => (
       windowItem.ownerType === 'canvas-owned'
       && windowItem.ownerCanvasWorkspaceId === canvasWorkspaceId
@@ -1297,7 +1320,7 @@ function AppContent() {
       setCanvasTerminalReturnTargetId(null);
       await switchToUnifiedView();
     }
-  }, [currentActiveCanvasWorkspaceId, currentView, setCanvasWorkspaceStarted, switchToUnifiedView]);
+  }, [currentActiveCanvasWorkspaceId, currentView, resetCanvasLiveBlocks, setCanvasWorkspaceStarted, switchToUnifiedView]);
 
   const handleWindowSwitch = useCallback((windowId: string, options?: WindowSwitchOptions) => {
     setCanvasTerminalReturnTargetId(null);

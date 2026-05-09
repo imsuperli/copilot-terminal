@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
 import { CanvasWorkspaceView } from '../CanvasWorkspaceView';
 import { CustomTitleBar } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
@@ -394,21 +395,44 @@ describe('CanvasWorkspaceView', () => {
     expect(screen.getAllByRole('button', { name: '实时嵌入' }).at(-1)?.className).toContain('min-w-[104px]');
   });
 
-  it('toggles a window block into live embedded mode', async () => {
+  it('starts an inactive referenced terminal in place when toggling a window block into live embedded mode', async () => {
     const user = userEvent.setup();
+    const onOpenWindow = vi.fn();
     const renderLiveWindow = vi.fn((windowId: string) => <div>Live:{windowId}</div>);
+    vi.mocked(window.electronAPI.startWindow).mockResolvedValueOnce({
+      success: true,
+      data: {
+        pid: 1001,
+        sessionId: 'session-terminal-1',
+        status: WindowStatus.Running,
+      },
+    });
 
     const { rerender } = render(
       <CanvasWorkspaceView
         canvasWorkspace={createCanvasWorkspace()}
+        onOpenWindow={onOpenWindow}
         renderLiveWindow={renderLiveWindow}
       />,
     );
 
     await user.click(screen.getByRole('button', { name: '实时嵌入' }));
+
+    expect(onOpenWindow).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(window.electronAPI.startWindow).toHaveBeenCalledWith(expect.objectContaining({
+        windowId: 'terminal-1',
+      }));
+    });
+    await waitFor(() => {
+      const updatedWindow = useWindowStore.getState().getWindowById('terminal-1');
+      expect(updatedWindow ? getAllPanes(updatedWindow.layout)[0]?.status : null).toBe(WindowStatus.Running);
+    });
+
     rerender(
       <CanvasWorkspaceView
         canvasWorkspace={useWindowStore.getState().getCanvasWorkspaceById('canvas-1')!}
+        onOpenWindow={onOpenWindow}
         renderLiveWindow={renderLiveWindow}
       />,
     );
@@ -424,6 +448,77 @@ describe('CanvasWorkspaceView', () => {
     if (liveBlock?.type === 'window') {
       expect(liveBlock.displayMode).toBe('live');
     }
+  });
+
+  it('downgrades live terminal blocks to summary when the referenced terminal stops', async () => {
+    const terminalOne = useWindowStore.getState().getWindowById('terminal-1')!;
+    const terminalTwo = useWindowStore.getState().getWindowById('terminal-2')!;
+    const paneId = terminalOne.activePaneId;
+    const runningTerminalOne: Window = {
+      ...terminalOne,
+      layout: {
+        type: 'pane',
+        id: paneId,
+        pane: {
+          ...getAllPanes(terminalOne.layout)[0]!,
+          status: WindowStatus.Running,
+          pid: 1001,
+        },
+      },
+    };
+    const liveWorkspace: CanvasWorkspace = {
+      ...createCanvasWorkspace(),
+      blocks: createCanvasWorkspace().blocks.map((block) => (
+        block.id === 'window-1' && block.type === 'window'
+          ? { ...block, displayMode: 'live' as const }
+          : block
+      )),
+    };
+    const renderLiveWindow = vi.fn((windowId: string) => <div>Live:{windowId}</div>);
+
+    useWindowStore.setState({
+      windows: [runningTerminalOne, terminalTwo],
+      canvasWorkspaces: [liveWorkspace],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: null,
+      activeGroupId: null,
+      groups: [],
+    });
+
+    const { rerender } = render(
+      <CanvasWorkspaceView
+        canvasWorkspace={liveWorkspace}
+        renderLiveWindow={renderLiveWindow}
+      />,
+    );
+
+    expect(await screen.findByText('Live:terminal-1')).toBeInTheDocument();
+
+    act(() => {
+      useWindowStore.getState().updatePane('terminal-1', paneId, {
+        status: WindowStatus.Completed,
+        pid: null,
+        sessionId: undefined,
+      });
+    });
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      const liveBlock = updated?.blocks.find((block) => block.id === 'window-1');
+      expect(liveBlock?.type).toBe('window');
+      if (liveBlock?.type === 'window') {
+        expect(liveBlock.displayMode).toBe('summary');
+      }
+    });
+
+    rerender(
+      <CanvasWorkspaceView
+        canvasWorkspace={useWindowStore.getState().getCanvasWorkspaceById('canvas-1')!}
+        renderLiveWindow={renderLiveWindow}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '实时嵌入' })).toBeInTheDocument();
   });
 
   it('renders terminal card actions in flow layout with a dedicated footer row', async () => {

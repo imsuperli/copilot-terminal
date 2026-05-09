@@ -141,6 +141,11 @@ export const idePopupInputClassName = joinClassNames(
   'focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20',
 );
 
+export const idePopupNativeSelectClassName = joinClassNames(
+  idePopupInputClassName,
+  'appearance-auto',
+);
+
 export const idePopupSelectTriggerClassName = joinClassNames(
   'flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] px-4 py-3 text-left text-sm text-[rgb(var(--foreground))]',
   'bg-[var(--appearance-pane-background)] transition-[border-color,box-shadow,background-color]',

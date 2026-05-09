@@ -38,7 +38,11 @@ import {
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { destroyWindowResourcesAndRemoveRecord, destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
+import {
+  destroySSHWindowFamilyResources,
+  destroyWindowResourcesAndRemoveRecord,
+  destroyWindowResourcesKeepRecord,
+} from '../utils/windowDestruction';
 import { createCanvasWindowBlock } from '../utils/canvasWorkspace';
 
 // 统一的卡片项类型
@@ -136,6 +140,7 @@ export const CardGrid = React.memo<CardGridProps>(({
 }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
+  const activeWindowId = useWindowStore((state) => state.activeWindowId);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
@@ -678,6 +683,22 @@ export const CardGrid = React.memo<CardGridProps>(({
     }
   }, [destroyWindowIds]);
 
+  const handleDestroySSHProfileWindowSession = useCallback(async (win: Window) => {
+    try {
+      const activeWindowIdAtStart = activeWindowId;
+      const destroyedWindowIds = await destroySSHWindowFamilyResources(win, {
+        removeTargetRecord: true,
+        includeOwnedClones: true,
+      });
+
+      if (activeWindowIdAtStart && destroyedWindowIds.includes(activeWindowIdAtStart)) {
+        await window.electronAPI.switchToUnifiedView();
+      }
+    } catch (error) {
+      console.error('Failed to destroy SSH profile window:', error);
+    }
+  }, [activeWindowId]);
+
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {
       if (isEphemeralSSHCloneWindow(win)) {
@@ -1116,7 +1137,7 @@ export const CardGrid = React.memo<CardGridProps>(({
                   isConnecting={connectingSSHProfileId === profile.id}
                   onConnect={handleConnectSSHProfile}
                   onOpenWindow={() => handleConnectSSHProfile(profile)}
-                  onDestroyWindowSession={handleDestroyWindowSession}
+                  onDestroyWindowSession={handleDestroySSHProfileWindowSession}
                   onStartWindow={() => handleConnectSSHProfile(profile)}
                   onArchiveWindow={handleArchiveWindow}
                   onUnarchiveWindow={handleUnarchiveWindow}

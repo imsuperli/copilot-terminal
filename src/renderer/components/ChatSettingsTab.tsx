@@ -14,6 +14,7 @@ import {
   idePopupActionButtonClassName,
   idePopupEmptyStateClassName,
   idePopupInputClassName,
+  idePopupNativeSelectClassName,
   idePopupSecondaryButtonClassName,
 } from './ui/ide-popup';
 import { Dialog } from './ui/Dialog';
@@ -119,6 +120,7 @@ export const ChatSettingsTab: React.FC = () => {
   );
 
   const inputClassName = `${idePopupInputClassName} !rounded-lg !px-3 !py-2`;
+  const selectClassName = `${idePopupNativeSelectClassName} !rounded-lg !px-3 !py-2`;
   const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-lg px-3`;
   const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-9 min-w-0 rounded-lg px-3`;
   const emptyStateClassName = `${idePopupEmptyStateClassName} px-5 py-8 text-center`;
@@ -809,7 +811,7 @@ export const ChatSettingsTab: React.FC = () => {
                         aria-label={t('settings.chat.defaultModelLabel')}
                         value={providerForm.defaultModel}
                         onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
-                        className={`w-full ${inputClassName}`}
+                        className={`w-full ${selectClassName}`}
                       >
                         {resolvedModels.length === 0 ? (
                           <option value="">{t('settings.chat.defaultModelPlaceholder')}</option>
@@ -921,7 +923,7 @@ export const ChatSettingsTab: React.FC = () => {
                 setSettingsError(message);
               });
             }}
-            className={inputClassName}
+            className={selectClassName}
           >
             <option value="">{t('settings.chat.activeProviderPlaceholder')}</option>
             {providers.map((provider) => (

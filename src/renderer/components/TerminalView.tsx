@@ -610,6 +610,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       const exitingPane = panes.find((pane) => pane.id === paneId);
 
       if (exitingPane && isTerminalPane(exitingPane) && terminalPaneCount <= 1) {
+        if (canvasEmbedded) {
+          void destroyWindowResourcesKeepRecord(terminalWindow.id).catch((error) => {
+            console.error('Failed to destroy canvas embedded window session after pane exit:', error);
+          });
+          return;
+        }
+
         // 单窗格窗口退出
         if (embedded && onStopAndRemoveFromGroup) {
           // 窗口组内：复用"停止并移除"逻辑
@@ -649,6 +656,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       terminalWindow,
       panes,
       terminalPaneCount,
+      canvasEmbedded,
       embedded,
       onStopAndRemoveFromGroup,
       isEphemeralRemoteTab,

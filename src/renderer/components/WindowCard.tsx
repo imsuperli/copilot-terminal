@@ -1,9 +1,9 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { FolderOpen, Trash2, Play, Square, Loader2, Archive, ArchiveRestore, Edit2, ChevronDown } from 'lucide-react';
+import { FolderOpen, Trash2, Play, Square, Loader2, Archive, ArchiveRestore, Edit2, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { Pane, Window, WindowStatus } from '../types/window';
-import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
+import { getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
 import { getAggregatedStatusFromPanes, getAllPanes } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
@@ -14,6 +14,7 @@ import { formatRelativeTime, useI18n } from '../i18n';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import {
   ideMenuContentClassName,
+  ideMenuDangerItemClassName,
   ideMenuItemClassName,
   IdeMenuItemContent,
 } from './ui/ide-menu';
@@ -175,8 +176,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
     [activeTerminalPane, enabledIDEs.length, workingDirectory]
   );
 
-  // 缓存状态色和标签
-  const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
+  // 缓存状态标签
   const statusLabel = useMemo(() => t(getStatusLabelKey(aggregatedStatus)), [aggregatedStatus, t]);
   const tooltipClassName = idePopupTooltipClassName;
   const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
@@ -286,7 +286,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       {/* 卡片内容 - 占据剩余空间 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
         {/* 第一行：窗口名称 + 窗格数量 + 状态 */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <TerminalTypeLogo
               variant={windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local'}
@@ -302,31 +302,88 @@ export const WindowCard = React.memo<WindowCardProps>(({
               </span>
             )}
           </div>
-          {/* 始终显示每个窗格的状态圆点 */}
-          <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-            {panes.map((pane, index) => (
-              <Tooltip.Provider key={pane.id}>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <div>
-                      <StatusDot
-                        status={pane.status}
-                        size="sm"
-                      />
-                    </div>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className={tooltipClassName}
-                      side="top"
-                      sideOffset={5}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* 始终显示每个窗格的状态圆点 */}
+            <div className="flex items-center gap-1.5">
+              {panes.map((pane, index) => (
+                <Tooltip.Provider key={pane.id}>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <div>
+                        <StatusDot
+                          status={pane.status}
+                          size="sm"
+                        />
+                      </div>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className={tooltipClassName}
+                        side="top"
+                        sideOffset={5}
+                      >
+                        {t('windowCard.pane', { index: index + 1, status: t(getStatusLabelKey(pane.status)) })}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              ))}
+            </div>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('common.more')}
+                  onClick={(event) => event.stopPropagation()}
+                  className={`flex h-8 w-8 items-center justify-center ${cardButtonClassName}`}
+                >
+                  <MoreHorizontal size={15} />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  className={ideMenuContentClassName}
+                  side="bottom"
+                  align="end"
+                  sideOffset={6}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {!window.archived ? (
+                    <DropdownMenu.Item
+                      className={ideMenuItemClassName}
+                      onSelect={() => onArchive?.(window)}
+                      aria-label={t('terminalView.archive')}
                     >
-                      {t('windowCard.pane', { index: index + 1, status: t(getStatusLabelKey(pane.status)) })}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            ))}
+                      <IdeMenuItemContent icon={<Archive size={14} />} label={t('terminalView.archive')} />
+                    </DropdownMenu.Item>
+                  ) : (
+                    <DropdownMenu.Item
+                      className={ideMenuItemClassName}
+                      onSelect={() => onUnarchive?.(window)}
+                      aria-label={t('windowCard.unarchive')}
+                    >
+                      <IdeMenuItemContent icon={<ArchiveRestore size={14} />} label={t('windowCard.unarchive')} />
+                    </DropdownMenu.Item>
+                  )}
+
+                  <DropdownMenu.Item
+                    className={ideMenuItemClassName}
+                    onSelect={() => onEdit?.(window)}
+                    aria-label={t('windowCard.edit')}
+                  >
+                    <IdeMenuItemContent icon={<Edit2 size={14} />} label={t('windowCard.edit')} />
+                  </DropdownMenu.Item>
+
+                  <DropdownMenu.Item
+                    className={ideMenuDangerItemClassName}
+                    onSelect={() => onDelete?.(window.id)}
+                    aria-label={t('common.deleteWindow')}
+                  >
+                    <IdeMenuItemContent icon={<Trash2 size={14} />} label={t('common.deleteWindow')} />
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
         </div>
 
@@ -379,9 +436,8 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
       {/* 底部按钮栏 - 两行布局 */}
       <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 flex-col gap-1.5 px-4 py-2`}>
-        {/* 第一行：启动/停止按钮（左侧） + 操作按钮（右侧） */}
+        {/* 第一行：启动/停止按钮 */}
         <div className="flex items-center justify-between">
-          {/* 左侧：启动/停止按钮 */}
           <div>
             {aggregatedStatus === WindowStatus.Completed && (
               <Tooltip.Provider>
@@ -443,103 +499,6 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 </Tooltip.Root>
               </Tooltip.Provider>
             )}
-          </div>
-
-          {/* 右侧：操作按钮组（归档 + 编辑 + 删除） */}
-          <div className="flex items-center gap-1.5">
-            {!window.archived ? (
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={(e) => handleButtonClick(e, () => onArchive?.(window))}
-                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                      aria-label={t('terminalView.archive')}
-                    >
-                      <Archive size={16} />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className={tooltipClassName}
-                      side="top"
-                      sideOffset={5}
-                    >
-                      {t('windowCard.archive')}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            ) : (
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={(e) => handleButtonClick(e, () => onUnarchive?.(window))}
-                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                      aria-label={t('windowCard.unarchive')}
-                    >
-                      <ArchiveRestore size={16} />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className={tooltipClassName}
-                      side="top"
-                      sideOffset={5}
-                    >
-                      {t('windowCard.unarchive')}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            )}
-
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(e) => handleButtonClick(e, () => onEdit?.(window))}
-                    className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
-                    aria-label={t('windowCard.edit')}
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className={tooltipClassName}
-                    side="top"
-                    sideOffset={5}
-                  >
-                    {t('windowCard.edit')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
-
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(e) => handleButtonClick(e, () => onDelete?.(window.id))}
-                    className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]`}
-                    aria-label={t('common.deleteWindow')}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className={tooltipClassName}
-                    side="top"
-                    sideOffset={5}
-                  >
-                    {t('common.delete')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
           </div>
         </div>
 
