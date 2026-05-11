@@ -136,14 +136,14 @@ describe('App quick navigation shortcut', () => {
     vi.useRealTimers();
   });
 
-  it('opens quick navigation when Shift is double-tapped within 149ms', async () => {
+  it('opens quick navigation when Shift is double-tapped within 399ms', async () => {
     await renderApp();
 
     expect(screen.queryByTestId('quick-nav-state')).not.toBeInTheDocument();
 
     await act(async () => {
       pressShift();
-      vi.advanceTimersByTime(149);
+      vi.advanceTimersByTime(399);
       pressShift();
       await Promise.resolve();
       await Promise.resolve();
@@ -152,12 +152,12 @@ describe('App quick navigation shortcut', () => {
     expect(screen.getByTestId('quick-nav-state')).toHaveTextContent('open');
   });
 
-  it('does not open quick navigation when Shift taps are 150ms apart', async () => {
+  it('does not open quick navigation when Shift taps are 400ms apart', async () => {
     await renderApp();
 
     act(() => {
       pressShift();
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(400);
       pressShift();
     });
 

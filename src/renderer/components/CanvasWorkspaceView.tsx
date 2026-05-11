@@ -1460,7 +1460,7 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
     });
   }, []);
 
-  const handleCanvasWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+  const handleCanvasWheel = useCallback((event: WheelEvent) => {
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
       const rect = canvasRef.current?.getBoundingClientRect();
@@ -1483,6 +1483,18 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       canvasWorkspace.viewport.zoom,
     );
   }, [canvasWorkspace.viewport, updateViewport]);
+
+  useEffect(() => {
+    const canvasNode = canvasRef.current;
+    if (!canvasNode) {
+      return undefined;
+    }
+
+    canvasNode.addEventListener('wheel', handleCanvasWheel, { passive: false });
+    return () => {
+      canvasNode.removeEventListener('wheel', handleCanvasWheel);
+    };
+  }, [handleCanvasWheel]);
 
   useEffect(() => {
     if (!dragState) {
@@ -1757,7 +1769,6 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
       <div
         ref={canvasRef}
         className="h-full w-full overflow-hidden"
-        onWheel={handleCanvasWheel}
         onMouseDown={(event) => {
           const shouldPan = event.button === 1 || (event.button === 0 && event.altKey);
           if (shouldPan) {

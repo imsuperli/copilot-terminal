@@ -69,7 +69,7 @@ import { matchesKeyboardShortcut } from '../shared/utils/keyboardShortcuts';
 import { destroyWindowResourcesKeepRecord } from './utils/windowDestruction';
 import type { WindowSwitchHandler, WindowSwitchOptions } from './types/windowSwitch';
 
-const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
+const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 400;
 const STARTUP_MASK_HOLD_MS = 40;
 const STARTUP_MASK_FADE_MS = 140;
 const LazyQuickNavPanel = lazy(async () => ({
@@ -842,11 +842,11 @@ function AppContent() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
     };
   }, [keyboardShortcuts.quickNav]);
 

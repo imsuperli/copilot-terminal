@@ -26,7 +26,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       const opts = optionsRef.current;
       const enabled = opts.enabled !== false; // 默认 true
 
-      if (!enabled) return;
+      if (!enabled || e.defaultPrevented) return;
 
       const target = e.target as HTMLElement;
       const isXtermTextarea = target?.classList?.contains('xterm-helper-textarea');
@@ -44,6 +44,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
       if (matchesKeyboardShortcut(e, opts.quickSwitcherShortcut)) {
         e.preventDefault();
+        e.stopPropagation();
         opts.onCtrlTab?.();
         return;
       }
@@ -51,6 +52,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       // Ctrl+B: 切换侧边栏
       if (e.ctrlKey && e.key === 'b') {
         e.preventDefault();
+        e.stopPropagation();
         opts.onCtrlB?.();
         return;
       }
@@ -58,6 +60,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       // Ctrl+1~9: 切换到第 N 个窗口
       if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
+        e.stopPropagation();
         opts.onCtrlNumber?.(parseInt(e.key, 10));
         return;
       }
@@ -75,10 +78,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       }
     };
 
-    // 改为冒泡阶段监听，避免干扰 xterm.js 的输入处理
-    window.addEventListener('keydown', handleKeyDown, false);
+    // 捕获阶段保留明确的应用级快捷键，避免 xterm 在目标阶段先消费 Ctrl+Tab。
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, false);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []); // 空依赖数组：listener 只注册一次，通过 ref 读取最新值
 }
