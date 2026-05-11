@@ -30,6 +30,7 @@ export interface SplitLayoutProps {
   layout: LayoutNode;
   activePaneId: string;
   isWindowActive: boolean;
+  ptyInputEnabled?: boolean;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
@@ -45,6 +46,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   layout,
   activePaneId,
   isWindowActive,
+  ptyInputEnabled = true,
   onPaneActivate,
   onPaneClose,
   onPaneExit,
@@ -108,6 +110,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
         splitPath={[]}
         activePaneId={activePaneId}
         isWindowActive={isWindowActive}
+        ptyInputEnabled={ptyInputEnabled}
         totalPaneCount={totalPaneCount}
         onPaneActivate={onPaneActivate}
         onPaneClose={onPaneClose}
@@ -131,6 +134,7 @@ interface SplitContainerProps {
   splitPath: number[];
   activePaneId: string;
   isWindowActive: boolean;
+  ptyInputEnabled: boolean;
   totalPaneCount: number;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
@@ -145,6 +149,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   splitPath,
   activePaneId,
   isWindowActive,
+  ptyInputEnabled,
   totalPaneCount,
   onPaneActivate,
   onPaneClose,
@@ -275,6 +280,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               splitPath={[...splitPath, index]}
               activePaneId={activePaneId}
               isWindowActive={isWindowActive}
+              ptyInputEnabled={ptyInputEnabled}
               totalPaneCount={totalPaneCount}
               onPaneActivate={onPaneActivate}
               onPaneClose={onPaneClose}
@@ -354,6 +360,7 @@ interface LayoutNodeRendererProps {
   splitPath: number[];
   activePaneId: string;
   isWindowActive: boolean;
+  ptyInputEnabled: boolean;
   totalPaneCount: number;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
@@ -686,6 +693,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   splitPath,
   activePaneId,
   isWindowActive,
+  ptyInputEnabled,
   totalPaneCount,
   onPaneActivate,
   onPaneClose,
@@ -745,6 +753,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
           layoutPaneCount={totalPaneCount}
           isActive={isActive}
           isWindowActive={isWindowActive}
+          ptyInputEnabled={ptyInputEnabled}
           onActivate={() => onPaneActivate(layout.id)}
           onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
           onProcessExit={onPaneExit ? () => onPaneExit(layout.id) : undefined}
@@ -776,6 +785,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
       splitPath={splitPath}
       activePaneId={activePaneId}
       isWindowActive={isWindowActive}
+      ptyInputEnabled={ptyInputEnabled}
       totalPaneCount={totalPaneCount}
       onPaneActivate={onPaneActivate}
       onPaneClose={onPaneClose}

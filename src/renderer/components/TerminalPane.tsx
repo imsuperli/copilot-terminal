@@ -429,6 +429,7 @@ export interface TerminalPaneProps {
   layoutPaneCount?: number;
   isActive: boolean; // 是否是当前激活的窗格
   isWindowActive: boolean; // 窗口是否是当前激活的窗口
+  ptyInputEnabled?: boolean;
   onActivate: () => void; // 点击激活
   onClose?: () => void; // 关闭窗格（可选，最后一个窗格不显示关闭按钮）
   onProcessExit?: () => void; // 进程退出回调（委托父组件处理）
@@ -444,6 +445,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   layoutPaneCount = 1,
   isActive,
   isWindowActive,
+  ptyInputEnabled = true,
   onActivate,
   onClose,
   onProcessExit,
@@ -461,6 +463,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
   const lastSyncedTerminalSizeRef = useRef({ cols: 0, rows: 0 });
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
+  const ptyInputEnabledRef = useRef(ptyInputEnabled);
   const onActivateRef = useRef(onActivate);
   const suppressNativePasteUntilRef = useRef(0); // 短时间屏蔽原生 paste，避免与手动 Ctrl+V 粘贴重复
   const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
@@ -734,6 +737,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     isActiveRef.current = isActive;
   }, [isActive]);
+
+  useEffect(() => {
+    ptyInputEnabledRef.current = ptyInputEnabled;
+  }, [ptyInputEnabled]);
 
   useEffect(() => {
     onActivateRef.current = onActivate;
@@ -1318,7 +1325,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     const performPaste = (text: string, source: 'context-menu-paste' | 'clipboard-shortcut') => {
       const normalizedText = normalizeTerminalPasteText(text);
-      if (!normalizedText || !window.electronAPI) {
+      if (!normalizedText || !window.electronAPI || !ptyInputEnabledRef.current) {
         return;
       }
 
@@ -1364,7 +1371,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         e.preventDefault();
         e.stopPropagation();
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
-        if (isActiveRef.current && window.electronAPI?.tryPasteSshClipboardImage) {
+        if (isActiveRef.current && ptyInputEnabledRef.current && window.electronAPI?.tryPasteSshClipboardImage) {
           void (async () => {
             const runtimeCwd = sshCwdTrackerRef.current.cwd ?? pane.cwd;
             const imageResult = await window.electronAPI.tryPasteSshClipboardImage(windowId, pane.id, runtimeCwd);
@@ -1389,10 +1396,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         e.preventDefault(); // 阻止浏览器默认粘贴行为（否则会通过 xterm textarea 触发第二次粘贴）
         e.stopPropagation();
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
-        if (isActiveRef.current && window.electronAPI) {
+        if (isActiveRef.current && ptyInputEnabledRef.current && window.electronAPI) {
           void (async () => {
             const text = await readClipboardText();
-            if (text && window.electronAPI && isActiveRef.current) {
+            if (text && window.electronAPI && isActiveRef.current && ptyInputEnabledRef.current) {
               performPaste(text, 'clipboard-shortcut');
             }
           })();
@@ -1418,13 +1425,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       // 新会话的首次回放里，xterm 生成的协议响应仍然要回给 PTY；
       // 只有同一会话后续的补回放才需要屏蔽 synthetic reply。
-      if (window.electronAPI && !suppressPtyWriteRef.current) {
+      if (window.electronAPI && !suppressPtyWriteRef.current && ptyInputEnabledRef.current) {
         window.electronAPI.ptyWrite(windowId, pane.id, data, { source: 'xterm.onData' });
       }
     });
 
     const binaryDisposable = terminal.onBinary?.((data) => {
-      if (window.electronAPI && !suppressPtyWriteRef.current) {
+      if (window.electronAPI && !suppressPtyWriteRef.current && ptyInputEnabledRef.current) {
         window.electronAPI.ptyWrite(windowId, pane.id, data, { source: 'xterm.onBinary' });
       }
     });

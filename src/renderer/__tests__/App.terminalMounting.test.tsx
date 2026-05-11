@@ -2,16 +2,34 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
-import { createSinglePaneWindow } from '../utils/layoutHelpers';
+import { createSinglePaneWindow, splitPane } from '../utils/layoutHelpers';
 
-const { mockTerminalView, mockUseViewSwitcher, mockUseWindowSwitcher, mockUseWorkspaceRestore } = vi.hoisted(() => ({
-  mockTerminalView: vi.fn(({ window, isActive }: { window: { id: string }; isActive: boolean }) => (
-    <div data-testid={`terminal-${window.id}`} data-active={String(isActive)} />
-  )),
-  mockUseViewSwitcher: vi.fn(),
-  mockUseWindowSwitcher: vi.fn(),
-  mockUseWorkspaceRestore: vi.fn(),
-}));
+const { mockTerminalView, mockUseViewSwitcher, mockUseWindowSwitcher, mockUseWorkspaceRestore } = vi.hoisted(() => {
+  const collectPaneIds = (layout: any): string[] => {
+    if (!layout) {
+      return [];
+    }
+
+    if (layout.type === 'pane') {
+      return [layout.id];
+    }
+
+    return layout.children.flatMap((child: any) => collectPaneIds(child));
+  };
+
+  return {
+    mockTerminalView: vi.fn(({ window, isActive }: { window: { id: string; layout?: any }; isActive: boolean }) => (
+      <div
+        data-testid={`terminal-${window.id}`}
+        data-active={String(isActive)}
+        data-pane-ids={collectPaneIds(window.layout).join(',')}
+      />
+    )),
+    mockUseViewSwitcher: vi.fn(),
+    mockUseWindowSwitcher: vi.fn(),
+    mockUseWorkspaceRestore: vi.fn(),
+  };
+});
 
 vi.mock('../components/TerminalView', () => ({
   TerminalView: mockTerminalView,
@@ -52,8 +70,23 @@ vi.mock('../components/CleanupOverlay', () => ({
 }));
 
 vi.mock('../components/CanvasWorkspaceView', () => ({
-  CanvasWorkspaceView: ({ canvasWorkspace }: { canvasWorkspace: { name: string } }) => (
-    <div data-testid="canvas-workspace-view">{canvasWorkspace.name}</div>
+  CanvasWorkspaceView: ({
+    canvasWorkspace,
+    renderLiveWindow,
+  }: {
+    canvasWorkspace: { name: string; blocks?: Array<{ id: string; type: string; windowId?: string; displayMode?: string }> };
+    renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => unknown;
+  }) => (
+    <div data-testid="canvas-workspace-view">
+      {canvasWorkspace.name}
+      {canvasWorkspace.blocks
+        ?.filter((block) => block.type === 'window' && block.windowId && block.displayMode === 'live')
+        .map((block) => (
+          <div key={block.id} data-testid={`canvas-live-${block.windowId}`}>
+            {renderLiveWindow?.(block.windowId!, { isActive: true }) as any}
+          </div>
+        ))}
+    </div>
   ),
 }));
 
@@ -261,6 +294,103 @@ describe('App terminal mounting', () => {
     render(<App />);
 
     expect(screen.getByTestId(`terminal-${windowOne.id}`)).toHaveAttribute('data-active', 'true');
+  });
+
+  it('keeps the standalone terminal mounted and syncs canvas live layout changes', async () => {
+    const terminalWindow = withSinglePaneStatus(
+      createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe'),
+      WindowStatus.Running,
+    );
+    const paneOneId = terminalWindow.activePaneId;
+    const paneTwoId = 'pane-two';
+    const paneThreeId = 'pane-three';
+
+    if (terminalWindow.layout.type !== 'pane') {
+      throw new Error('expected single pane layout');
+    }
+
+    const paneTwo = {
+      ...terminalWindow.layout.pane,
+      id: paneTwoId,
+      pid: 202,
+    };
+    const paneThree = {
+      ...terminalWindow.layout.pane,
+      id: paneThreeId,
+      pid: 303,
+    };
+
+    const twoPaneLayout = splitPane(terminalWindow.layout, paneOneId, 'horizontal', paneTwo);
+    if (!twoPaneLayout) {
+      throw new Error('expected two pane layout');
+    }
+
+    const threePaneLayout = splitPane(twoPaneLayout, paneTwoId, 'vertical', paneThree);
+    if (!threePaneLayout) {
+      throw new Error('expected three pane layout');
+    }
+
+    terminalWindow.layout = threePaneLayout;
+
+    mockUseViewSwitcher.mockReturnValue({
+      currentView: 'canvas',
+      activeWindowId: null,
+      activeCanvasWorkspaceId: 'canvas-1',
+      switchToTerminalView: vi.fn(),
+      switchToCanvasView: vi.fn(),
+      switchToUnifiedView: vi.fn(),
+      error: null,
+    });
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Ops Board',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z',
+          blocks: [
+            {
+              id: 'window-block-1',
+              type: 'window',
+              windowId: terminalWindow.id,
+              x: 0,
+              y: 0,
+              width: 360,
+              height: 220,
+              zIndex: 1,
+              displayMode: 'live',
+            },
+          ],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 2,
+        },
+      ],
+      activeWindowId: terminalWindow.id,
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeGroupId: null,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    const terminalSurfaces = screen.getAllByTestId(`terminal-${terminalWindow.id}`);
+    expect(terminalSurfaces).toHaveLength(2);
+    expect(terminalSurfaces.some((surface) => surface.getAttribute('data-active') === 'false')).toBe(true);
+    expect(terminalSurfaces.map((surface) => surface.getAttribute('data-pane-ids'))).toContain(`${paneOneId},${paneTwoId},${paneThreeId}`);
+
+    act(() => {
+      useWindowStore.getState().closePaneInWindow(terminalWindow.id, paneTwoId, { syncProcess: false });
+    });
+
+    await waitFor(() => {
+      const latestSurfaces = screen.getAllByTestId(`terminal-${terminalWindow.id}`);
+      expect(latestSurfaces.map((surface) => surface.getAttribute('data-pane-ids'))).toContain(`${paneOneId},${paneThreeId}`);
+      expect(latestSurfaces.every((surface) => !surface.getAttribute('data-pane-ids')?.includes(paneTwoId))).toBe(true);
+    });
   });
 
   it('clears pane runtime when the main process reports an exited pane', () => {

@@ -166,6 +166,7 @@ function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): s
 
 const MountedTerminalSurface = React.memo(({
   activeCanvasWorkspaceId,
+  activeLiveCanvasWindowIds,
   isVisible,
   onCanvasSwitch,
   onGroupSwitch,
@@ -177,6 +178,7 @@ const MountedTerminalSurface = React.memo(({
   windowId,
 }: {
   activeCanvasWorkspaceId: string | null;
+  activeLiveCanvasWindowIds: Set<string>;
   isVisible: boolean;
   onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
@@ -206,6 +208,7 @@ const MountedTerminalSurface = React.memo(({
   const isMac = window.electronAPI?.platform === 'darwin';
   const titleBarHeight = isMac ? 36 : 32;
   const keepsLayoutWhileHidden = getAllPanes(terminalWindow.layout).some((pane) => pane.kind === 'browser');
+  const ptyInputEnabled = isVisible || !activeLiveCanvasWindowIds.has(windowId);
 
   return (
     <div
@@ -231,6 +234,7 @@ const MountedTerminalSurface = React.memo(({
         onCanvasSwitch={onCanvasSwitch}
         onGroupSwitch={onGroupSwitch}
         isActive={isVisible}
+        ptyInputEnabled={ptyInputEnabled}
         sshEnabled={sshEnabled}
         sshProfiles={sshProfiles}
         onSSHProfileSaved={onSSHProfileSaved}
@@ -240,6 +244,55 @@ const MountedTerminalSurface = React.memo(({
 });
 
 MountedTerminalSurface.displayName = 'MountedTerminalSurface';
+
+const CanvasEmbeddedTerminalSurface = React.memo(({
+  isActive,
+  onCanvasSwitch,
+  onExitWorkspace,
+  onGroupSwitch,
+  onWindowSwitch,
+  onSSHProfileSaved,
+  sshEnabled,
+  sshProfiles,
+  windowId,
+}: {
+  isActive: boolean;
+  onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
+  onExitWorkspace: () => void | Promise<void>;
+  onGroupSwitch: (groupId: string) => void | Promise<void>;
+  onWindowSwitch: WindowSwitchHandler;
+  onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
+  sshEnabled: boolean;
+  sshProfiles: SSHProfile[];
+  windowId: string;
+}) => {
+  const embeddedWindow = useWindowStore((state) => (
+    state.windows.find((window) => window.id === windowId) ?? null
+  ));
+
+  if (!embeddedWindow) {
+    return null;
+  }
+
+  return (
+    <TerminalView
+      key={`canvas-embedded-${windowId}`}
+      window={embeddedWindow}
+      onReturn={onExitWorkspace}
+      onWindowSwitch={onWindowSwitch}
+      onCanvasSwitch={onCanvasSwitch}
+      onGroupSwitch={onGroupSwitch}
+      isActive={isActive}
+      embedded
+      canvasEmbedded
+      sshEnabled={sshEnabled}
+      sshProfiles={sshProfiles}
+      onSSHProfileSaved={onSSHProfileSaved}
+    />
+  );
+});
+
+CanvasEmbeddedTerminalSurface.displayName = 'CanvasEmbeddedTerminalSurface';
 
 const ActiveGroupSurface = React.memo(({
   activeGroupId,
@@ -361,21 +414,15 @@ const ActiveCanvasSurface = React.memo(({
             onOpenGroup={onGroupSwitch}
             onStopWorkspace={onStopWorkspace}
             renderLiveWindow={(windowId, options) => {
-              const embeddedWindow = useWindowStore.getState().getWindowById(windowId);
-              if (!embeddedWindow) {
-                return null;
-              }
-
               return (
-                <TerminalView
-                  key={`canvas-embedded-${windowId}`}
-                  window={embeddedWindow}
-                  onReturn={onExitWorkspace}
+                <CanvasEmbeddedTerminalSurface
+                  key={windowId}
+                  windowId={windowId}
+                  isActive={options.isActive}
                   onWindowSwitch={onWindowSwitch}
                   onCanvasSwitch={onCanvasSwitch}
-                  isActive={options.isActive}
-                  embedded
-                  canvasEmbedded
+                  onGroupSwitch={onGroupSwitch}
+                  onExitWorkspace={onExitWorkspace}
                   sshEnabled={sshEnabled}
                   sshProfiles={sshProfiles}
                   onSSHProfileSaved={onSSHProfileSaved}
@@ -1542,7 +1589,7 @@ function AppContent() {
 
     return nextIds;
   }, [activeWindowId, mountedTerminalWindowIds]);
-  const liveCanvasWindowIds = useMemo(() => {
+  const activeLiveCanvasWindowIds = useMemo(() => {
     const ids = new Set<string>();
     if (currentView !== 'canvas' || !currentActiveCanvasWorkspaceId) {
       return ids;
@@ -1725,12 +1772,11 @@ function AppContent() {
       </div>
 
       {/* 终端视图：窗口一旦打开过就保持挂载，仅切换显示状态，避免返回或窗口切换时销毁 xterm 实例 */}
-      {mountedTerminalWindowIds
-        .filter((windowId) => !liveCanvasWindowIds.has(windowId))
-        .map((windowId) => (
+      {mountedTerminalWindowIds.map((windowId) => (
         <MountedTerminalSurface
           key={windowId}
           activeCanvasWorkspaceId={currentActiveCanvasWorkspaceId}
+          activeLiveCanvasWindowIds={activeLiveCanvasWindowIds}
           windowId={windowId}
           isVisible={currentView === 'terminal' && activeWindowId === windowId}
           onReturn={handleReturnFromTerminal}

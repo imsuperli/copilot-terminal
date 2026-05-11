@@ -248,6 +248,8 @@ export interface TerminalViewProps {
   embedded?: boolean;
   /** 画布嵌入模式：只渲染终端内容，不显示侧栏、标题栏动作和远程标签 */
   canvasEmbedded?: boolean;
+  /** 是否允许此视图把 xterm 输入写回 PTY；隐藏的备用挂载实例会关闭它，避免重复协议响应污染同一会话。 */
+  ptyInputEnabled?: boolean;
   /** 所属组 ID（嵌入模式下传入） */
   groupId?: string;
   /** 从组中移除窗口的回调 */
@@ -273,6 +275,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   isActive,
   embedded = false,
   canvasEmbedded = false,
+  ptyInputEnabled = true,
   groupId,
   onRemoveFromGroup,
   onStopAndRemoveFromGroup,
@@ -1617,6 +1620,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 layout={terminalWindow.layout}
                 activePaneId={terminalWindow.activePaneId}
                 isWindowActive={isActive}
+                ptyInputEnabled={ptyInputEnabled}
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
                 onPaneExit={handlePaneExit}
@@ -1698,6 +1702,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 layout={terminalWindow.layout}
                 activePaneId={terminalWindow.activePaneId}
                 isWindowActive={isActive}
+                ptyInputEnabled={ptyInputEnabled}
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
                 onPaneExit={handlePaneExit}
@@ -1714,6 +1719,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   layout={terminalWindow.layout}
                   activePaneId={terminalWindow.activePaneId}
                   isWindowActive={isActive}
+                  ptyInputEnabled={ptyInputEnabled}
                   onPaneActivate={handlePaneActivate}
                   onPaneClose={handlePaneClose}
                   onPaneExit={handlePaneExit}
