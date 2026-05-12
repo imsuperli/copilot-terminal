@@ -245,6 +245,7 @@ describe('windowStore auto-save gating', () => {
         }),
       ],
       expect.anything(),
+      expect.anything(),
     );
   });
 
@@ -266,6 +267,7 @@ describe('windowStore auto-save gating', () => {
             command: 'pwsh.exe',
             status: WindowStatus.Running,
             pid: 111,
+            sessionId: 'leader-session',
             title: 'leader',
             borderColor: '#0087ff',
           },
@@ -341,11 +343,12 @@ describe('windowStore auto-save gating', () => {
     }
 
     expect(storedWindow.layout.pane.title).toBeUndefined();
+    expect(storedWindow.layout.pane.sessionId).toBeUndefined();
     expect(storedWindow.layout.pane.borderColor).toBeUndefined();
     expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps manual split layouts intact when clearing a non-tmux multi-pane session', () => {
+  it('keeps manual split layouts intact and auto-saves when clearing a non-tmux multi-pane session', () => {
     const terminalWindow = createSinglePaneWindow('Manual Split', 'D:\\repo', 'pwsh.exe');
     const leaderPaneId = terminalWindow.activePaneId;
     const teammatePaneId = 'pane-teammate';
@@ -364,6 +367,7 @@ describe('windowStore auto-save gating', () => {
             command: 'pwsh.exe',
             status: WindowStatus.Running,
             pid: 444,
+            sessionId: 'leader-session',
           },
         },
         {
@@ -375,6 +379,7 @@ describe('windowStore auto-save gating', () => {
             command: 'pwsh.exe',
             status: WindowStatus.WaitingForInput,
             pid: 555,
+            sessionId: 'teammate-session',
           },
         },
       ],
@@ -390,6 +395,7 @@ describe('windowStore auto-save gating', () => {
     });
 
     useWindowStore.getState().clearWindowRuntimeSession(terminalWindow.id);
+    __flushWindowStoreAutoSaveForTests();
 
     const storedWindow = useWindowStore.getState().windows[0];
     expect(storedWindow.layout.type).toBe('split');
@@ -397,11 +403,11 @@ describe('windowStore auto-save gating', () => {
     expect(getAllPanes(storedWindow.layout)).toHaveLength(2);
     expect(getAllPanes(storedWindow.layout)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: leaderPaneId, status: WindowStatus.Completed, pid: null }),
-        expect.objectContaining({ id: teammatePaneId, status: WindowStatus.Completed, pid: null }),
+        expect.objectContaining({ id: leaderPaneId, status: WindowStatus.Completed, pid: null, sessionId: undefined }),
+        expect.objectContaining({ id: teammatePaneId, status: WindowStatus.Completed, pid: null, sessionId: undefined }),
       ]),
     );
-    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
   });
 
   it('coalesces repeated persisted updates into a single auto-save payload', () => {
@@ -435,6 +441,7 @@ describe('windowStore auto-save gating', () => {
           name: 'Coalesce 2',
         }),
       ],
+      [],
       [],
     );
   });

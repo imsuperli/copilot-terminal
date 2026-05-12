@@ -111,6 +111,7 @@ describe('WorkspaceManager', () => {
                 command: 'claude',
                 status: 'running',
                 pid: 1234,
+                sessionId: 'stale-session-1',
                 title: 'team-lead',
               },
             },
@@ -137,6 +138,7 @@ describe('WorkspaceManager', () => {
       const saved = await fs.readJson(workspacePath);
       expect(saved.windows[0].layout.pane).not.toHaveProperty('status');
       expect(saved.windows[0].layout.pane).not.toHaveProperty('pid');
+      expect(saved.windows[0].layout.pane).not.toHaveProperty('sessionId');
       expect(saved.windows[0].layout.pane.title).toBe('team-lead');
       expect(saved.windows[0]).not.toHaveProperty('claudeModel');
       expect(saved.windows[0]).not.toHaveProperty('claudeModelId');
@@ -653,8 +655,60 @@ describe('WorkspaceManager', () => {
         throw new Error('expected pane layout');
       }
 
-      expect(paneLayout.pane.status).toBe('paused');
+      expect(paneLayout.pane.status).toBe('completed');
       expect(paneLayout.pane.pid).toBeNull();
+    });
+
+    it('should purge stale session ids from existing 3.0 workspaces on load', async () => {
+      const workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'stale-window',
+            name: 'Stale Session Window',
+            layout: {
+              type: 'pane',
+              id: 'pane-1',
+              pane: {
+                id: 'pane-1',
+                cwd: '/test/dir',
+                command: 'claude',
+                status: 'running',
+                pid: null,
+                sessionId: 'stale-session-1',
+              },
+            },
+            activePaneId: 'pane-1',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T12:00:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '2026-02-28T12:00:00Z',
+      };
+
+      await fs.writeJson(workspacePath, workspace, { spaces: 2 });
+
+      const loaded = await workspaceManager.loadWorkspace();
+      const loadedLayout = loaded.windows[0].layout;
+      expect(loadedLayout.type).toBe('pane');
+      if (loadedLayout.type !== 'pane') {
+        throw new Error('expected pane layout');
+      }
+      expect(loadedLayout.pane.status).toBe('completed');
+      expect(loadedLayout.pane.pid).toBeNull();
+      expect(loadedLayout.pane.sessionId).toBeUndefined();
+
+      const persisted = await fs.readJson(workspacePath);
+      expect(persisted.windows[0].layout.pane).not.toHaveProperty('status');
+      expect(persisted.windows[0].layout.pane).not.toHaveProperty('pid');
+      expect(persisted.windows[0].layout.pane).not.toHaveProperty('sessionId');
     });
 
     it('should return default workspace if file does not exist', async () => {

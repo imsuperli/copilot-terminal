@@ -1106,10 +1106,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        if (shouldPersistChange) {
-          const { windows, groups, canvasWorkspaces } = get();
-          triggerAutoSave(windows, groups, canvasWorkspaces);
-        }
+        const { windows, groups, canvasWorkspaces } = get();
+        triggerAutoSave(windows, groups, canvasWorkspaces);
       }
     },
 

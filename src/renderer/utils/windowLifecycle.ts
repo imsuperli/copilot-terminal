@@ -22,7 +22,7 @@ export function hasLiveTerminalSession(pane: Pane): boolean {
     return false;
   }
 
-  return pane.pid !== null || Boolean(pane.sessionId);
+  return pane.pid !== null;
 }
 
 export function canStartPaneSession(pane: Pane): boolean {

@@ -22,10 +22,7 @@ import { isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 import { getDefaultKeyboardShortcuts, normalizeKeyboardShortcuts } from '../../shared/utils/keyboardShortcuts';
 
-type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
-  status?: PaneNode['pane']['status'];
-  pid?: PaneNode['pane']['pid'];
-};
+type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid' | 'sessionId'>;
 
 type PersistedLayoutNode =
   | (Omit<PaneNode, 'pane'> & { pane: PersistedPane })
@@ -196,7 +193,8 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           // 3.0 版本：验证组完整性
           const validatedWorkspace = this.validateGroupIntegrity(normalizedWorkspace);
           const hydratedWorkspace = this.hydrateWorkspace(validatedWorkspace);
-          const requiresRewrite = JSON.stringify(hydratedWorkspace) !== JSON.stringify(workspace);
+          const persistedWorkspace = this.sanitizeWorkspaceForPersistence(hydratedWorkspace);
+          const requiresRewrite = JSON.stringify(persistedWorkspace) !== JSON.stringify(workspace);
 
           console.log(
             `[WorkspaceManager] Branch: normalize 3.0 rewrite=${requiresRewrite ? 'yes' : 'no'}`,
@@ -294,7 +292,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     const collapsedLayout = this.collapseRedundantLayoutSplits(layout);
 
     if (collapsedLayout.type === 'pane') {
-      const { status, pid, ...pane } = collapsedLayout.pane;
+      const { status, pid, sessionId, ...pane } = collapsedLayout.pane;
       return {
         ...collapsedLayout,
         pane: this.sanitizePaneForPersistence(pane),
