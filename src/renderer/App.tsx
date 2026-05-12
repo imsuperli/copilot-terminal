@@ -37,6 +37,7 @@ import type {
   TmuxWindowRemovedPayload,
   TmuxWindowSyncedPayload,
 } from '../shared/types/electron-api';
+import type { CanvasWindowBlock, CanvasWorkspace } from '../shared/types/canvas';
 import './api/ptyDataBus';
 import { getAllPanes } from './utils/layoutHelpers';
 import { getAllWindowIds } from './utils/groupLayoutHelpers';
@@ -51,6 +52,7 @@ import {
 import { APP_NOTICE_EVENT, type AppNoticeEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
 import { isEphemeralSSHCloneWindow, isStandaloneWindow } from './utils/sshWindowBindings';
+import { isBrowserPane } from '../shared/utils/terminalCapabilities';
 import {
   createMountedTerminalObservationSnapshot,
   logMountedTerminalObservation,
@@ -72,6 +74,13 @@ import type { WindowSwitchHandler, WindowSwitchOptions } from './types/windowSwi
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 400;
 const STARTUP_MASK_HOLD_MS = 40;
 const STARTUP_MASK_FADE_MS = 140;
+const CANVAS_LIVE_BLOCK_ATTR = 'data-canvas-live-terminal-block-id';
+type CanvasLiveTerminalRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 const LazyQuickNavPanel = lazy(async () => ({
   default: (await import('./components/QuickNavPanel')).QuickNavPanel,
 }));
@@ -164,9 +173,43 @@ function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): s
   });
 }
 
+function getLiveCanvasWindowBlocks(
+  canvasWorkspaces: Pick<CanvasWorkspace, 'id' | 'blocks'>[],
+  activeCanvasWorkspaceId: string | null,
+  currentView: string,
+): CanvasWindowBlock[] {
+  if (currentView !== 'canvas' || !activeCanvasWorkspaceId) {
+    return [];
+  }
+
+  const activeCanvasWorkspace = canvasWorkspaces.find((canvasWorkspace) => canvasWorkspace.id === activeCanvasWorkspaceId);
+  if (!activeCanvasWorkspace) {
+    return [];
+  }
+
+  return activeCanvasWorkspace.blocks.filter((block): block is CanvasWindowBlock => (
+    block.type === 'window' && block.displayMode === 'live'
+  ));
+}
+
+function getLiveCanvasWindowIds(liveBlocks: CanvasWindowBlock[]): Set<string> {
+  return new Set(liveBlocks.map((block) => block.windowId));
+}
+
+function findCanvasLiveBlockNode(blockId: string): HTMLElement | null {
+  const nodes = document.querySelectorAll<HTMLElement>(`[${CANVAS_LIVE_BLOCK_ATTR}]`);
+  for (const node of nodes) {
+    if (node.getAttribute(CANVAS_LIVE_BLOCK_ATTR) === blockId) {
+      return node;
+    }
+  }
+
+  return null;
+}
+
 const MountedTerminalSurface = React.memo(({
-  activeCanvasWorkspaceId,
   activeLiveCanvasWindowIds,
+  canvasLiveRect,
   isVisible,
   onCanvasSwitch,
   onGroupSwitch,
@@ -177,8 +220,8 @@ const MountedTerminalSurface = React.memo(({
   sshProfiles,
   windowId,
 }: {
-  activeCanvasWorkspaceId: string | null;
   activeLiveCanvasWindowIds: Set<string>;
+  canvasLiveRect?: CanvasLiveTerminalRect | null;
   isVisible: boolean;
   onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
   onGroupSwitch: (groupId: string) => void | Promise<void>;
@@ -207,13 +250,23 @@ const MountedTerminalSurface = React.memo(({
 
   const isMac = window.electronAPI?.platform === 'darwin';
   const titleBarHeight = isMac ? 36 : 32;
-  const keepsLayoutWhileHidden = getAllPanes(terminalWindow.layout).some((pane) => pane.kind === 'browser');
-  const ptyInputEnabled = isVisible || !activeLiveCanvasWindowIds.has(windowId);
-
-  return (
-    <div
-      className="transition-opacity duration-300"
-      style={{
+  const keepsLayoutWhileHidden = getAllPanes(terminalWindow.layout).some((pane) => isBrowserPane(pane));
+  const isCanvasLiveVisible = Boolean(canvasLiveRect);
+  const ptyInputEnabled = isVisible || isCanvasLiveVisible || !activeLiveCanvasWindowIds.has(windowId);
+  const surfaceStyle: React.CSSProperties = isCanvasLiveVisible && canvasLiveRect
+    ? {
+        display: 'block',
+        opacity: 1,
+        visibility: 'visible',
+        pointerEvents: 'auto',
+        position: 'fixed',
+        top: canvasLiveRect.top,
+        left: canvasLiveRect.left,
+        width: canvasLiveRect.width,
+        height: canvasLiveRect.height,
+        zIndex: 1010,
+      }
+    : {
         display: isVisible || keepsLayoutWhileHidden ? 'block' : 'none',
         opacity: isVisible ? 1 : 0,
         visibility: isVisible ? 'visible' : 'hidden',
@@ -224,7 +277,12 @@ const MountedTerminalSurface = React.memo(({
         right: 0,
         bottom: 0,
         zIndex: 1000,
-      }}
+      };
+
+  return (
+    <div
+      className="transition-opacity duration-300"
+      style={surfaceStyle}
     >
       <TerminalView
         key={terminalWindow.id}
@@ -233,7 +291,8 @@ const MountedTerminalSurface = React.memo(({
         onWindowSwitch={onWindowSwitch}
         onCanvasSwitch={onCanvasSwitch}
         onGroupSwitch={onGroupSwitch}
-        isActive={isVisible}
+        isActive={isVisible || isCanvasLiveVisible}
+        canvasLiveDocked={isCanvasLiveVisible}
         ptyInputEnabled={ptyInputEnabled}
         sshEnabled={sshEnabled}
         sshProfiles={sshProfiles}
@@ -244,55 +303,6 @@ const MountedTerminalSurface = React.memo(({
 });
 
 MountedTerminalSurface.displayName = 'MountedTerminalSurface';
-
-const CanvasEmbeddedTerminalSurface = React.memo(({
-  isActive,
-  onCanvasSwitch,
-  onExitWorkspace,
-  onGroupSwitch,
-  onWindowSwitch,
-  onSSHProfileSaved,
-  sshEnabled,
-  sshProfiles,
-  windowId,
-}: {
-  isActive: boolean;
-  onCanvasSwitch: (canvasWorkspaceId: string) => void | Promise<void>;
-  onExitWorkspace: () => void | Promise<void>;
-  onGroupSwitch: (groupId: string) => void | Promise<void>;
-  onWindowSwitch: WindowSwitchHandler;
-  onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
-  sshEnabled: boolean;
-  sshProfiles: SSHProfile[];
-  windowId: string;
-}) => {
-  const embeddedWindow = useWindowStore((state) => (
-    state.windows.find((window) => window.id === windowId) ?? null
-  ));
-
-  if (!embeddedWindow) {
-    return null;
-  }
-
-  return (
-    <TerminalView
-      key={`canvas-embedded-${windowId}`}
-      window={embeddedWindow}
-      onReturn={onExitWorkspace}
-      onWindowSwitch={onWindowSwitch}
-      onCanvasSwitch={onCanvasSwitch}
-      onGroupSwitch={onGroupSwitch}
-      isActive={isActive}
-      embedded
-      canvasEmbedded
-      sshEnabled={sshEnabled}
-      sshProfiles={sshProfiles}
-      onSSHProfileSaved={onSSHProfileSaved}
-    />
-  );
-});
-
-CanvasEmbeddedTerminalSurface.displayName = 'CanvasEmbeddedTerminalSurface';
 
 const ActiveGroupSurface = React.memo(({
   activeGroupId,
@@ -415,17 +425,11 @@ const ActiveCanvasSurface = React.memo(({
             onStopWorkspace={onStopWorkspace}
             renderLiveWindow={(windowId, options) => {
               return (
-                <CanvasEmbeddedTerminalSurface
+                <div
                   key={windowId}
-                  windowId={windowId}
-                  isActive={options.isActive}
-                  onWindowSwitch={onWindowSwitch}
-                  onCanvasSwitch={onCanvasSwitch}
-                  onGroupSwitch={onGroupSwitch}
-                  onExitWorkspace={onExitWorkspace}
-                  sshEnabled={sshEnabled}
-                  sshProfiles={sshProfiles}
-                  onSSHProfileSaved={onSSHProfileSaved}
+                  data-canvas-live-terminal-block-id={options.blockId}
+                  className="h-full w-full bg-[var(--appearance-pane-background)]"
+                  aria-hidden={!options.isActive}
                 />
               );
             }}
@@ -524,6 +528,7 @@ function AppContent() {
   const [isStartupMaskHiding, setIsStartupMaskHiding] = useState(false);
   const [canvasTerminalReturnTargetId, setCanvasTerminalReturnTargetId] = useState<string | null>(null);
   const [canvasCreateContextWorkspaceId, setCanvasCreateContextWorkspaceId] = useState<string | null>(null);
+  const [canvasLiveTerminalRects, setCanvasLiveTerminalRects] = useState<Record<string, CanvasLiveTerminalRect>>({});
   const sshPasswordPromptResolverRef = useRef<((password: string | null) => void) | null>(null);
   const appErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startupMaskDismissedRef = useRef(false);
@@ -1577,6 +1582,120 @@ function AppContent() {
     await handleGroupSwitch(groupId);
   }, [canvasTerminalReturnTargetId, handleGroupSwitch, setActiveGroup]);
   const activeSSHHostKeyPrompt = sshHostKeyPromptQueue[0] ?? null;
+  const activeLiveCanvasBlocks = useMemo(
+    () => getLiveCanvasWindowBlocks(canvasWorkspaces, currentActiveCanvasWorkspaceId, currentView),
+    [canvasWorkspaces, currentActiveCanvasWorkspaceId, currentView],
+  );
+  const activeLiveCanvasWindowIds = useMemo(
+    () => getLiveCanvasWindowIds(activeLiveCanvasBlocks),
+    [activeLiveCanvasBlocks],
+  );
+  const activeLiveCanvasBlockIds = useMemo(
+    () => activeLiveCanvasBlocks.map((block) => block.id),
+    [activeLiveCanvasBlocks],
+  );
+
+  useEffect(() => {
+    if (activeLiveCanvasBlockIds.length === 0) {
+      setCanvasLiveTerminalRects((previousRects) => (
+        Object.keys(previousRects).length === 0 ? previousRects : {}
+      ));
+      return;
+    }
+
+    let animationFrameId: number | null = null;
+    const activeBlockIds = new Set(activeLiveCanvasBlockIds);
+
+    const readRects = () => {
+      const nextRects: Record<string, CanvasLiveTerminalRect> = {};
+
+      for (const blockId of activeBlockIds) {
+        const node = findCanvasLiveBlockNode(blockId);
+        if (!node) {
+          continue;
+        }
+
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+          continue;
+        }
+
+        nextRects[blockId] = {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+
+      setCanvasLiveTerminalRects((previousRects) => {
+        const previousKeys = Object.keys(previousRects);
+        const nextKeys = Object.keys(nextRects);
+        if (
+          previousKeys.length === nextKeys.length
+          && nextKeys.every((key) => {
+            const previousRect = previousRects[key];
+            const nextRect = nextRects[key];
+            return previousRect
+              && Math.abs(previousRect.left - nextRect.left) < 0.5
+              && Math.abs(previousRect.top - nextRect.top) < 0.5
+              && Math.abs(previousRect.width - nextRect.width) < 0.5
+              && Math.abs(previousRect.height - nextRect.height) < 0.5;
+          })
+        ) {
+          return previousRects;
+        }
+
+        return nextRects;
+      });
+    };
+
+    const scheduleReadRects = () => {
+      if (animationFrameId !== null) {
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = null;
+        readRects();
+      });
+    };
+
+    readRects();
+
+    const resizeObserver = new ResizeObserver(scheduleReadRects);
+    for (const blockId of activeBlockIds) {
+      const node = findCanvasLiveBlockNode(blockId);
+      if (node) {
+        resizeObserver.observe(node);
+      }
+    }
+
+    window.addEventListener('resize', scheduleReadRects);
+    window.addEventListener('scroll', scheduleReadRects, true);
+
+    return () => {
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', scheduleReadRects);
+      window.removeEventListener('scroll', scheduleReadRects, true);
+    };
+  }, [activeLiveCanvasBlockIds]);
+  const canvasLiveRectByWindowId = useMemo(() => {
+    const nextRects = new Map<string, CanvasLiveTerminalRect>();
+
+    for (const block of activeLiveCanvasBlocks) {
+      const rect = canvasLiveTerminalRects[block.id];
+      if (rect) {
+        nextRects.set(block.windowId, rect);
+      }
+    }
+
+    return nextRects;
+  }, [activeLiveCanvasBlocks, canvasLiveTerminalRects]);
 
   const mountedTerminalWindowIdSet = useMemo(() => {
     const nextIds = new Set(mountedTerminalWindowIds);
@@ -1587,33 +1706,22 @@ function AppContent() {
       nextIds.add(activeWindowId);
     }
 
+    for (const windowId of activeLiveCanvasWindowIds) {
+      nextIds.add(windowId);
+    }
+
     return nextIds;
-  }, [activeWindowId, mountedTerminalWindowIds]);
-  const activeLiveCanvasWindowIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (currentView !== 'canvas' || !currentActiveCanvasWorkspaceId) {
-      return ids;
-    }
-
-    const activeCanvasWorkspace = canvasWorkspaces.find((canvasWorkspace) => canvasWorkspace.id === currentActiveCanvasWorkspaceId);
-    if (!activeCanvasWorkspace) {
-      return ids;
-    }
-
-    for (const block of activeCanvasWorkspace.blocks) {
-      if (block.type === 'window' && block.displayMode === 'live') {
-        ids.add(block.windowId);
-      }
-    }
-
-    return ids;
-  }, [canvasWorkspaces, currentActiveCanvasWorkspaceId, currentView]);
+  }, [activeLiveCanvasWindowIds, activeWindowId, mountedTerminalWindowIds]);
+  const mountedTerminalSurfaceWindowIds = useMemo(
+    () => Array.from(mountedTerminalWindowIdSet),
+    [mountedTerminalWindowIdSet],
+  );
   const mountedTerminalObservation = useMemo(() => (
     createMountedTerminalObservationSnapshot({
       currentView,
       activeWindowId,
       activeGroupId,
-      mountedWindowIds: Array.from(mountedTerminalWindowIdSet),
+      mountedWindowIds: mountedTerminalSurfaceWindowIds,
       mountedWindowStatusKeys: mountedWindowRecordKeys,
       mountedWindowTerminalPaneCountKeys,
     })
@@ -1621,7 +1729,7 @@ function AppContent() {
     activeGroupId,
     activeWindowId,
     currentView,
-    mountedTerminalWindowIdSet,
+    mountedTerminalSurfaceWindowIds,
     mountedWindowRecordKeys,
     mountedWindowTerminalPaneCountKeys,
   ]);
@@ -1772,11 +1880,11 @@ function AppContent() {
       </div>
 
       {/* 终端视图：窗口一旦打开过就保持挂载，仅切换显示状态，避免返回或窗口切换时销毁 xterm 实例 */}
-      {mountedTerminalWindowIds.map((windowId) => (
+      {mountedTerminalSurfaceWindowIds.map((windowId) => (
         <MountedTerminalSurface
           key={windowId}
-          activeCanvasWorkspaceId={currentActiveCanvasWorkspaceId}
           activeLiveCanvasWindowIds={activeLiveCanvasWindowIds}
+          canvasLiveRect={canvasLiveRectByWindowId.get(windowId) ?? null}
           windowId={windowId}
           isVisible={currentView === 'terminal' && activeWindowId === windowId}
           onReturn={handleReturnFromTerminal}

@@ -611,6 +611,22 @@ describe('TerminalView', () => {
     expect(screen.getByTestId('split-layout')).toBeInTheDocument();
   });
 
+  it('hides standalone chrome while docked into a canvas live block', () => {
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+        canvasLiveDocked
+      />
+    );
+
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('terminal-floating-actions')).not.toBeInTheDocument();
+    expect(screen.getByTestId('split-layout')).toBeInTheDocument();
+  });
+
   it('keeps canvas embedded pane exits inside the canvas instead of switching views', async () => {
     const currentWindow = createLocalWindow(WindowStatus.Running);
     const onReturn = vi.fn();

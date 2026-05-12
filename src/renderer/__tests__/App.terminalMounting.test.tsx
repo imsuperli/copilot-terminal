@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
 import { createSinglePaneWindow, splitPane } from '../utils/layoutHelpers';
@@ -75,7 +75,7 @@ vi.mock('../components/CanvasWorkspaceView', () => ({
     renderLiveWindow,
   }: {
     canvasWorkspace: { name: string; blocks?: Array<{ id: string; type: string; windowId?: string; displayMode?: string }> };
-    renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => unknown;
+    renderLiveWindow?: (windowId: string, options: { blockId: string; isActive: boolean }) => unknown;
   }) => (
     <div data-testid="canvas-workspace-view">
       {canvasWorkspace.name}
@@ -83,7 +83,7 @@ vi.mock('../components/CanvasWorkspaceView', () => ({
         ?.filter((block) => block.type === 'window' && block.windowId && block.displayMode === 'live')
         .map((block) => (
           <div key={block.id} data-testid={`canvas-live-${block.windowId}`}>
-            {renderLiveWindow?.(block.windowId!, { isActive: true }) as any}
+            {renderLiveWindow?.(block.windowId!, { blockId: block.id, isActive: true }) as any}
           </div>
         ))}
     </div>
@@ -129,8 +129,12 @@ function withSinglePaneStatus<T extends ReturnType<typeof createSinglePaneWindow
 }
 
 describe('App terminal mounting', () => {
+  let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn> | null = null;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    getBoundingClientRectSpy?.mockRestore();
+    getBoundingClientRectSpy = null;
     useWindowStore.setState({
       windows: [],
       activeWindowId: null,
@@ -149,6 +153,11 @@ describe('App terminal mounting', () => {
       switchToWindow: vi.fn(),
     });
     mockUseWorkspaceRestore.mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    getBoundingClientRectSpy?.mockRestore();
+    getBoundingClientRectSpy = null;
   });
 
   it('mounts only the active terminal view when multiple windows exist', () => {
@@ -297,6 +306,33 @@ describe('App terminal mounting', () => {
   });
 
   it('keeps the standalone terminal mounted and syncs canvas live layout changes', async () => {
+    getBoundingClientRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getRect(this: HTMLElement) {
+      if (this.hasAttribute('data-canvas-live-terminal-block-id')) {
+        return {
+          x: 320,
+          y: 120,
+          left: 320,
+          top: 120,
+          right: 680,
+          bottom: 340,
+          width: 360,
+          height: 220,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+
+      return {
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        right: 1024,
+        bottom: 768,
+        width: 1024,
+        height: 768,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
     const terminalWindow = withSinglePaneStatus(
       createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe'),
       WindowStatus.Running,
@@ -378,8 +414,8 @@ describe('App terminal mounting', () => {
     render(<App />);
 
     const terminalSurfaces = screen.getAllByTestId(`terminal-${terminalWindow.id}`);
-    expect(terminalSurfaces).toHaveLength(2);
-    expect(terminalSurfaces.some((surface) => surface.getAttribute('data-active') === 'false')).toBe(true);
+    expect(terminalSurfaces).toHaveLength(1);
+    expect(terminalSurfaces[0]).toHaveAttribute('data-active', 'true');
     expect(terminalSurfaces.map((surface) => surface.getAttribute('data-pane-ids'))).toContain(`${paneOneId},${paneTwoId},${paneThreeId}`);
 
     act(() => {
@@ -390,6 +426,89 @@ describe('App terminal mounting', () => {
       const latestSurfaces = screen.getAllByTestId(`terminal-${terminalWindow.id}`);
       expect(latestSurfaces.map((surface) => surface.getAttribute('data-pane-ids'))).toContain(`${paneOneId},${paneThreeId}`);
       expect(latestSurfaces.every((surface) => !surface.getAttribute('data-pane-ids')?.includes(paneTwoId))).toBe(true);
+    });
+  });
+
+  it('mounts a canvas live terminal even when the terminal has never been opened directly', async () => {
+    getBoundingClientRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getRect(this: HTMLElement) {
+      if (this.hasAttribute('data-canvas-live-terminal-block-id')) {
+        return {
+          x: 320,
+          y: 120,
+          left: 320,
+          top: 120,
+          right: 680,
+          bottom: 340,
+          width: 360,
+          height: 220,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+
+      return {
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        right: 1024,
+        bottom: 768,
+        width: 1024,
+        height: 768,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+    const terminalWindow = withSinglePaneStatus(
+      createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe'),
+      WindowStatus.Running,
+    );
+
+    mockUseViewSwitcher.mockReturnValue({
+      currentView: 'canvas',
+      activeWindowId: null,
+      activeCanvasWorkspaceId: 'canvas-1',
+      switchToTerminalView: vi.fn(),
+      switchToCanvasView: vi.fn(),
+      switchToUnifiedView: vi.fn(),
+      error: null,
+    });
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      canvasWorkspaces: [
+        {
+          id: 'canvas-1',
+          name: 'Ops Board',
+          createdAt: '2026-05-03T00:00:00.000Z',
+          updatedAt: '2026-05-03T00:00:00.000Z',
+          blocks: [
+            {
+              id: 'window-block-1',
+              type: 'window',
+              windowId: terminalWindow.id,
+              x: 0,
+              y: 0,
+              width: 360,
+              height: 220,
+              zIndex: 1,
+              displayMode: 'live',
+            },
+          ],
+          viewport: { tx: 0, ty: 0, zoom: 1 },
+          nextZIndex: 2,
+        },
+      ],
+      activeWindowId: null,
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeGroupId: null,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`terminal-${terminalWindow.id}`)).toHaveAttribute('data-active', 'true');
     });
   });
 

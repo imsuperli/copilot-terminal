@@ -7,7 +7,7 @@ import { CanvasWorkspaceView } from '../CanvasWorkspaceView';
 import { CustomTitleBar } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
 import { createSinglePaneWindow, getAllPanes } from '../../utils/layoutHelpers';
-import { WindowStatus, type Window } from '../../types/window';
+import { WindowStatus, type LayoutNode, type Pane, type Window } from '../../types/window';
 import type { CanvasWorkspace } from '../../../shared/types/canvas';
 
 function createCanvasWorkspace(): CanvasWorkspace {
@@ -120,6 +120,37 @@ function createCanvasOwnedWindow(): Window {
     windowItem.layout.pane.pid = 202;
   }
   return windowItem;
+}
+
+function createRunningTerminalPane(id: string, pid: number): Pane {
+  return {
+    id,
+    cwd: '/srv/app',
+    command: 'bash',
+    status: WindowStatus.Running,
+    pid,
+    backend: 'local',
+  };
+}
+
+function createPaneNode(id: string, pid: number): LayoutNode {
+  return {
+    type: 'pane',
+    id,
+    pane: createRunningTerminalPane(id, pid),
+  };
+}
+
+function createWindowWithLayout(id: string, layout: LayoutNode): Window {
+  return {
+    id,
+    name: 'Split Terminal',
+    activePaneId: 'pane-1',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    lastActiveAt: '2026-05-03T00:00:00.000Z',
+    kind: 'local',
+    layout,
+  };
 }
 
 describe('CanvasWorkspaceView', () => {
@@ -539,6 +570,145 @@ describe('CanvasWorkspaceView', () => {
     if (liveBlock?.type === 'window') {
       expect(liveBlock.displayMode).toBe('live');
     }
+  });
+
+  it('expands a live embedded terminal block to fit split panes without shrinking larger blocks', async () => {
+    const user = userEvent.setup();
+    const splitWindow = createWindowWithLayout('terminal-1', {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [createPaneNode('pane-1', 1001), createPaneNode('pane-2', 1002)],
+        },
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [createPaneNode('pane-3', 1003), createPaneNode('pane-4', 1004)],
+        },
+      ],
+    });
+    const terminalTwo = useWindowStore.getState().getWindowById('terminal-2')!;
+    const workspace = {
+      ...createCanvasWorkspace(),
+      blocks: createCanvasWorkspace().blocks.map((block) => (
+        block.id === 'window-1' && block.type === 'window'
+          ? { ...block, width: 900, height: 260 }
+          : block
+      )),
+    };
+
+    useWindowStore.setState({
+      windows: [splitWindow, terminalTwo],
+      canvasWorkspaces: [workspace],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: null,
+      activeGroupId: null,
+      groups: [],
+    });
+
+    render(
+      <CanvasWorkspaceView
+        canvasWorkspace={workspace}
+        renderLiveWindow={(windowId) => <div>Live:{windowId}</div>}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '实时嵌入' }));
+
+    await waitFor(() => {
+      const updated = useWindowStore.getState().getCanvasWorkspaceById('canvas-1');
+      const liveBlock = updated?.blocks.find((block) => block.id === 'window-1');
+      expect(liveBlock?.type).toBe('window');
+      if (liveBlock?.type === 'window') {
+        expect(liveBlock.displayMode).toBe('live');
+        expect(liveBlock.width).toBe(900);
+        expect(liveBlock.height).toBeGreaterThan(400);
+      }
+    });
+  });
+
+  it('activates a live embedded terminal block when its terminal surface is clicked', async () => {
+    const user = userEvent.setup();
+    const terminalOne = useWindowStore.getState().getWindowById('terminal-1')!;
+    const terminalTwo = useWindowStore.getState().getWindowById('terminal-2')!;
+    const paneId = terminalOne.activePaneId;
+    const runningTerminalOne: Window = {
+      ...terminalOne,
+      layout: {
+        type: 'pane',
+        id: paneId,
+        pane: {
+          ...getAllPanes(terminalOne.layout)[0]!,
+          status: WindowStatus.Running,
+          pid: 1001,
+        },
+      },
+    };
+    const liveWorkspace: CanvasWorkspace = {
+      ...createCanvasWorkspace(),
+      blocks: [
+        ...createCanvasWorkspace().blocks.map((block) => (
+          block.id === 'window-1' && block.type === 'window'
+            ? { ...block, displayMode: 'live' as const }
+            : block
+        )),
+        {
+          id: 'note-front',
+          type: 'note',
+          x: 840,
+          y: 40,
+          width: 260,
+          height: 180,
+          zIndex: 4,
+          label: 'Front Note',
+          content: '',
+        },
+      ],
+      nextZIndex: 5,
+    };
+    const renderLiveWindow = vi.fn((windowId: string, options: { blockId: string; isActive: boolean }) => (
+      <button type="button" data-testid="live-terminal-surface" data-active={String(options.isActive)}>
+        {`Live:${windowId}`}
+      </button>
+    ));
+
+    useWindowStore.setState({
+      windows: [runningTerminalOne, terminalTwo],
+      canvasWorkspaces: [liveWorkspace],
+      activeCanvasWorkspaceId: 'canvas-1',
+      activeWindowId: null,
+      activeGroupId: null,
+      groups: [],
+    });
+
+    const { rerender } = render(
+      <CanvasWorkspaceView
+        canvasWorkspace={liveWorkspace}
+        renderLiveWindow={renderLiveWindow}
+      />,
+    );
+
+    expect(await screen.findByTestId('live-terminal-surface')).toHaveAttribute('data-active', 'false');
+
+    await user.click(screen.getByTestId('live-terminal-surface'));
+
+    const updatedWorkspace = useWindowStore.getState().getCanvasWorkspaceById('canvas-1')!;
+    rerender(
+      <CanvasWorkspaceView
+        canvasWorkspace={updatedWorkspace}
+        renderLiveWindow={renderLiveWindow}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('live-terminal-surface')).toHaveAttribute('data-active', 'true');
+    });
   });
 
   it('downgrades live terminal blocks to summary when the referenced terminal stops', async () => {

@@ -4,7 +4,7 @@ import type {
   CanvasBlockType,
   CanvasViewport,
 } from '../../shared/types/canvas';
-import type { Window } from '../types/window';
+import type { LayoutNode, Pane, Window } from '../types/window';
 import { getAllPanes } from './layoutHelpers';
 import { isBrowserPane, isChatPane, isCodePane } from '../../shared/utils/terminalCapabilities';
 
@@ -46,6 +46,12 @@ export const DEFAULT_CODE_WINDOW_BLOCK_SIZE = { width: 460, height: 320 };
 export const DEFAULT_CANVAS_INSERT_ORIGIN = { x: 112, y: 124 };
 export const DEFAULT_CANVAS_INSERT_STEP = { x: 28, y: 24 };
 export const DEFAULT_CANVAS_INSERT_SEARCH_PADDING = 24;
+export const CANVAS_LIVE_TERMINAL_PANE_MIN_SIZE = { width: 320, height: 180 };
+export const CANVAS_LIVE_BROWSER_PANE_MIN_SIZE = { width: 380, height: 220 };
+export const CANVAS_LIVE_CODE_PANE_MIN_SIZE = { width: 420, height: 240 };
+export const CANVAS_LIVE_CHAT_PANE_MIN_SIZE = { width: 400, height: 240 };
+export const CANVAS_LIVE_SPLIT_DIVIDER_SIZE = 8;
+export const CANVAS_LIVE_BLOCK_VERTICAL_CHROME = 72;
 
 const MIN_BLOCK_SIZE: Record<CanvasBlockType, { width: number; height: number }> = {
   note: { width: 220, height: 140 },
@@ -221,6 +227,86 @@ export function getCanvasWindowBlockSize(windowItem: Window): { width: number; h
   }
 
   return DEFAULT_WINDOW_BLOCK_SIZE;
+}
+
+function getCanvasLivePaneMinSize(pane: Pane): { width: number; height: number } {
+  if (isChatPane(pane)) {
+    return CANVAS_LIVE_CHAT_PANE_MIN_SIZE;
+  }
+
+  if (isCodePane(pane)) {
+    return CANVAS_LIVE_CODE_PANE_MIN_SIZE;
+  }
+
+  if (isBrowserPane(pane)) {
+    return CANVAS_LIVE_BROWSER_PANE_MIN_SIZE;
+  }
+
+  return CANVAS_LIVE_TERMINAL_PANE_MIN_SIZE;
+}
+
+function getNormalizedSplitSizes(node: LayoutNode): number[] {
+  if (node.type !== 'split' || node.children.length === 0) {
+    return [];
+  }
+
+  const sanitizedSizes = node.children.map((_, index) => {
+    const size = node.sizes[index];
+    return typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : 0;
+  });
+  const total = sanitizedSizes.reduce((sum, size) => sum + size, 0);
+
+  if (total <= 0) {
+    return node.children.map(() => 1 / node.children.length);
+  }
+
+  return sanitizedSizes.map((size) => (size > 0 ? size / total : 1 / node.children.length));
+}
+
+function getCanvasLiveLayoutContentSize(layout: LayoutNode): { width: number; height: number } {
+  if (layout.type === 'pane') {
+    return getCanvasLivePaneMinSize(layout.pane);
+  }
+
+  if (layout.children.length === 0) {
+    return CANVAS_LIVE_TERMINAL_PANE_MIN_SIZE;
+  }
+
+  const childSizes = layout.children.map(getCanvasLiveLayoutContentSize);
+  const splitSizes = getNormalizedSplitSizes(layout);
+  const dividerSize = CANVAS_LIVE_SPLIT_DIVIDER_SIZE * Math.max(0, layout.children.length - 1);
+
+  if (layout.direction === 'horizontal') {
+    const widthWithoutDividers = childSizes.reduce((requiredWidth, childSize, index) => {
+      const childSplitSize = splitSizes[index] ?? (1 / layout.children.length);
+      return Math.max(requiredWidth, childSize.width / childSplitSize);
+    }, 0);
+
+    return {
+      width: Math.ceil(widthWithoutDividers + dividerSize),
+      height: Math.ceil(Math.max(...childSizes.map((size) => size.height))),
+    };
+  }
+
+  const heightWithoutDividers = childSizes.reduce((requiredHeight, childSize, index) => {
+    const childSplitSize = splitSizes[index] ?? (1 / layout.children.length);
+    return Math.max(requiredHeight, childSize.height / childSplitSize);
+  }, 0);
+
+  return {
+    width: Math.ceil(Math.max(...childSizes.map((size) => size.width))),
+    height: Math.ceil(heightWithoutDividers + dividerSize),
+  };
+}
+
+export function getCanvasLiveWindowBlockSize(windowItem: Window): { width: number; height: number } {
+  const baseSize = getCanvasWindowBlockSize(windowItem);
+  const contentSize = getCanvasLiveLayoutContentSize(windowItem.layout);
+
+  return {
+    width: Math.max(baseSize.width, contentSize.width),
+    height: Math.max(baseSize.height, contentSize.height + CANVAS_LIVE_BLOCK_VERTICAL_CHROME),
+  };
 }
 
 export function createCanvasWindowBlock(

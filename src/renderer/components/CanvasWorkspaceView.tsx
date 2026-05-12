@@ -30,6 +30,7 @@ import {
   fitViewportToBlocks,
   findCanvasWindowInsertRect,
   getCanvasBounds,
+  getCanvasLiveWindowBlockSize,
   getCanvasWindowBlockSize,
   getIntersectingCanvasBlockIds,
   getWorldPointFromClient,
@@ -90,7 +91,7 @@ interface CanvasWorkspaceViewProps {
   onOpenWindow?: (windowId: string) => void;
   onOpenCanvasWorkspace?: (canvasWorkspaceId: string) => void;
   onOpenGroup?: (groupId: string) => void;
-  renderLiveWindow?: (windowId: string, options: { isActive: boolean }) => React.ReactNode;
+  renderLiveWindow?: (windowId: string, options: { blockId: string; isActive: boolean }) => React.ReactNode;
   onStopWorkspace?: (canvasWorkspaceId: string) => void | Promise<void>;
 }
 
@@ -946,9 +947,15 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
           return block;
         }
 
+        const liveSize = displayMode === 'live' && targetWindow
+          ? getCanvasLiveWindowBlockSize(targetWindow)
+          : null;
+
         return {
           ...block,
           displayMode,
+          width: liveSize ? Math.max(block.width, liveSize.width) : block.width,
+          height: liveSize ? Math.max(block.height, liveSize.height) : block.height,
         };
       }),
     }));
@@ -2035,10 +2042,13 @@ export const CanvasWorkspaceView: React.FC<CanvasWorkspaceViewProps> = ({
                         <div className="min-h-0 flex-1 overflow-hidden">
                           <div
                             className="h-full w-full"
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => {
+                              event.stopPropagation();
+                              selectBlock(block.id, false);
+                            }}
                             onClick={(event) => event.stopPropagation()}
                           >
-                            {renderLiveWindow?.(linkedWindow.id, { isActive: isLiveBlockActive })}
+                            {renderLiveWindow?.(linkedWindow.id, { blockId: block.id, isActive: isLiveBlockActive })}
                           </div>
                         </div>
                       </div>

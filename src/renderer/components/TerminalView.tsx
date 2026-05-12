@@ -248,6 +248,8 @@ export interface TerminalViewProps {
   embedded?: boolean;
   /** 画布嵌入模式：只渲染终端内容，不显示侧栏、标题栏动作和远程标签 */
   canvasEmbedded?: boolean;
+  /** 画布实时停靠模式：复用已挂载终端内容，隐藏独立终端 chrome。 */
+  canvasLiveDocked?: boolean;
   /** 是否允许此视图把 xterm 输入写回 PTY；隐藏的备用挂载实例会关闭它，避免重复协议响应污染同一会话。 */
   ptyInputEnabled?: boolean;
   /** 所属组 ID（嵌入模式下传入） */
@@ -275,6 +277,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   isActive,
   embedded = false,
   canvasEmbedded = false,
+  canvasLiveDocked = false,
   ptyInputEnabled = true,
   groupId,
   onRemoveFromGroup,
@@ -370,10 +373,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
   const sidebarActiveWindowId = terminalWindow.id;
   const showRemoteWindowTabs = useMemo(
-    () => isStandaloneSshWindow && !canvasEmbedded,
-    [canvasEmbedded, isStandaloneSshWindow],
+    () => isStandaloneSshWindow && !canvasEmbedded && !canvasLiveDocked,
+    [canvasEmbedded, canvasLiveDocked, isStandaloneSshWindow],
   );
-  const showFloatingChrome = isActive;
+  const showFloatingChrome = isActive && !canvasLiveDocked;
   const canSplitActivePane = useMemo(
     () => Boolean(activePane && !isChatPane(activePane) && !isCodePane(activePane)),
     [activePane],
@@ -402,7 +405,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, [activePane, activeTerminalPane, terminalWindow.id]);
 
   useEffect(() => {
-    if (canvasEmbedded) {
+    if (canvasEmbedded || canvasLiveDocked) {
       setTitleBarActionsSlot(null);
       return;
     }
@@ -424,7 +427,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     return () => {
       window.removeEventListener('resize', syncSlot);
     };
-  }, [canvasEmbedded]);
+  }, [canvasEmbedded, canvasLiveDocked]);
 
   // Store
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -1609,7 +1612,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     visibleIDEs,
   ]);
 
-  if (canvasEmbedded) {
+  if (canvasEmbedded || canvasLiveDocked) {
     return (
       <div className="flex h-full w-full min-w-0 overflow-hidden bg-transparent text-[rgb(var(--foreground))]">
         <div className="relative min-w-0 flex-1 flex-col overflow-hidden">
@@ -1623,7 +1626,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 ptyInputEnabled={ptyInputEnabled}
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
-                onPaneExit={handlePaneExit}
+                onPaneExit={ptyInputEnabled ? handlePaneExit : undefined}
                 onBrowserPaneDrop={handleBrowserPaneDrop}
               />
             </div>
@@ -1705,7 +1708,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 ptyInputEnabled={ptyInputEnabled}
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
-                onPaneExit={handlePaneExit}
+                onPaneExit={ptyInputEnabled ? handlePaneExit : undefined}
                 onBrowserPaneDrop={handleBrowserPaneDrop}
               />
             ) : (
@@ -1722,7 +1725,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   ptyInputEnabled={ptyInputEnabled}
                   onPaneActivate={handlePaneActivate}
                   onPaneClose={handlePaneClose}
-                  onPaneExit={handlePaneExit}
+                  onPaneExit={ptyInputEnabled ? handlePaneExit : undefined}
                   onBrowserPaneDrop={handleBrowserPaneDrop}
                 />
               </DropZone>

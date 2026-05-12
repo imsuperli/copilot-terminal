@@ -5,18 +5,50 @@ import {
   buildCanvasLinkGeometry,
   findCanvasWindowInsertRect,
   fitViewportToBlocks,
+  getCanvasLiveWindowBlockSize,
   getCanvasWindowBlockSize,
   moveCanvasBlocks,
   resizeCanvasBlock,
 } from '../canvasWorkspace';
 import { createChatPaneDraft } from '../chatPane';
-import { WindowStatus } from '../../types/window';
+import { WindowStatus, type LayoutNode, type Pane, type Window } from '../../types/window';
 
 const sampleBlocks: CanvasBlock[] = [
   { id: 'note-1', type: 'note', x: 20, y: 30, width: 320, height: 200, zIndex: 1, content: '', label: 'A' },
   { id: 'win-1', type: 'window', x: 420, y: 60, width: 360, height: 220, zIndex: 2, windowId: 'window-1', label: 'B' },
   { id: 'note-2', type: 'note', x: 180, y: 420, width: 280, height: 180, zIndex: 3, content: '', label: 'C' },
 ];
+
+function createTerminalPane(id: string): Pane {
+  return {
+    id,
+    cwd: '/workspace',
+    command: 'bash',
+    status: WindowStatus.Completed,
+    pid: null,
+    backend: 'local',
+  };
+}
+
+function createPaneNode(id: string): LayoutNode {
+  return {
+    type: 'pane',
+    id,
+    pane: createTerminalPane(id),
+  };
+}
+
+function createWindowWithLayout(layout: LayoutNode): Window {
+  return {
+    id: 'terminal-window-1',
+    name: 'Terminal',
+    activePaneId: 'pane-1',
+    createdAt: '2026-05-07T00:00:00.000Z',
+    lastActiveAt: '2026-05-07T00:00:00.000Z',
+    kind: 'local',
+    layout,
+  };
+}
 
 describe('canvasWorkspace utils', () => {
   it('arranges blocks in rows with increasing x positions', () => {
@@ -98,30 +130,67 @@ describe('canvasWorkspace utils', () => {
   });
 
   it('uses a taller default size for standard terminal window blocks', () => {
-    const terminalWindow = {
-      id: 'terminal-window-1',
-      name: 'Terminal',
-      activePaneId: 'terminal-pane-1',
-      createdAt: '2026-05-07T00:00:00.000Z',
-      lastActiveAt: '2026-05-07T00:00:00.000Z',
-      kind: 'local' as const,
-      layout: {
-        type: 'pane' as const,
-        id: 'terminal-pane-1',
-        pane: {
-          id: 'terminal-pane-1',
-          cwd: '/workspace',
-          command: 'bash',
-          status: WindowStatus.Completed,
-          pid: null,
-          backend: 'local' as const,
-        },
-      },
-    };
+    const terminalWindow = createWindowWithLayout(createPaneNode('terminal-pane-1'));
 
     const size = getCanvasWindowBlockSize(terminalWindow);
     expect(size.width).toBe(360);
     expect(size.height).toBeGreaterThan(220);
+  });
+
+  it('keeps live terminal block size compact for a single pane', () => {
+    const size = getCanvasLiveWindowBlockSize(createWindowWithLayout(createPaneNode('pane-1')));
+
+    expect(size.width).toBe(360);
+    expect(size.height).toBe(252);
+  });
+
+  it('widens live terminal block size for horizontal pane splits', () => {
+    const size = getCanvasLiveWindowBlockSize(createWindowWithLayout({
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-1'), createPaneNode('pane-2')],
+    }));
+
+    expect(size.width).toBeGreaterThan(600);
+    expect(size.height).toBe(252);
+  });
+
+  it('heightens live terminal block size for vertical pane splits', () => {
+    const size = getCanvasLiveWindowBlockSize(createWindowWithLayout({
+      type: 'split',
+      direction: 'vertical',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-1'), createPaneNode('pane-2')],
+    }));
+
+    expect(size.width).toBe(360);
+    expect(size.height).toBeGreaterThan(400);
+  });
+
+  it('expands live terminal block size in both axes for nested pane grids', () => {
+    const size = getCanvasLiveWindowBlockSize(createWindowWithLayout({
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [createPaneNode('pane-1'), createPaneNode('pane-2')],
+        },
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [createPaneNode('pane-3'), createPaneNode('pane-4')],
+        },
+      ],
+    }));
+
+    expect(size.width).toBeGreaterThan(600);
+    expect(size.height).toBeGreaterThan(400);
   });
 
   it('finds a non-overlapping insert rect beyond reserved top-left space', () => {
