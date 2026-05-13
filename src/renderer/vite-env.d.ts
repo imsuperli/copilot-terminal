@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+declare module 'monaco-editor/esm/nls.messages.zh-cn.js' {}
+
 // 声明图片模块
 declare module '*.png' {
   const value: string;

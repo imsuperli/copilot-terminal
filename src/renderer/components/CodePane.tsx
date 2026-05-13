@@ -8993,7 +8993,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   onActivate,
   onClose,
 }) => {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const updatePane = useWindowStore((state) => state.updatePane);
   const supportsMonaco = typeof Worker !== 'undefined';
   const isMac = window.electronAPI.platform === 'darwin';
@@ -10654,7 +10654,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     try {
-      const monaco = monacoRef.current ?? await ensureMonacoEnvironment();
+      const monaco = monacoRef.current ?? await ensureMonacoEnvironment(language);
       monacoRef.current = monaco;
       languageBridgeRef.current = ensureMonacoLanguageBridge(monaco);
       ensureMarkerListener(monaco);
@@ -10668,7 +10668,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ));
       return null;
     }
-  }, [ensureMarkerListener, supportsMonaco, t]);
+  }, [ensureMarkerListener, language, supportsMonaco, t]);
 
   const buildLanguageDocumentContext = useCallback((filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
@@ -18250,7 +18250,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       try {
         if (supportsMonaco) {
-          void ensureMonacoEnvironment()
+          void ensureMonacoEnvironment(language)
             .then((monaco) => {
               if (!mounted) {
                 return;
@@ -18378,6 +18378,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [
     applyExternalChangeState,
     pane.id,
+    language,
     rootPath,
     supportsMonaco,
     t,

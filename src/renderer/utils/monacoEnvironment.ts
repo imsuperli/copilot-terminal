@@ -1,15 +1,22 @@
+import type { AppLanguage } from '../../shared/i18n';
+
 type MonacoModule = typeof import('monaco-editor');
+type MonacoGlobal = typeof globalThis & {
+  _VSCODE_NLS_LANGUAGE?: string;
+  _VSCODE_NLS_MESSAGES?: Array<string | null>;
+};
 
 let monacoPromise: Promise<MonacoModule> | null = null;
 let monacoReady = false;
 
-export async function ensureMonacoEnvironment(): Promise<MonacoModule> {
+export async function ensureMonacoEnvironment(language: AppLanguage = 'zh-CN'): Promise<MonacoModule> {
   if (monacoPromise) {
     return monacoPromise;
   }
 
   monacoPromise = (async () => {
     await import('monaco-editor/min/vs/editor/editor.main.css');
+    await configureMonacoNls(language);
 
     const [
       monaco,
@@ -142,4 +149,16 @@ export async function ensureMonacoEnvironment(): Promise<MonacoModule> {
   })();
 
   return monacoPromise;
+}
+
+export async function configureMonacoNls(language: AppLanguage): Promise<void> {
+  const monacoGlobal = globalThis as MonacoGlobal;
+
+  if (language === 'zh-CN') {
+    await import('monaco-editor/esm/nls.messages.zh-cn.js');
+    return;
+  }
+
+  delete monacoGlobal._VSCODE_NLS_MESSAGES;
+  monacoGlobal._VSCODE_NLS_LANGUAGE = 'en';
 }
