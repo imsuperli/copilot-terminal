@@ -31,27 +31,37 @@ export function highlightMatches(text: string, query: string): Array<{ text: str
 
   const lowerQuery = query.toLowerCase();
   const lowerText = text.toLowerCase();
-  const result: Array<{ text: string; highlight: boolean }> = [];
-
-  let lastIndex = 0;
+  const matchedIndices = new Set<number>();
   let queryIndex = 0;
 
   for (let i = 0; i < text.length && queryIndex < lowerQuery.length; i++) {
     if (lowerText[i] === lowerQuery[queryIndex]) {
-      // 添加之前的非匹配部分
-      if (i > lastIndex) {
-        result.push({ text: text.slice(lastIndex, i), highlight: false });
-      }
-      // 添加匹配的字符
-      result.push({ text: text[i], highlight: true });
-      lastIndex = i + 1;
+      matchedIndices.add(i);
       queryIndex++;
     }
   }
 
-  // 添加剩余的非匹配部分
-  if (lastIndex < text.length) {
-    result.push({ text: text.slice(lastIndex), highlight: false });
+  const result: Array<{ text: string; highlight: boolean }> = [];
+  let segmentStart = 0;
+  let segmentHighlight = matchedIndices.has(0);
+
+  for (let i = 1; i < text.length; i++) {
+    const highlight = matchedIndices.has(i);
+    if (highlight !== segmentHighlight) {
+      result.push({
+        text: text.slice(segmentStart, i),
+        highlight: segmentHighlight,
+      });
+      segmentStart = i;
+      segmentHighlight = highlight;
+    }
+  }
+
+  if (text.length > 0) {
+    result.push({
+      text: text.slice(segmentStart),
+      highlight: segmentHighlight,
+    });
   }
 
   return result;
