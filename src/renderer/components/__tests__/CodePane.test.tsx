@@ -7109,7 +7109,7 @@ describe('CodePane', () => {
     });
   });
 
-  it('tracks external file changes and opens an external diff', async () => {
+  it('tracks external file changes and shows inline review for the active file without switching view mode', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],
       activeFilePath: '/workspace/project/src/index.ts',
@@ -7150,17 +7150,17 @@ describe('CodePane', () => {
       expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 2;\n');
     });
 
-    await screen.findByText('codePane.externalChangesSubtitle');
-    const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
-    expect(viewDiffButton).toBeEnabled();
+    const externalChangesTab = await screen.findByRole('button', { name: 'codePane.externalChangesTab' });
+    expect(externalChangesTab).toBeInTheDocument();
+    expect(screen.getByText('codePane.externalReviewPending')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.externalReviewRevertAll' })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 1;').length).toBeGreaterThan(0);
       expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 2;').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('codePane.externalChangeLineSummary')).toBeInTheDocument();
-    expect(screen.getAllByText('codePane.externalChangeDeletedLines').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('codePane.externalChangeAddedLines').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('external-change-review-block').length).toBeGreaterThan(0);
   });
 
   it('does not re-open language documents for watcher refreshes on already opened files', async () => {
@@ -7308,7 +7308,7 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneWriteFile).not.toHaveBeenCalled();
   });
 
-  it('opens a git-based external diff for unopened file watcher changes', async () => {
+  it('tracks unopened watcher changes without auto-switching files and opens review when the user selects the file', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
       success: true,
       data: [
@@ -7325,7 +7325,15 @@ describe('CodePane', () => {
       ],
     });
 
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
 
     await screen.findByRole('button', { name: 'other.ts' }, { timeout: 3000 });
 
@@ -7362,10 +7370,24 @@ describe('CodePane', () => {
       vi.useRealTimers();
     }
 
-    expect(await screen.findByText('codePane.externalChangeModified')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'codePane.externalChangesTab' })).toBeInTheDocument();
+    expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/index.ts');
+    expect(within(screen.getByTestId('code-pane-editor-region')).queryByText('export const remote = 1;')).toBeNull();
+    expect(within(screen.getByTestId('code-pane-editor-region')).queryByText('export const remote = 4;')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.externalChangesTab' }));
+    });
 
     const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
     expect(viewDiffButton).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(viewDiffButton);
+    });
+
+    await waitFor(() => {
+      expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/other.ts');
+    });
     await waitFor(() => {
       expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const remote = 1;').length).toBeGreaterThan(0);
       expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const remote = 4;').length).toBeGreaterThan(0);
@@ -7373,6 +7395,93 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneReadGitBaseFile).toHaveBeenCalledWith({
       rootPath: '/workspace/project',
       filePath: '/workspace/project/src/other.ts',
+    });
+  });
+
+  it('supports accepting and reverting all changes from the active external review', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 2;\n',
+        mtimeMs: 200,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(screen.getByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.externalReviewAcceptAll' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeNull();
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 3;\n',
+        mtimeMs: 300,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    vi.mocked(window.electronAPI.codePaneWriteFile).mockClear();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.externalReviewRevertAll' }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'codePane.externalReviewRevertAll' })).toBeNull();
     });
   });
 

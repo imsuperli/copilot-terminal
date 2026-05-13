@@ -1,11 +1,11 @@
 import React from 'react';
 import { useI18n } from '../../i18n';
 
-type InlineDiffLineKind = 'context' | 'added' | 'deleted';
+export type InlineDiffLineKind = 'context' | 'added' | 'deleted';
 
 const INLINE_DIFF_LCS_CELL_LIMIT = 1_000_000;
 
-interface InlineDiffLine {
+export interface InlineDiffLine {
   key: string;
   kind: InlineDiffLineKind;
   beforeLineNumber: number | null;
@@ -20,7 +20,7 @@ interface InlineDiffViewerProps {
   emptyLabel?: string;
 }
 
-function splitContentLines(content: string | null | undefined): string[] {
+export function splitContentLines(content: string | null | undefined): string[] {
   if (content === null || content === undefined) {
     return [];
   }
@@ -37,7 +37,7 @@ function splitContentLines(content: string | null | undefined): string[] {
   return lines;
 }
 
-function buildInlineDiffLines(beforeContent: string | null | undefined, afterContent: string | null | undefined): InlineDiffLine[] {
+export function buildInlineDiffLines(beforeContent: string | null | undefined, afterContent: string | null | undefined): InlineDiffLine[] {
   const beforeLines = splitContentLines(beforeContent);
   const afterLines = splitContentLines(afterContent);
   const beforeCount = beforeLines.length;

@@ -148,6 +148,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneListDirectory: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneReadFile: vi.fn().mockResolvedValue({ success: true, data: { content: '', mtimeMs: Date.now(), size: 0, language: 'plaintext', isBinary: false } }),
     codePaneWriteFile: vi.fn().mockResolvedValue({ success: true, data: { mtimeMs: Date.now() } }),
+    codePaneDeleteFile: vi.fn().mockResolvedValue({ success: true }),
     codePaneCreateFile: vi.fn().mockResolvedValue({ success: true, data: { path: '/tmp/new-file', name: 'new-file', type: 'file', size: 0, mtimeMs: Date.now() } }),
     codePaneCreateDirectory: vi.fn().mockResolvedValue({ success: true, data: { path: '/tmp/new-folder', name: 'new-folder', type: 'directory', mtimeMs: Date.now(), hasChildren: true } }),
     codePaneRenamePath: vi.fn().mockResolvedValue({ success: true, data: { path: '/tmp/renamed', name: 'renamed', type: 'file', size: 0, mtimeMs: Date.now() } }),

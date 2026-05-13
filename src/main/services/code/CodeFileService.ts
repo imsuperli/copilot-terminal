@@ -2,6 +2,7 @@ import path from 'path';
 import { promises as fsPromises } from 'fs';
 import type {
   CodePaneContentMatch,
+  CodePaneDeleteFileConfig,
   CodePaneCreateDirectoryConfig,
   CodePaneCreateFileConfig,
   CodePaneListDirectoryConfig,
@@ -254,6 +255,12 @@ export class CodeFileService {
     return {
       mtimeMs: updatedStats.mtimeMs,
     };
+  }
+
+  async deleteFile(config: CodePaneDeleteFileConfig): Promise<void> {
+    const rootInfo = await this.resolveRoot(config.rootPath);
+    const filePath = await this.resolveExistingPath(rootInfo, config.filePath, 'file');
+    await fsPromises.unlink(filePath);
   }
 
   async createFile(config: CodePaneCreateFileConfig): Promise<CodePaneTreeEntry> {

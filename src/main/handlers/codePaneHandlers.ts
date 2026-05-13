@@ -4,6 +4,7 @@ import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
   CodePaneApplyRefactorConfig,
+  CodePaneDeleteFileConfig,
   CodePaneCreateDirectoryConfig,
   CodePaneCreateFileConfig,
   CodePaneDebugControlConfig,
@@ -158,6 +159,19 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeFileService.writeFile(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-delete-file', async (_event, config: CodePaneDeleteFileConfig) => {
+    try {
+      if (!codeFileService) {
+        throw new Error('CodeFileService not initialized');
+      }
+
+      await codeFileService.deleteFile(config);
+      return successResponse(undefined);
     } catch (error) {
       return errorResponse(error);
     }

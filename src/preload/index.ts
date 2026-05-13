@@ -144,6 +144,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-read-file', config),
   codePaneWriteFile: (config) =>
     ipcRenderer.invoke('code-pane-write-file', config),
+  codePaneDeleteFile: (config) =>
+    ipcRenderer.invoke('code-pane-delete-file', config),
   codePaneCreateFile: (config) =>
     ipcRenderer.invoke('code-pane-create-file', config),
   codePaneCreateDirectory: (config) =>

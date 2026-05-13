@@ -359,6 +359,11 @@ export interface CodePaneWriteFileResult {
   mtimeMs: number;
 }
 
+export interface CodePaneDeleteFileConfig {
+  rootPath: string;
+  filePath: string;
+}
+
 export interface CodePaneCreateFileConfig {
   rootPath: string;
   filePath: string;
@@ -1761,6 +1766,7 @@ export interface ElectronAPI {
   codePaneListDirectory: (config: CodePaneListDirectoryConfig) => Promise<IpcResponse<CodePaneTreeEntry[]>>;
   codePaneReadFile: (config: CodePaneReadFileConfig) => Promise<IpcResponse<CodePaneReadFileResult>>;
   codePaneWriteFile: (config: CodePaneWriteFileConfig) => Promise<IpcResponse<CodePaneWriteFileResult>>;
+  codePaneDeleteFile: (config: CodePaneDeleteFileConfig) => Promise<IpcResponse<void>>;
   codePaneCreateFile: (config: CodePaneCreateFileConfig) => Promise<IpcResponse<CodePaneTreeEntry>>;
   codePaneCreateDirectory: (config: CodePaneCreateDirectoryConfig) => Promise<IpcResponse<CodePaneTreeEntry>>;
   codePaneRenamePath: (config: CodePaneRenamePathConfig) => Promise<IpcResponse<CodePaneTreeEntry>>;
