@@ -22,7 +22,13 @@ type ChangeListener = () => void;
 const hoisted = vi.hoisted(() => ({
   ensureMonacoEnvironmentMock: vi.fn(),
   setLanguage: vi.fn(),
-  t: (key: string) => key,
+  t: (key: string, params?: Record<string, string | number>) => {
+    const template = key;
+    if (!params) {
+      return template;
+    }
+    return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''));
+  },
   updatePaneSpy: vi.fn(),
 }));
 
@@ -226,6 +232,8 @@ function createFakeDiffEditor() {
 const fakeMonacoState = {
   lastDiffModel: null as { original: FakeModel; modified: FakeModel } | null,
   lastEditorModel: null as FakeModel | null,
+  lastEditorOptions: null as Record<string, unknown> | null,
+  lastDiffEditorOptions: null as Record<string, unknown> | null,
   definitionProviders: new Map<string, { provideDefinition: (...args: any[]) => Promise<unknown> }>(),
   hoverProviders: new Map<string, { provideHover: (...args: any[]) => Promise<unknown> }>(),
   referenceProviders: new Map<string, { provideReferences: (...args: any[]) => Promise<unknown> }>(),
@@ -271,6 +279,8 @@ const fakeMonacoState = {
   reset() {
     this.lastDiffModel = null;
     this.lastEditorModel = null;
+    this.lastEditorOptions = null;
+    this.lastDiffEditorOptions = null;
     this.definitionProviders.clear();
     this.hoverProviders.clear();
     this.referenceProviders.clear();
@@ -372,8 +382,14 @@ const fakeMonaco = {
     },
   },
   editor: {
-    create: vi.fn(() => createFakeEditor()),
-    createDiffEditor: vi.fn(() => createFakeDiffEditor()),
+    create: vi.fn((_element: HTMLElement, options?: Record<string, unknown>) => {
+      fakeMonacoState.lastEditorOptions = options ?? null;
+      return createFakeEditor();
+    }),
+    createDiffEditor: vi.fn((_element: HTMLElement, options?: Record<string, unknown>) => {
+      fakeMonacoState.lastDiffEditorOptions = options ?? null;
+      return createFakeDiffEditor();
+    }),
     createModel: vi.fn((content: string, language: string, uri: { path: string; fsPath?: string; toString?: () => string }) => {
       const model = new FakeModel(content, language, uri);
       fakeMonacoState.models.set(uri.path, model);
@@ -1770,6 +1786,55 @@ describe('CodePane', () => {
     });
   });
 
+  it('reveals paths without reopening a hidden workbench sidebar', async () => {
+    const pane = createPane({
+      layout: {
+        sidebar: {
+          visible: false,
+          activeView: 'files',
+          width: 280,
+          lastExpandedWidth: 280,
+        },
+      },
+      selectedPath: '/workspace/project/src/index.ts',
+    });
+
+    renderCodePane(pane);
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByPlaceholderText('codePane.searchFilesPlaceholder')).not.toBeInTheDocument();
+  });
+
+  it('configures Monaco diff editor as inline and compact', async () => {
+    renderCodePane(createPane({
+      activeFilePath: '/workspace/project/src/index.ts',
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      viewMode: 'diff',
+      diffTargetPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonaco.editor.createDiffEditor).toHaveBeenCalled();
+    });
+
+    expect(fakeMonaco.editor.create).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({
+      glyphMargin: false,
+      lineDecorationsWidth: 4,
+      lineNumbersMinChars: 3,
+    }));
+    expect(fakeMonaco.editor.createDiffEditor).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({
+      renderSideBySide: false,
+      useInlineViewWhenSpaceIsLimited: true,
+      glyphMargin: false,
+      lineDecorationsWidth: 4,
+      lineNumbersMinChars: 3,
+      folding: false,
+    }));
+  });
+
   it('does not bootstrap the project tree again when only isActive changes', async () => {
     const pane = createPane();
     const onActivate = vi.fn();
@@ -2058,14 +2123,14 @@ describe('CodePane', () => {
 
     expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
 
-    const collapseButtons = screen.getAllByRole('button', { name: 'Collapse' });
+    const collapseButtons = screen.getAllByRole('button', { name: 'codePane.collapse' });
     await act(async () => {
       fireEvent.click(collapseButtons[0]);
     });
 
     expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument();
 
-    const expandButtons = screen.getAllByRole('button', { name: 'Expand' });
+    const expandButtons = screen.getAllByRole('button', { name: 'codePane.expand' });
     await act(async () => {
       fireEvent.click(expandButtons[0]);
     });
@@ -3704,11 +3769,11 @@ describe('CodePane', () => {
       });
     });
 
-    expect(await screen.findByText('Java Project')).toBeInTheDocument();
-    expect(screen.getByText('Request Mappings')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.projectTitleJava')).toBeInTheDocument();
+    expect(screen.getByText('codePane.projectLabelRequestMappings')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Test.*mvn test/i }));
+      fireEvent.click(screen.getByRole('button', { name: /codePane\.projectCommandTest.*mvn test/i }));
     });
 
     expect(window.electronAPI.codePaneRunProjectCommand).toHaveBeenCalledWith({
@@ -3795,10 +3860,10 @@ describe('CodePane', () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.projectTab' }));
     });
 
-    expect(await screen.findByText('Python Project')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.projectTitlePython')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Refresh Project Model.*Rescan interpreters and project files/i }));
+      fireEvent.click(screen.getByRole('button', { name: /codePane\.projectCommandRefreshProjectModel.*Rescan interpreters and project files/i }));
     });
 
     await waitFor(() => {
@@ -3879,15 +3944,15 @@ describe('CodePane', () => {
       },
     });
 
-    expect(await screen.findByText('Workspace State')).toBeInTheDocument();
-    expect(screen.getByText('Importing')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.projectWorkspaceState')).toBeInTheDocument();
+    expect(screen.getByText('codePane.workspacePhaseImporting')).toBeInTheDocument();
     expect(screen.getByText('Resolving classpath containers')).toBeInTheDocument();
-    expect(screen.getByText('Diagnostics')).toBeInTheDocument();
-    expect(screen.getByText('Maven wrapper not detected')).toBeInTheDocument();
+    expect(screen.getByText('codePane.projectDiagnostics')).toBeInTheDocument();
+    expect(screen.getByText('codePane.projectDiagnosticWrapperMissing')).toBeInTheDocument();
     expect(screen.getByText('definition')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Reimport Maven Model' }));
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.projectCommandReimportMavenModel' }));
     });
 
     await waitFor(() => {
@@ -4347,7 +4412,7 @@ describe('CodePane', () => {
     expect((await commitWindowQueries.findAllByText('other.ts')).length).toBeGreaterThan(0);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'unselect /workspace/project/src/other.ts' }));
+      fireEvent.click(commitWindowQueries.getAllByRole('button', { name: 'codePane.gitUnselectPath' })[1]);
     });
 
     await act(async () => {
@@ -4486,7 +4551,9 @@ describe('CodePane', () => {
     expect(commitWindow).not.toBeNull();
     const commitWindowQueries = within(commitWindow as HTMLElement);
 
-    const groupSelectionToggle = commitWindowQueries.getByRole('button', { name: 'unselect group src/components' });
+    const componentsGroupSection = commitWindowQueries.getByText('src/components').closest('section');
+    expect(componentsGroupSection).not.toBeNull();
+    const groupSelectionToggle = within(componentsGroupSection as HTMLElement).getByRole('button', { name: 'codePane.gitUnselectGroup' });
 
     await act(async () => {
       fireEvent.click(groupSelectionToggle);
@@ -7088,8 +7155,8 @@ describe('CodePane', () => {
     expect(viewDiffButton).toBeEnabled();
 
     await waitFor(() => {
-      expect(fakeMonacoState.lastDiffModel?.original.getValue()).toBe('export const value = 1;\n');
-      expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const value = 2;\n');
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 1;').length).toBeGreaterThan(0);
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 2;').length).toBeGreaterThan(0);
     });
     expect(screen.getByText('codePane.externalChangeLineSummary')).toBeInTheDocument();
     expect(screen.getAllByText('codePane.externalChangeDeletedLines').length).toBeGreaterThan(0);
@@ -7300,8 +7367,8 @@ describe('CodePane', () => {
     const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
     expect(viewDiffButton).toBeEnabled();
     await waitFor(() => {
-      expect(fakeMonacoState.lastDiffModel?.original.getValue()).toBe('export const remote = 1;\n');
-      expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const remote = 4;\n');
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const remote = 1;').length).toBeGreaterThan(0);
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const remote = 4;').length).toBeGreaterThan(0);
     });
     expect(window.electronAPI.codePaneReadGitBaseFile).toHaveBeenCalledWith({
       rootPath: '/workspace/project',
@@ -8476,7 +8543,7 @@ describe('CodePane', () => {
     await user.click(await screen.findByRole('button', { name: 'codePane.performanceTab' }));
 
     expect(await screen.findAllByText('codePane.performanceRequests')).toHaveLength(2);
-    expect(await screen.findByText('File search')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.requestFileSearch')).toBeInTheDocument();
   });
 
   it('opens the hierarchy tool window and loads call hierarchy data', async () => {

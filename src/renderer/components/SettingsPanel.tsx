@@ -29,7 +29,9 @@ import { applyAppearanceToDocument, getAppearanceBackdropDescriptor, getAppearan
 import {
   formatKeyboardShortcut,
   getDefaultKeyboardShortcuts,
+  getKeyboardShortcutInputValue,
   KEYBOARD_SHORTCUT_ACTIONS,
+  normalizeKeyboardShortcutKey,
   normalizeKeyboardShortcuts,
 } from '../../shared/utils/keyboardShortcuts';
 import {
@@ -223,12 +225,7 @@ function formatSettingsTimestamp(timestamp: string): string {
 }
 
 function keyboardShortcutToInputValue(definition: KeyboardShortcutDefinition): string {
-  if (definition.doubleTap) {
-    return `Double ${definition.key}`;
-  }
-
-  const parts = [...(definition.modifiers ?? []), definition.key];
-  return parts.join('+');
+  return getKeyboardShortcutInputValue(definition);
 }
 
 function parseKeyboardShortcutInput(value: string): KeyboardShortcutDefinition | null {
@@ -237,36 +234,23 @@ function parseKeyboardShortcutInput(value: string): KeyboardShortcutDefinition |
     return null;
   }
 
+  const doubleTapMatch = trimmedValue.match(/^double(?:\s+|\+)(.+)$/i);
+  if (doubleTapMatch) {
+    const key = normalizeKeyboardShortcutKey(doubleTapMatch[1], '');
+    return key ? { key, doubleTap: true } : null;
+  }
+
   const normalizedParts = trimmedValue
     .split('+')
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => part.toLowerCase());
 
-  if (normalizedParts.length === 2 && normalizedParts[0] === 'double' && normalizedParts[1] === 'shift') {
-    return {
-      key: 'Shift',
-      doubleTap: true,
-    };
-  }
-
   const keyPart = normalizedParts[normalizedParts.length - 1];
   if (!keyPart) {
     return null;
   }
-  const key = keyPart.length === 1
-    ? keyPart.toUpperCase()
-    : keyPart === 'tab'
-      ? 'Tab'
-      : keyPart === 'shift'
-        ? 'Shift'
-        : keyPart === 'escape' || keyPart === 'esc'
-          ? 'Escape'
-          : keyPart === 'enter' || keyPart === 'return'
-            ? 'Enter'
-            : keyPart.startsWith('arrow')
-              ? `Arrow${keyPart.slice(5, 6).toUpperCase()}${keyPart.slice(6)}`
-              : keyPart;
+  const key = normalizeKeyboardShortcutKey(keyPart, '');
 
   const modifiers = normalizedParts.slice(0, -1)
     .map((modifier) => {

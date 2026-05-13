@@ -345,7 +345,7 @@ See `docs/project-config.md` for detailed documentation and examples.
 Global quick navigation panel for frequently accessed URLs and folders:
 
 - **Activation**:
-  - Keyboard shortcut: Double-tap `Shift` key (works in both unified and terminal views)
+  - Keyboard shortcut: Double-tap `Ctrl` key (works in both unified and terminal views)
   - Sidebar button: Compass icon in main sidebar
 - **Purpose**: Quick access to frequently used websites and project folders
 - **UI**: Card-based grid layout with auto-detected icons (Globe for URLs, Folder for paths)

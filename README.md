@@ -48,7 +48,7 @@ It provides a unified card view to manage multiple project terminals and an imme
   - Helps manage context limits during long coding sessions
 - `Ctrl+Tab` quick window switching, `Ctrl+1~9` numbered navigation
 - Project link configuration: Place `copilot.json` in project root to display quick access buttons
-- Quick navigation panel: Supports URLs and local folders, activated by double-tapping `Shift`
+- Quick navigation panel: Supports URLs and local folders, activated by double-tapping `Ctrl`
 - Workspace auto-save, crash recovery, window state restoration
 - Git branch and window status display
 - Open project directories directly in common IDEs from the app

@@ -77,9 +77,9 @@ vi.mock('../hooks/useWorkspaceRestore', () => ({
 
 import App from '../App';
 
-function pressShift() {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
-  window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+function pressKey(key: string) {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key }));
+  window.dispatchEvent(new KeyboardEvent('keyup', { key }));
 }
 
 async function renderApp() {
@@ -104,7 +104,7 @@ describe('App quick navigation shortcut', () => {
         features: { sshEnabled: true },
         keyboardShortcuts: {
           quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
-          quickNav: { key: 'Shift', doubleTap: true },
+          quickNav: { key: 'Control', doubleTap: true },
         },
       } as any,
     });
@@ -136,15 +136,15 @@ describe('App quick navigation shortcut', () => {
     vi.useRealTimers();
   });
 
-  it('opens quick navigation when Shift is double-tapped within 399ms', async () => {
+  it('opens quick navigation when Control is double-tapped within 399ms', async () => {
     await renderApp();
 
     expect(screen.queryByTestId('quick-nav-state')).not.toBeInTheDocument();
 
     await act(async () => {
-      pressShift();
+      pressKey('Control');
       vi.advanceTimersByTime(399);
-      pressShift();
+      pressKey('Control');
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -152,15 +152,44 @@ describe('App quick navigation shortcut', () => {
     expect(screen.getByTestId('quick-nav-state')).toHaveTextContent('open');
   });
 
-  it('does not open quick navigation when Shift taps are 400ms apart', async () => {
+  it('does not open quick navigation when Control taps are 400ms apart', async () => {
     await renderApp();
 
     act(() => {
-      pressShift();
+      pressKey('Control');
       vi.advanceTimersByTime(400);
-      pressShift();
+      pressKey('Control');
     });
 
     expect(screen.queryByTestId('quick-nav-state')).not.toBeInTheDocument();
+  });
+
+  it('opens quick navigation with a legacy customized Shift double tap', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: { useBundledConptyDll: false, defaultShellProgram: '' },
+        features: { sshEnabled: true },
+        keyboardShortcuts: {
+          quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
+          quickNav: { key: 'Shift', doubleTap: true },
+        },
+      } as any,
+    });
+
+    await renderApp();
+
+    await act(async () => {
+      pressKey('Shift');
+      vi.advanceTimersByTime(399);
+      pressKey('Shift');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('quick-nav-state')).toHaveTextContent('open');
   });
 });

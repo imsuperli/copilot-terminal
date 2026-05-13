@@ -288,7 +288,7 @@ Running > WaitingForInput > Paused > Exited
 | 快捷键 | 功能 |
 | --- | --- |
 | `Ctrl+Tab` | 打开快速切换器 |
-| `Shift+Shift` | 打开快捷导航面板（双击 Shift） |
+| `Ctrl+Ctrl` | 打开快捷导航面板（双击 Ctrl） |
 | `Ctrl+,` | 打开设置面板 |
 
 ### 终端视图快捷键
@@ -366,7 +366,7 @@ Running > WaitingForInput > Paused > Exited
 
 ### 打开快捷导航
 
-- **方法一**：双击 `Shift` 键
+- **方法一**：双击 `Ctrl` 键
 - **方法二**：点击主侧边栏的指南针图标
 
 ### 添加导航项

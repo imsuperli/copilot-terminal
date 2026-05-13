@@ -306,7 +306,7 @@ Object.defineProperty(window, 'electronAPI', {
     setActivePane: vi.fn().mockResolvedValue(undefined),
     onViewChanged: vi.fn(),
     offViewChanged: vi.fn(),
-    getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' }, features: { sshEnabled: true }, sshClipboardImage: { enabled: true, uploadLocation: 'current-working-directory', shortcut: 'alt-v', customUploadDirectory: '', copyRemotePathAfterUpload: true, maxUploadBytes: 20 * 1024 * 1024 }, chat: { providers: [], enableCommandSecurity: true }, keyboardShortcuts: { quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] }, quickNav: { key: 'Shift', doubleTap: true } } } }),
+    getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' }, features: { sshEnabled: true }, sshClipboardImage: { enabled: true, uploadLocation: 'current-working-directory', shortcut: 'alt-v', customUploadDirectory: '', copyRemotePathAfterUpload: true, maxUploadBytes: 20 * 1024 * 1024 }, chat: { providers: [], enableCommandSecurity: true }, keyboardShortcuts: { quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] }, quickNav: { key: 'Control', doubleTap: true } } } }),
     updateSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
     validateChatProvider: vi.fn().mockResolvedValue({
       success: true,

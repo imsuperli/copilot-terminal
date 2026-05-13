@@ -101,7 +101,7 @@ describe('SettingsPanel', () => {
         },
         keyboardShortcuts: {
           quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
-          quickNav: { key: 'Shift', doubleTap: true },
+          quickNav: { key: 'Control', doubleTap: true },
         },
       } as any,
     });
@@ -116,7 +116,7 @@ describe('SettingsPanel', () => {
 
     expect(await screen.findByText('应用快捷键')).toBeInTheDocument();
     const quickSwitcherInput = screen.getByLabelText('快速切换面板');
-    expect(quickSwitcherInput).toHaveValue('ctrl+Tab');
+    expect(quickSwitcherInput).toHaveValue('Ctrl+Tab');
 
     await user.clear(quickSwitcherInput);
     await user.type(quickSwitcherInput, 'Ctrl+P');
@@ -126,10 +126,53 @@ describe('SettingsPanel', () => {
       expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
         keyboardShortcuts: {
           quickSwitcher: { key: 'P', modifiers: ['ctrl'] },
-          quickNav: { key: 'Shift', doubleTap: true },
+          quickNav: { key: 'Control', doubleTap: true },
         },
       });
     });
+  });
+
+  it('normalizes double-tap shortcut casing and aliases when saving', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        keyboardShortcuts: {
+          quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
+          quickNav: { key: 'Shift', doubleTap: true },
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '快捷键' }));
+    const quickNavInput = await screen.findByLabelText('快捷导航面板');
+
+    await user.clear(quickNavInput);
+    await user.type(quickNavInput, 'Double Ctrl');
+    fireEvent.blur(quickNavInput);
+
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+        keyboardShortcuts: {
+          quickSwitcher: { key: 'Tab', modifiers: ['ctrl'] },
+          quickNav: { key: 'Control', doubleTap: true },
+        },
+      });
+    });
+    expect(quickNavInput).toHaveValue('Double Ctrl');
   });
 
   it('loads and updates appearance settings from the appearance tab', async () => {

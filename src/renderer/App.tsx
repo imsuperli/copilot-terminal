@@ -818,31 +818,31 @@ function AppContent() {
     };
   }, []);
 
-  // 全局快捷键：双击 Shift 唤出快捷导航（必须是两次完整的按下+松开）
-  const lastShiftUpTime = useRef<number>(0);
-  const shiftPressedDown = useRef<boolean>(false);
+  // 全局快捷键：双击配置键唤出快捷导航（必须是两次完整的按下+松开）
+  const lastQuickNavKeyUpTime = useRef<number>(0);
+  const quickNavKeyPressedDown = useRef<boolean>(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (matchesKeyboardShortcut(e, keyboardShortcuts.quickNav)) {
         // 忽略长按产生的重复事件
         if (e.repeat) return;
-        shiftPressedDown.current = true;
+        quickNavKeyPressedDown.current = true;
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (matchesKeyboardShortcut(e, keyboardShortcuts.quickNav) && shiftPressedDown.current) {
-        shiftPressedDown.current = false;
+      if (matchesKeyboardShortcut(e, keyboardShortcuts.quickNav) && quickNavKeyPressedDown.current) {
+        quickNavKeyPressedDown.current = false;
         const now = Date.now();
-        const timeSinceLastUp = now - lastShiftUpTime.current;
+        const timeSinceLastUp = now - lastQuickNavKeyUpTime.current;
 
-        // 两次完整 Shift（松开间隔必须小于阈值）才触发
+        // 两次完整按键（松开间隔必须小于阈值）才触发
         if (timeSinceLastUp < QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS && timeSinceLastUp > 0) {
           setIsQuickNavOpen(prev => !prev);
-          lastShiftUpTime.current = 0; // 重置，避免连续触发
+          lastQuickNavKeyUpTime.current = 0; // 重置，避免连续触发
         } else {
-          lastShiftUpTime.current = now;
+          lastQuickNavKeyUpTime.current = now;
         }
       }
     };

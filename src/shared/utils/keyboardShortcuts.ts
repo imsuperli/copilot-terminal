@@ -20,10 +20,47 @@ const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcutSettings = {
     modifiers: ['ctrl'],
   },
   quickNav: {
-    key: 'Shift',
+    key: 'Control',
     doubleTap: true,
   },
 };
+
+const KEY_ALIASES: Record<string, string> = {
+  ctrl: 'Control',
+  ctr: 'Control',
+  control: 'Control',
+  cmd: 'Meta',
+  command: 'Meta',
+  meta: 'Meta',
+  option: 'Alt',
+  alt: 'Alt',
+  shift: 'Shift',
+  tab: 'Tab',
+  escape: 'Escape',
+  esc: 'Escape',
+  enter: 'Enter',
+  return: 'Enter',
+  space: ' ',
+  spacebar: ' ',
+};
+
+export function normalizeKeyboardShortcutKey(key: string | undefined, fallback: string): string {
+  const trimmedKey = typeof key === 'string' ? key.trim() : '';
+  if (!trimmedKey) {
+    return fallback;
+  }
+
+  const loweredKey = trimmedKey.toLowerCase();
+  if (KEY_ALIASES[loweredKey] !== undefined) {
+    return KEY_ALIASES[loweredKey];
+  }
+
+  if (loweredKey.startsWith('arrow') && loweredKey.length > 'arrow'.length) {
+    return `Arrow${loweredKey.slice(5, 6).toUpperCase()}${loweredKey.slice(6)}`;
+  }
+
+  return trimmedKey.length === 1 ? trimmedKey.toUpperCase() : trimmedKey;
+}
 
 function normalizeModifiers(modifiers?: KeyboardShortcutModifier[]): KeyboardShortcutModifier[] | undefined {
   if (!Array.isArray(modifiers) || modifiers.length === 0) {
@@ -49,12 +86,12 @@ function normalizeDefinition(
     return fallback;
   }
 
-  const key = typeof definition.key === 'string' && definition.key.trim().length > 0
-    ? definition.key
-    : fallback.key;
+  const rawKey = typeof definition.key === 'string' ? definition.key.trim() : '';
+  const recoveredDoubleTapKey = rawKey.match(/^double(?:\s+|\+)(.+)$/i)?.[1];
+  const key = normalizeKeyboardShortcutKey(recoveredDoubleTapKey ?? rawKey, fallback.key);
   const modifiers = normalizeModifiers(definition.modifiers);
 
-  if (definition.doubleTap) {
+  if (definition.doubleTap || recoveredDoubleTapKey) {
     return {
       key,
       doubleTap: true,
@@ -117,16 +154,36 @@ const MODIFIER_DISPLAY_LABELS: Record<KeyboardShortcutModifier, { mac: string; d
 };
 
 const KEY_DISPLAY_LABELS: Record<KeyboardShortcutDefinition['key'], string> = {
+  Control: 'Ctrl',
+  Meta: 'Meta',
+  Alt: 'Alt',
   Shift: 'Shift',
   Tab: 'Tab',
+  Escape: 'Esc',
+  Enter: 'Enter',
+  ' ': 'Space',
 };
+
+export function getKeyboardShortcutInputValue(definition: KeyboardShortcutDefinition): string {
+  if (definition.doubleTap) {
+    return `Double ${KEY_DISPLAY_LABELS[definition.key] ?? definition.key}`;
+  }
+
+  const parts = [...(definition.modifiers ?? []), definition.key];
+  return parts.map((part) => {
+    if (VALID_MODIFIERS.includes(part as KeyboardShortcutModifier)) {
+      return MODIFIER_DISPLAY_LABELS[part as KeyboardShortcutModifier].default;
+    }
+    return KEY_DISPLAY_LABELS[part] ?? part;
+  }).join('+');
+}
 
 export function formatKeyboardShortcut(
   definition: KeyboardShortcutDefinition,
   platform: string | undefined,
 ): string {
   if (definition.doubleTap) {
-    return `Double ${definition.key}`;
+    return `Double ${KEY_DISPLAY_LABELS[definition.key] ?? definition.key}`;
   }
 
   const isMac = platform === 'darwin';

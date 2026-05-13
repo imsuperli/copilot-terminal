@@ -545,6 +545,11 @@ type ExternalChangeDiffRequest = {
   leftLabel: string;
   rightLabel: string;
 };
+type InlineEditorDiff = {
+  filePath: string;
+  beforeContent: string | null | undefined;
+  afterContent: string | null | undefined;
+};
 type DefinitionLookupResult = {
   location: CodePaneLocation | null;
   error?: string;
@@ -9250,6 +9255,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [gitHistoryError, setGitHistoryError] = useState<string | null>(null);
   const [pendingGitRevisionDiff, setPendingGitRevisionDiff] = useState<GitRevisionDiffRequest | null>(null);
   const [pendingExternalChangeDiff, setPendingExternalChangeDiff] = useState<ExternalChangeDiffRequest | null>(null);
+  const [inlineEditorDiff, setInlineEditorDiff] = useState<InlineEditorDiff | null>(null);
   const [externalChangeEntries, setExternalChangeEntries] = useState<ExternalChangeEntry[]>([]);
   const [selectedExternalChangePath, setSelectedExternalChangePath] = useState<string | null>(null);
   const [selectedExternalChangeEntry, setSelectedExternalChangeEntry] = useState<ExternalChangeEntry | null>(null);
@@ -10388,13 +10394,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [persistSidebarLayout]);
 
-  const handleSidebarModeSelect = useCallback((mode: SidebarMode) => {
-    const isSameMode = sidebarModeRef.current === mode;
-    if (isSameMode) {
-      toggleSidebarVisibility();
-      return;
-    }
-
+  const showSidebarMode = useCallback((mode: SidebarMode) => {
     const nextWidth = clampSidebarWidth(lastExpandedSidebarWidthRef.current);
     setSidebarMode(mode);
     setIsSidebarVisible(true);
@@ -10410,7 +10410,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       width: nextWidth,
       lastExpandedWidth: nextWidth,
     });
-  }, [persistSidebarLayout, toggleSidebarVisibility]);
+  }, [persistSidebarLayout]);
+
+  const handleSidebarModeSelect = useCallback((mode: SidebarMode) => {
+    const isSameMode = sidebarModeRef.current === mode;
+    if (isSameMode) {
+      toggleSidebarVisibility();
+      return;
+    }
+
+    showSidebarMode(mode);
+  }, [showSidebarMode, toggleSidebarVisibility]);
 
   useEffect(() => {
     if (!isActive) {
@@ -11034,6 +11044,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         options: {
           isWholeLine: true,
           glyphMarginClassName: getBreakpointGlyphClassName(breakpoint),
+          linesDecorationsClassName: getBreakpointGlyphClassName(breakpoint),
           glyphMarginHoverMessage: [{ value: formatBreakpointHoverMessage(breakpoint, t) }],
         },
       }));
@@ -11050,6 +11061,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           isWholeLine: true,
           className: 'code-pane-debug-current-line',
           glyphMarginClassName: 'code-pane-debug-current-glyph',
+          linesDecorationsClassName: 'code-pane-debug-current-glyph',
           glyphMarginHoverMessage: [{ value: t('codePane.debugPausedAtLine', { line: currentFrame.lineNumber }) }],
         },
       }]
@@ -12341,7 +12353,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [ensureCompactDirectoryChainLoaded, getDirectoryEntries, isDirectoryLoaded, loadExplorerDirectory, rootPath]);
 
-  const revealPathInExplorer = useCallback(async (targetPath: string) => {
+  const revealPathInExplorer = useCallback(async (
+    targetPath: string,
+    options?: {
+      showSidebar?: boolean;
+    },
+  ) => {
     const directoryPathsToExpand: string[] = [];
     let currentPath = getParentDirectory(targetPath);
 
@@ -12369,7 +12386,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       selectedPath: targetPath,
       expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
     });
-    handleSidebarModeSelect('files');
+    if (options?.showSidebar) {
+      showSidebarMode('files');
+    }
 
     const loadRequests: Array<Promise<void>> = [];
     for (const directoryPath of directoryPathsToExpand) {
@@ -12382,7 +12401,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (loadRequests.length > 0) {
       await Promise.all(loadRequests);
     }
-  }, [getPersistedExpandedPaths, handleSidebarModeSelect, loadDirectory, persistCodeState, rootPath]);
+  }, [getPersistedExpandedPaths, loadDirectory, persistCodeState, rootPath, showSidebarMode]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
     const monaco = monacoRef.current;
@@ -12738,6 +12757,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestId = ++editorSurfaceRequestIdRef.current;
     const isCurrentRequest = () => requestId === editorSurfaceRequestIdRef.current;
     const hostElement = editorHostRef.current;
+    const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+    const currentActiveFilePath = activeFilePathRef.current;
+    const shouldUseInlineDiffViewer = currentViewMode === 'diff'
+      && pendingExternalChangeDiffRef.current?.filePath === currentActiveFilePath
+      && inlineEditorDiff?.filePath === currentActiveFilePath;
+
+    if (shouldUseInlineDiffViewer) {
+      disposeEditors();
+      return;
+    }
+
     if (!hostElement) {
       return;
     }
@@ -12751,8 +12781,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const currentActiveFilePath = activeFilePathRef.current;
-    const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
     const currentSecondaryFilePath = secondaryFilePathRef.current;
     const shouldShowSplit = currentViewMode === 'editor'
       && Boolean(paneRef.current.code?.layout?.editorSplit?.visible)
@@ -12835,12 +12863,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
           minimap: { enabled: false },
           links: false,
           definitionLinkOpensInPeek: false,
-          renderSideBySide: true,
+          renderSideBySide: false,
+          useInlineViewWhenSpaceIsLimited: true,
           wordWrap: 'off',
           fontSize: 13,
           scrollBeyondLastLine: false,
           smoothScrolling: true,
-          glyphMargin: true,
+          glyphMargin: false,
+          lineDecorationsWidth: 4,
+          lineNumbersMinChars: 3,
+          folding: false,
           stickyScroll: { enabled: false },
           ...editorInlayHintOptions,
         });
@@ -12867,6 +12899,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         readOnly: usesReadonlyDiffModel
           ? true
           : isReadOnlyFile,
+        glyphMargin: false,
+        lineDecorationsWidth: 4,
+        lineNumbersMinChars: 3,
+        folding: false,
         ...editorInlayHintOptions,
       });
       applyDebugDecorations(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
@@ -12917,7 +12953,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         tabSize: 2,
         scrollBeyondLastLine: false,
         smoothScrolling: true,
-        glyphMargin: true,
+        glyphMargin: false,
+        lineDecorationsWidth: 4,
+        lineNumbersMinChars: 3,
         stickyScroll: { enabled: false },
         ...editorInlayHintOptions,
       });
@@ -13052,6 +13090,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     disposeEditors,
     editorInlayHintOptions,
     ensureMonacoReady,
+    inlineEditorDiff?.filePath,
     isActive,
     saveCurrentViewState,
     viewMode,
@@ -14477,7 +14516,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setUsagesTargetLabel((currentLabel) => (currentLabel === targetWord ? currentLabel : targetWord));
     setUsageError((currentError) => (currentError === null ? currentError : null));
     setIsFindingUsages((currentFinding) => (currentFinding ? currentFinding : true));
-    handleSidebarModeSelect('search');
+    showSidebarMode('search');
 
     const response = await window.electronAPI.codePaneGetReferences({
       rootPath,
@@ -14500,7 +14539,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       currentError === nextError ? currentError : nextError
     ));
     setIsFindingUsages((currentFinding) => (currentFinding === false ? currentFinding : false));
-  }, [getActiveEditorContext, handleSidebarModeSelect, rootPath, t]);
+  }, [getActiveEditorContext, rootPath, showSidebarMode, t]);
 
   const renameSymbolAtCursor = useCallback(async () => {
     const context = getActiveEditorContext();
@@ -14564,6 +14603,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     formatActiveDocumentRef.current = formatActiveDocument;
   }, [formatActiveDocument]);
 
+  const clearInlineEditorDiffForPath = useCallback((filePath: string) => {
+    setInlineEditorDiff((currentDiff) => (
+      currentDiff?.filePath === filePath ? null : currentDiff
+    ));
+  }, []);
+
   const activateFile = useCallback(async (
     filePath: string,
     options?: {
@@ -14580,6 +14625,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    clearInlineEditorDiffForPath(filePath);
     const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
     const currentActiveFilePath = paneRef.current.code?.activeFilePath ?? activeFilePathRef.current;
     const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
@@ -14619,7 +14665,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (shouldRefreshCurrentEditorSurface) {
       await refreshEditorSurface();
     }
-  }, [diffTargetPath, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, viewMode]);
+  }, [clearInlineEditorDiffForPath, diffTargetPath, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, viewMode]);
 
   const ensureDiffModel = useCallback(async (
     filePath: string,
@@ -15051,6 +15097,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       pendingExternalChangeDiffRef.current = nextExternalDiffRequest;
       setPendingExternalChangeDiff(nextExternalDiffRequest);
     }
+    setInlineEditorDiff((currentDiff) => (
+      currentDiff?.filePath === entry.filePath
+        && currentDiff.beforeContent === entry.previousContent
+        && currentDiff.afterContent === entry.currentContent
+        ? currentDiff
+        : {
+            filePath: entry.filePath,
+            beforeContent: entry.previousContent,
+            afterContent: entry.currentContent,
+          }
+    ));
     clearBannerForFile(entry.filePath);
     return true;
   }, [activeFilePathRef, clearBannerForFile, detachDiffEditorModel, ensureMonacoReady, supportsMonaco, t, viewMode]);
@@ -15184,23 +15241,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setPendingExternalChangeDiff((currentRequest) => (
         currentRequest === null ? currentRequest : null
       ));
+      clearInlineEditorDiffForPath(filePath);
       if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
+        setInlineEditorDiff((currentDiff) => (currentDiff === null ? currentDiff : null));
         persistCodeState({
           viewMode: 'editor',
           diffTargetPath: null,
         });
       }
     }
-  }, [applyExternalChangeState, persistCodeState, viewMode]);
+  }, [applyExternalChangeState, clearInlineEditorDiffForPath, persistCodeState, viewMode]);
 
   const clearAllExternalChanges = useCallback(() => {
     applyExternalChangeState([], null);
+    setInlineEditorDiff((currentDiff) => (currentDiff === null ? currentDiff : null));
     if (pendingExternalChangeDiffRef.current) {
       pendingExternalChangeDiffRef.current = null;
       setPendingExternalChangeDiff((currentRequest) => (
         currentRequest === null ? currentRequest : null
       ));
       if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
+        setInlineEditorDiff((currentDiff) => (currentDiff === null ? currentDiff : null));
         persistCodeState({
           viewMode: 'editor',
           diffTargetPath: null,
@@ -17500,7 +17561,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return false;
       }
 
-      await revealPathInExplorer(response.data.path);
+      await revealPathInExplorer(response.data.path, { showSidebar: true });
       await refreshDirectoryPaths([parentDirectoryPath], {
         showLoadingIndicator: false,
       });
@@ -17538,7 +17599,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return false;
       }
 
-      await revealPathInExplorer(response.data.path);
+      await revealPathInExplorer(response.data.path, { showSidebar: true });
       await refreshDirectoryPaths([parentDirectoryPath, response.data.path], {
         showLoadingIndicator: false,
       });
@@ -17614,7 +17675,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         await syncLanguageDocument(renamedFilePath, 'open');
       });
     }
-    await revealPathInExplorer(response.data.path);
+    await revealPathInExplorer(response.data.path, { showSidebar: true });
     await refreshDirectoryPaths(directoriesToRefresh, {
       showLoadingIndicator: false,
     });
@@ -18007,6 +18068,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             || lastAutoPresentedChange.changedAt !== latestEntry.changedAt
           ),
         );
+        const shouldKeepSidebarPreference = !isSidebarVisible;
 
         if (shouldAutoPresentLatestEntry && latestEntry) {
           lastAutoPresentedExternalChangeRef.current = {
@@ -18015,7 +18077,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           };
           setBottomPanelMode((currentMode) => (currentMode === 'external-changes' ? currentMode : 'external-changes'));
 
-          if (latestEntry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== latestEntry.filePath) {
+          if (!shouldKeepSidebarPreference && latestEntry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== latestEntry.filePath) {
             void revealPathInExplorer(latestEntry.filePath);
           }
           if (latestEntry.canDiff) {
@@ -18034,7 +18096,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void refreshDirectoryPathsRef.current(directoriesToRefresh, {
       showLoadingIndicator: false,
     });
-  }, [buildConsolidatedFsChanges, invalidateWorkspaceRuntimeCaches, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
+  }, [buildConsolidatedFsChanges, invalidateWorkspaceRuntimeCaches, isSidebarVisible, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
 
   useEffect(() => {
     flushPendingFsChangesRef.current = flushPendingFsChanges;
@@ -18501,6 +18563,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
             viewMode: 'editor',
             diffTargetPath: null,
           });
+        } else if (!pendingExternalEntry) {
+          setInlineEditorDiff((currentDiff) => (currentDiff === null ? currentDiff : null));
         }
       }
 
@@ -20692,7 +20756,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    handleSidebarModeSelect('problems');
+    showSidebarMode('problems');
     await openEditorLocation({
       filePath: nextProblem.filePath,
       lineNumber: nextProblem.startLineNumber,
@@ -20703,7 +20767,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       recordRecent: true,
       clearForward: true,
     });
-  }, [getCurrentNavigationLocation, handleSidebarModeSelect, openEditorLocation, problems]);
+  }, [getCurrentNavigationLocation, openEditorLocation, problems, showSidebarMode]);
 
   const openSearchEverywhere = useCallback((mode: SearchEverywhereMode) => {
     searchEverywhereControllerRef.current?.open(mode);
@@ -24744,7 +24808,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         }}
                       />
                     )}
-                    {isEditorSplitVisible && secondaryFilePath && viewMode === 'editor' ? (
+                    {inlineEditorDiff?.filePath === activeFilePath && viewMode === 'diff' ? (
+                      <div className="min-h-0 flex-1 overflow-hidden p-2">
+                        <InlineDiffViewer
+                          beforeContent={inlineEditorDiff.beforeContent}
+                          afterContent={inlineEditorDiff.afterContent}
+                          maxHeightClassName="h-full max-h-full"
+                          emptyLabel={t('codePane.externalChangeNoContent')}
+                        />
+                      </div>
+                    ) : isEditorSplitVisible && secondaryFilePath && viewMode === 'editor' ? (
                       <div className="flex min-h-0 flex-1 overflow-hidden">
                         <div
                           ref={primaryEditorPaneRef}

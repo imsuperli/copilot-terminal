@@ -193,7 +193,7 @@ export function InlineDiffViewer({
 
   return (
     <div className={`min-h-0 overflow-auto rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] ${maxHeightClassName}`}>
-      <div className="min-w-max py-1 font-mono text-[11px] leading-5">
+      <div className="min-w-full py-1 font-mono text-[11px] leading-5">
         {lines.map((line) => {
           const marker = line.kind === 'added' ? '+' : line.kind === 'deleted' ? '-' : ' ';
           const lineNumber = line.kind === 'added'
@@ -205,7 +205,7 @@ export function InlineDiffViewer({
           return (
             <div
               key={line.key}
-              className={`grid grid-cols-[28px_52px_minmax(0,1fr)] gap-2 border-l-2 px-2 ${getDiffLineClassName(line.kind)}`}
+              className={`grid grid-cols-[22px_44px_minmax(0,1fr)] gap-2 border-l-2 px-2 ${getDiffLineClassName(line.kind)}`}
             >
               <span className={`select-none text-center font-semibold ${getDiffMarkerClassName(line.kind)}`}>
                 {marker}

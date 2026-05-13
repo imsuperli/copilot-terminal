@@ -288,7 +288,7 @@ Running > WaitingForInput > Paused > Exited
 | Shortcut | Function |
 | --- | --- |
 | `Ctrl+Tab` | Open quick switcher |
-| `Shift+Shift` | Open quick navigation panel (double-tap Shift) |
+| `Ctrl+Ctrl` | Open quick navigation panel (double-tap Ctrl) |
 | `Ctrl+,` | Open settings panel |
 
 ### Terminal View Shortcuts
@@ -366,7 +366,7 @@ Quick navigation is a global panel for quickly accessing frequently used website
 
 ### Open Quick Navigation
 
-- **Method 1**: Double-tap `Shift` key
+- **Method 1**: Double-tap `Ctrl` key
 - **Method 2**: Click the compass icon in the main sidebar
 
 ### Add Navigation Items

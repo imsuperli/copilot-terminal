@@ -62,7 +62,7 @@ Typical targets include:
 ### 6. Quick Navigation Panel
 
 - Maintain a list of frequently used URLs and local folders
-- Open the panel by double-pressing `Shift`
+- Open the panel by double-pressing `Ctrl`
 - Add, edit, and remove entries from settings
 - Useful for dashboards, docs, local workspaces, and shared folders
 
@@ -246,7 +246,7 @@ It supports:
 
 ### 6. Quick Navigation
 
-Double-press `Shift` to open the quick navigation panel.
+Double-press `Ctrl` to open the quick navigation panel.
 
 In settings, you can manage two types of entries:
 
@@ -309,7 +309,7 @@ When Claude StatusLine is enabled, the app cooperates with `~/.claude/settings.j
 | `Ctrl+V` | Paste clipboard content |
 | `Ctrl+Enter` | Insert a newline |
 | `Shift+Enter` | Insert a newline |
-| double `Shift` | Open the quick navigation panel |
+| double `Ctrl` | Open the quick navigation panel |
 
 Related documentation:
 
