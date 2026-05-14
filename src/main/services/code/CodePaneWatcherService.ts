@@ -1,5 +1,5 @@
 import path from 'path';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, type WebContents } from 'electron';
 import { PathValidator } from '../../utils/pathValidator';
 import { isIgnoredCodePanePath } from './codePaneFsConstants';
 
@@ -28,40 +28,61 @@ type WatchChange = {
   path: string;
 };
 
+type ChokidarLike = {
+  watch: (target: string, options: Record<string, unknown>) => any;
+};
+
 type WatcherInfo = {
   rootPath: string;
   watcher: any;
-  paneIds: Set<string>;
+  paneTargets: Map<string, WebContents>;
   pendingChanges: WatchChange[];
   flushTimer: NodeJS.Timeout | null;
 };
 
+type PaneSubscription = {
+  rootPath: string;
+  webContents: WebContents;
+  handleDestroyed: () => void;
+};
+
 export class CodePaneWatcherService {
   private readonly rootWatchers = new Map<string, WatcherInfo>();
-  private readonly paneToRoot = new Map<string, string>();
+  private readonly paneSubscriptions = new Map<string, PaneSubscription>();
 
   constructor(
     private readonly getMainWindow: () => BrowserWindow | null,
     private readonly onChanges?: (rootPath: string, changes: WatchChange[]) => void | Promise<void>,
+    private readonly loadChokidar: () => Promise<ChokidarLike> = getChokidar,
   ) {}
 
-  async watchRoot(paneId: string, rootPath: string): Promise<void> {
+  async watchRoot(paneId: string, rootPath: string, webContents: WebContents): Promise<void> {
     const normalizedRootPath = path.resolve(PathValidator.expandHomePath(rootPath));
     const validation = PathValidator.validate(normalizedRootPath);
     if (!validation.valid) {
       throw new Error(`Invalid code pane root path: ${validation.reason ?? 'unknown error'}`);
     }
 
-    const existingRootPath = this.paneToRoot.get(paneId);
+    if (webContents.isDestroyed()) {
+      throw new Error(`Cannot watch code pane root for destroyed webContents: ${paneId}`);
+    }
+
+    const existingSubscription = this.paneSubscriptions.get(paneId);
+    const existingRootPath = existingSubscription?.rootPath;
+    const existingTargetId = existingSubscription?.webContents.id;
     if (existingRootPath && existingRootPath !== normalizedRootPath) {
       await this.unwatchRoot(paneId);
-    } else if (existingRootPath === normalizedRootPath) {
+    } else if (
+      existingRootPath === normalizedRootPath
+      && existingTargetId === webContents.id
+      && this.rootWatchers.has(normalizedRootPath)
+    ) {
       return;
     }
 
     let watcherInfo = this.rootWatchers.get(normalizedRootPath);
     if (!watcherInfo) {
-      const chokidar = await getChokidar();
+      const chokidar = await this.loadChokidar();
       const watcher = chokidar.watch(normalizedRootPath, {
         persistent: true,
         ignoreInitial: true,
@@ -78,7 +99,7 @@ export class CodePaneWatcherService {
       watcherInfo = {
         rootPath: normalizedRootPath,
         watcher,
-        paneIds: new Set<string>(),
+        paneTargets: new Map<string, WebContents>(),
         pendingChanges: [],
         flushTimer: null,
       };
@@ -103,26 +124,43 @@ export class CodePaneWatcherService {
       this.rootWatchers.set(normalizedRootPath, watcherInfo);
     }
 
-    watcherInfo.paneIds.add(paneId);
-    this.paneToRoot.set(paneId, normalizedRootPath);
+    if (existingSubscription) {
+      this.rootWatchers.get(existingSubscription.rootPath)?.paneTargets.delete(paneId);
+      existingSubscription.webContents.removeListener('destroyed', existingSubscription.handleDestroyed);
+    }
+
+    const handleDestroyed = () => {
+      void this.unwatchRoot(paneId);
+    };
+
+    webContents.on('destroyed', handleDestroyed);
+    watcherInfo.paneTargets.set(paneId, webContents);
+    this.paneSubscriptions.set(paneId, {
+      rootPath: normalizedRootPath,
+      webContents,
+      handleDestroyed,
+    });
   }
 
   async unwatchRoot(paneId: string): Promise<void> {
-    const rootPath = this.paneToRoot.get(paneId);
-    if (!rootPath) {
+    const subscription = this.paneSubscriptions.get(paneId);
+    if (!subscription) {
       return;
     }
 
-    const watcherInfo = this.rootWatchers.get(rootPath);
+    this.paneSubscriptions.delete(paneId);
+    if (!subscription.webContents.isDestroyed()) {
+      subscription.webContents.removeListener('destroyed', subscription.handleDestroyed);
+    }
+
+    const watcherInfo = this.rootWatchers.get(subscription.rootPath);
     if (!watcherInfo) {
-      this.paneToRoot.delete(paneId);
       return;
     }
 
-    watcherInfo.paneIds.delete(paneId);
-    this.paneToRoot.delete(paneId);
+    watcherInfo.paneTargets.delete(paneId);
 
-    if (watcherInfo.paneIds.size > 0) {
+    if (watcherInfo.paneTargets.size > 0) {
       return;
     }
 
@@ -132,13 +170,20 @@ export class CodePaneWatcherService {
     }
 
     await watcherInfo.watcher.close();
-    this.rootWatchers.delete(rootPath);
+    this.rootWatchers.delete(subscription.rootPath);
   }
 
   async destroy(): Promise<void> {
     const watcherInfos = Array.from(this.rootWatchers.values());
+    const subscriptions = Array.from(this.paneSubscriptions.values());
     this.rootWatchers.clear();
-    this.paneToRoot.clear();
+    this.paneSubscriptions.clear();
+
+    for (const subscription of subscriptions) {
+      if (!subscription.webContents.isDestroyed()) {
+        subscription.webContents.removeListener('destroyed', subscription.handleDestroyed);
+      }
+    }
 
     await Promise.all(watcherInfos.map(async (watcherInfo) => {
       if (watcherInfo.flushTimer) {
@@ -166,9 +211,16 @@ export class CodePaneWatcherService {
       }
 
       const changes = watcherInfo.pendingChanges.splice(0, watcherInfo.pendingChanges.length);
-      const mainWindow = this.getMainWindow();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('code-pane-fs-changed', {
+      const targetContents = new Map<number, WebContents>();
+      for (const target of watcherInfo.paneTargets.values()) {
+        if (target.isDestroyed()) {
+          continue;
+        }
+        targetContents.set(target.id, target);
+      }
+
+      for (const target of targetContents.values()) {
+        target.send('code-pane-fs-changed', {
           rootPath,
           changes,
         });

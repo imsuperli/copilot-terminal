@@ -636,7 +636,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     }
   });
 
-  ipcMain.handle('code-pane-watch-root', async (_event, config: CodePaneWatchRootConfig) => {
+  ipcMain.handle('code-pane-watch-root', async (event, config: CodePaneWatchRootConfig) => {
     try {
       if (!codePaneWatcherService) {
         throw new Error('CodePaneWatcherService not initialized');
@@ -645,7 +645,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
         throw new Error('CodeProjectIndexService not initialized');
       }
 
-      await codePaneWatcherService.watchRoot(config.paneId, config.rootPath);
+      await codePaneWatcherService.watchRoot(config.paneId, config.rootPath, event.sender);
       void codeProjectIndexService.watchProjectForPane(config.paneId, config.rootPath).catch((error) => {
         console.error('[CodePaneHandlers] Failed to initialize project index:', error);
         const mainWindow = getMainWindow?.();

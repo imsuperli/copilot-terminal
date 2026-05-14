@@ -46,13 +46,14 @@ describe('registerCodePaneHandlers', () => {
 
     registerCodePaneHandlers(ctx);
     const watchRootHandler = getRegisteredHandler('code-pane-watch-root');
+    const sender = { id: 42 };
 
-    const response = await watchRootHandler({}, {
+    const response = await watchRootHandler({ sender }, {
       paneId: 'pane-code-1',
       rootPath: '/workspace/project',
     }) as { success: boolean };
 
-    expect(codePaneWatcherService.watchRoot).toHaveBeenCalledWith('pane-code-1', '/workspace/project');
+    expect(codePaneWatcherService.watchRoot).toHaveBeenCalledWith('pane-code-1', '/workspace/project', sender);
     expect(codeProjectIndexService.watchProjectForPane).toHaveBeenCalledWith('pane-code-1', '/workspace/project');
     expect(languageWorkspaceHostService.prewarmProject).toHaveBeenCalledWith('/workspace/project');
     expect(response).toEqual({ success: true, data: undefined });
