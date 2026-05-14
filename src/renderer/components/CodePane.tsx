@@ -5033,6 +5033,13 @@ function normalizePath(pathValue: string): string {
   return pathValue.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
+function getPathComparisonKey(pathValue: string): string {
+  const normalizedPath = normalizePath(pathValue);
+  return window.electronAPI.platform === 'win32'
+    ? normalizedPath.toLowerCase()
+    : normalizedPath;
+}
+
 function isVirtualDocumentPath(pathValue: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(pathValue) && !pathValue.toLowerCase().startsWith('file://');
 }
@@ -5044,6 +5051,20 @@ function createFallbackRange(lineNumber: number, column: number): MonacoRange {
     endLineNumber: lineNumber,
     endColumn: column + 1,
   };
+}
+
+function resolveTrackedPath(
+  pathValue: string,
+  trackedPaths: Iterable<string>,
+): string {
+  const normalizedPath = normalizePath(pathValue);
+  const comparisonKey = getPathComparisonKey(pathValue);
+  for (const candidatePath of trackedPaths) {
+    if (getPathComparisonKey(candidatePath) === comparisonKey) {
+      return candidatePath;
+    }
+  }
+  return normalizedPath;
 }
 
 function normalizeSidebarMode(mode: string | undefined): SidebarMode {
@@ -5559,12 +5580,14 @@ function updateSaveQualityStep(
 function getRelativePath(rootPath: string, targetPath: string): string {
   const normalizedRootPath = normalizePath(rootPath);
   const normalizedTargetPath = normalizePath(targetPath);
+  const rootPathComparisonKey = getPathComparisonKey(rootPath);
+  const targetPathComparisonKey = getPathComparisonKey(targetPath);
 
-  if (normalizedTargetPath === normalizedRootPath) {
+  if (targetPathComparisonKey === rootPathComparisonKey) {
     return '';
   }
 
-  if (normalizedTargetPath.startsWith(`${normalizedRootPath}/`)) {
+  if (targetPathComparisonKey.startsWith(`${rootPathComparisonKey}/`)) {
     return normalizedTargetPath.slice(normalizedRootPath.length + 1);
   }
 
@@ -5599,12 +5622,14 @@ function replacePathPrefix(targetPath: string, sourcePath: string, nextPath: str
   const normalizedTargetPath = normalizePath(targetPath);
   const normalizedSourcePath = normalizePath(sourcePath);
   const normalizedNextPath = normalizePath(nextPath);
+  const targetPathComparisonKey = getPathComparisonKey(targetPath);
+  const sourcePathComparisonKey = getPathComparisonKey(sourcePath);
 
-  if (normalizedTargetPath === normalizedSourcePath) {
+  if (targetPathComparisonKey === sourcePathComparisonKey) {
     return normalizedNextPath;
   }
 
-  if (!normalizedTargetPath.startsWith(`${normalizedSourcePath}/`)) {
+  if (!targetPathComparisonKey.startsWith(`${sourcePathComparisonKey}/`)) {
     return normalizedTargetPath;
   }
 
@@ -5612,10 +5637,10 @@ function replacePathPrefix(targetPath: string, sourcePath: string, nextPath: str
 }
 
 function isPathEqualOrDescendant(targetPath: string, basePath: string): boolean {
-  const normalizedTargetPath = normalizePath(targetPath);
-  const normalizedBasePath = normalizePath(basePath);
-  return normalizedTargetPath === normalizedBasePath
-    || normalizedTargetPath.startsWith(`${normalizedBasePath}/`);
+  const targetPathComparisonKey = getPathComparisonKey(targetPath);
+  const basePathComparisonKey = getPathComparisonKey(basePath);
+  return targetPathComparisonKey === basePathComparisonKey
+    || targetPathComparisonKey.startsWith(`${basePathComparisonKey}/`);
 }
 
 function splitGitBranchPath(branchName: string): string[] {
@@ -5941,13 +5966,15 @@ function isKnownMonacoCancellationError(error: unknown): boolean {
 function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedParentPath = normalizePath(parentPath);
   const normalizedCandidatePath = normalizePath(candidatePath);
+  const parentPathComparisonKey = getPathComparisonKey(parentPath);
+  const candidatePathComparisonKey = getPathComparisonKey(candidatePath);
   if (normalizedParentPath.includes('://') || normalizedCandidatePath.includes('://')) {
-    return normalizedCandidatePath === normalizedParentPath
-      || normalizedCandidatePath.startsWith(`${normalizedParentPath}/`);
+    return candidatePathComparisonKey === parentPathComparisonKey
+      || candidatePathComparisonKey.startsWith(`${parentPathComparisonKey}/`);
   }
 
-  return normalizedCandidatePath === normalizedParentPath
-    || normalizedCandidatePath.startsWith(`${normalizedParentPath}/`);
+  return candidatePathComparisonKey === parentPathComparisonKey
+    || candidatePathComparisonKey.startsWith(`${parentPathComparisonKey}/`);
 }
 
 function isExternalTreePath(rootPath: string, targetPath: string): boolean {
@@ -15156,7 +15183,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
-    const filePath = normalizePath(change.path);
+    const trackedPaths = new Set<string>([
+      ...fileModelsRef.current.keys(),
+      ...fileMetaRef.current.keys(),
+      ...externalChangeStateRef.current.entriesByPath.keys(),
+      activeFilePathRef.current ?? '',
+      secondaryFilePathRef.current ?? '',
+    ].filter((value) => Boolean(value)));
+    const filePath = resolveTrackedPath(change.path, trackedPaths);
     if (!isPathInside(rootPath, filePath) || isVirtualDocumentPath(filePath)) {
       return null;
     }
@@ -18128,7 +18162,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     let mounted = true;
 
     const handleFsChanged = (_event: unknown, payload: CodePaneFsChangedPayload) => {
-      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+      if (getPathComparisonKey(payload.rootPath) !== getPathComparisonKey(rootPath)) {
         return;
       }
 
@@ -21218,7 +21252,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     const handleRunSessionChanged = (_event: unknown, payload: CodePaneRunSessionChangedPayload) => {
-      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+      if (getPathComparisonKey(payload.rootPath) !== getPathComparisonKey(rootPath)) {
         return;
       }
 
@@ -21233,7 +21267,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
 
     const handleRunSessionOutput = (_event: unknown, payload: CodePaneRunSessionOutputPayload) => {
-      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+      if (getPathComparisonKey(payload.rootPath) !== getPathComparisonKey(rootPath)) {
         return;
       }
 
@@ -21257,7 +21291,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     const handleDebugSessionChanged = (_event: unknown, payload: CodePaneDebugSessionChangedPayload) => {
-      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+      if (getPathComparisonKey(payload.rootPath) !== getPathComparisonKey(rootPath)) {
         return;
       }
 
@@ -21287,7 +21321,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
 
     const handleDebugSessionOutput = (_event: unknown, payload: CodePaneDebugSessionOutputPayload) => {
-      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+      if (getPathComparisonKey(payload.rootPath) !== getPathComparisonKey(rootPath)) {
         return;
       }
 
