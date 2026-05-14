@@ -39,6 +39,19 @@ export type ExternalChangeReviewBlock = {
   lines: InlineDiffLine[];
 };
 
+type ExternalChangeReviewRenderRow =
+  | {
+    id: string;
+    kind: 'context';
+    lineNumber: number;
+    text: string;
+  }
+  | {
+    id: string;
+    kind: 'block';
+    block: ExternalChangeReviewBlock;
+  };
+
 type ExternalChangeReviewProps = {
   filePath: string;
   beforeContent: string | null | undefined;
@@ -61,6 +74,10 @@ function getLineToneClassName(kind: InlineDiffLine['kind']): string {
   }
 }
 
+function getContextLineClassName() {
+  return 'text-[rgb(var(--foreground))]';
+}
+
 function getMarkerClassName(kind: InlineDiffLine['kind']): string {
   switch (kind) {
     case 'added':
@@ -71,6 +88,10 @@ function getMarkerClassName(kind: InlineDiffLine['kind']): string {
     default:
       return 'text-[rgb(var(--muted-foreground))]';
   }
+}
+
+function getContextMarkerClassName() {
+  return 'text-[rgb(var(--muted-foreground))]';
 }
 
 function createEmptyExternalChangeLineSummary(): ExternalChangeLineSummary {
@@ -342,11 +363,80 @@ export function buildExternalChangeReviewBlocks(
   return blocks;
 }
 
+function buildExternalChangeReviewRows(
+  beforeContent: string | null | undefined,
+  blocks: ExternalChangeReviewBlock[],
+): ExternalChangeReviewRenderRow[] {
+  const beforeLines = splitContentLines(beforeContent);
+  const rows: ExternalChangeReviewRenderRow[] = [];
+  let nextContextIndex = 0;
+
+  const pushContextLine = (lineIndex: number) => {
+    rows.push({
+      id: `context:${lineIndex}`,
+      kind: 'context',
+      lineNumber: lineIndex + 1,
+      text: beforeLines[lineIndex] ?? '',
+    });
+  };
+
+  for (const block of blocks) {
+    while (nextContextIndex < block.beforeStartIndex) {
+      pushContextLine(nextContextIndex);
+      nextContextIndex += 1;
+    }
+
+    rows.push({
+      id: `block:${block.id}`,
+      kind: 'block',
+      block,
+    });
+
+    nextContextIndex = Math.max(nextContextIndex, block.beforeStartIndex + block.beforeDeleteCount);
+  }
+
+  while (nextContextIndex < beforeLines.length) {
+    pushContextLine(nextContextIndex);
+    nextContextIndex += 1;
+  }
+
+  if (beforeLines.length === 0 && blocks.length === 0) {
+    return [];
+  }
+
+  return rows;
+}
+
 function formatRangeLabel(start: number | null, end: number | null): string | null {
   if (start === null || end === null) {
     return null;
   }
   return start === end ? `${start}` : `${start}-${end}`;
+}
+
+function ExternalChangeReviewContextLine({
+  lineNumber,
+  text,
+}: {
+  lineNumber: number;
+  text: string;
+}) {
+  return (
+    <div
+      className={`grid grid-cols-[18px_36px_minmax(0,1fr)] gap-2 px-2 ${getContextLineClassName()}`}
+      data-testid="external-change-review-context-line"
+    >
+      <span className={`select-none text-center font-semibold ${getContextMarkerClassName()}`}>
+        {' '}
+      </span>
+      <span className="select-none text-right text-[rgb(var(--muted-foreground))]">
+        {lineNumber}
+      </span>
+      <code className="min-w-0 whitespace-pre-wrap break-words py-0.5">
+        {text || ' '}
+      </code>
+    </div>
+  );
 }
 
 export function ExternalChangeReview({
@@ -370,6 +460,10 @@ export function ExternalChangeReview({
   const blocks = React.useMemo(
     () => (isSummaryOnly ? [] : buildExternalChangeReviewBlocks(beforeContent, afterContent)),
     [afterContent, beforeContent, isSummaryOnly],
+  );
+  const rows = React.useMemo(
+    () => (isSummaryOnly ? [] : buildExternalChangeReviewRows(beforeContent, blocks)),
+    [beforeContent, blocks, isSummaryOnly],
   );
 
   return (
@@ -414,84 +508,97 @@ export function ExternalChangeReview({
           </div>
           <ExternalChangeLineSummaryPanel summary={summary} />
         </div>
-      ) : blocks.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="px-3 py-3 text-xs text-[rgb(var(--muted-foreground))]">
           {t('codePane.externalChangeNoLineChanges')}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto py-2">
-          {blocks.map((block) => {
-            const deletedRangeLabel = formatRangeLabel(block.deletedStartLineNumber, block.deletedEndLineNumber);
-            const addedRangeLabel = formatRangeLabel(block.addedStartLineNumber, block.addedEndLineNumber);
+        <div className="min-h-0 flex-1 overflow-auto p-2">
+          <div className="overflow-hidden rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] font-mono text-[11px] leading-5">
+            {rows.map((row) => {
+              if (row.kind === 'context') {
+                return (
+                  <ExternalChangeReviewContextLine
+                    key={row.id}
+                    lineNumber={row.lineNumber}
+                    text={row.text}
+                  />
+                );
+              }
 
-            return (
-              <section
-                key={block.id}
-                className="mx-2 mb-3 overflow-hidden rounded border border-[rgb(var(--border))]"
-                data-testid="external-change-review-block"
-              >
-                <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--secondary))/0.32] px-3 py-1.5">
-                  <div className="flex min-w-0 items-center gap-3 text-[11px] text-[rgb(var(--muted-foreground))]">
-                    {deletedRangeLabel && (
-                      <span>{t('codePane.externalReviewDeletedRange', { range: deletedRangeLabel })}</span>
-                    )}
-                    {addedRangeLabel && (
-                      <span>{t('codePane.externalReviewAddedRange', { range: addedRangeLabel })}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRevertBlock(block);
-                      }}
-                      className="inline-flex items-center gap-1 rounded border border-[rgb(var(--error))/0.32] bg-[rgb(var(--error))/0.10] px-2 py-0.5 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.16]"
-                    >
-                      <RotateCcw size={11} />
-                      {t('codePane.externalReviewRevert')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onAcceptBlock(block);
-                      }}
-                      className="inline-flex items-center gap-1 rounded border border-[rgb(var(--success))/0.32] bg-[rgb(var(--success))/0.10] px-2 py-0.5 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.16]"
-                    >
-                      <Check size={11} />
-                      {t('codePane.externalReviewAccept')}
-                    </button>
-                  </div>
-                </div>
-                <div className="font-mono text-[11px] leading-5">
-                  {block.lines.map((line) => {
-                    const marker = line.kind === 'added' ? '+' : line.kind === 'deleted' ? '-' : ' ';
-                    const lineNumber = line.kind === 'added'
-                      ? line.afterLineNumber
-                      : line.kind === 'deleted'
-                        ? line.beforeLineNumber
-                        : line.afterLineNumber ?? line.beforeLineNumber;
+              const { block } = row;
+              const deletedRangeLabel = formatRangeLabel(block.deletedStartLineNumber, block.deletedEndLineNumber);
+              const addedRangeLabel = formatRangeLabel(block.addedStartLineNumber, block.addedEndLineNumber);
 
-                    return (
-                      <div
-                        key={line.key}
-                        className={`grid grid-cols-[18px_36px_minmax(0,1fr)] gap-2 px-2 ${getLineToneClassName(line.kind)}`}
+              return (
+                <section
+                  key={row.id}
+                  className="border-y border-[rgb(var(--border))] first:border-t-0 last:border-b-0"
+                  data-testid="external-change-review-block"
+                >
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-y border-[rgb(var(--border))] bg-[rgb(var(--secondary))/0.86] px-3 py-1.5 backdrop-blur">
+                    <div className="flex min-w-0 items-center gap-3 text-[11px] text-[rgb(var(--muted-foreground))]">
+                      {deletedRangeLabel && (
+                        <span>{t('codePane.externalReviewDeletedRange', { range: deletedRangeLabel })}</span>
+                      )}
+                      {addedRangeLabel && (
+                        <span>{t('codePane.externalReviewAddedRange', { range: addedRangeLabel })}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onRevertBlock(block);
+                        }}
+                        className="inline-flex items-center gap-1 rounded border border-[rgb(var(--error))/0.32] bg-[rgb(var(--error))/0.10] px-2 py-0.5 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.16]"
                       >
-                        <span className={`select-none text-center font-semibold ${getMarkerClassName(line.kind)}`}>
-                          {marker}
-                        </span>
-                        <span className="select-none text-right text-[rgb(var(--muted-foreground))]">
-                          {lineNumber ?? ''}
-                        </span>
-                        <code className="min-w-0 whitespace-pre-wrap break-words py-0.5">
-                          {line.text || ' '}
-                        </code>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+                        <RotateCcw size={11} />
+                        {t('codePane.externalReviewRevert')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onAcceptBlock(block);
+                        }}
+                        className="inline-flex items-center gap-1 rounded border border-[rgb(var(--success))/0.32] bg-[rgb(var(--success))/0.10] px-2 py-0.5 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.16]"
+                      >
+                        <Check size={11} />
+                        {t('codePane.externalReviewAccept')}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    {block.lines.map((line) => {
+                      const marker = line.kind === 'added' ? '+' : line.kind === 'deleted' ? '-' : ' ';
+                      const lineNumber = line.kind === 'added'
+                        ? line.afterLineNumber
+                        : line.kind === 'deleted'
+                          ? line.beforeLineNumber
+                          : line.afterLineNumber ?? line.beforeLineNumber;
+
+                      return (
+                        <div
+                          key={line.key}
+                          className={`grid grid-cols-[18px_36px_minmax(0,1fr)] gap-2 px-2 ${getLineToneClassName(line.kind)}`}
+                        >
+                          <span className={`select-none text-center font-semibold ${getMarkerClassName(line.kind)}`}>
+                            {marker}
+                          </span>
+                          <span className="select-none text-right text-[rgb(var(--muted-foreground))]">
+                            {lineNumber ?? ''}
+                          </span>
+                          <code className="min-w-0 whitespace-pre-wrap break-words py-0.5">
+                            {line.text || ' '}
+                          </code>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

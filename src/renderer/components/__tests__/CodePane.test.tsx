@@ -7163,6 +7163,142 @@ describe('CodePane', () => {
     expect(screen.getAllByTestId('external-change-review-block').length).toBeGreaterThan(0);
   });
 
+  it('keeps full-file context visible around external review blocks for the active file', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2',
+            'line 3',
+            'line 4',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 28,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2 updated',
+            'line 2.5 inserted',
+            'line 3',
+            'line 4',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 48,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('line 2');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const editorRegion = screen.getByTestId('code-pane-editor-region');
+    await waitFor(() => {
+      expect(within(editorRegion).getAllByText('line 1').length).toBeGreaterThan(0);
+      expect(within(editorRegion).getAllByText('line 3').length).toBeGreaterThan(0);
+      expect(within(editorRegion).getAllByText('line 4').length).toBeGreaterThan(0);
+      expect(within(editorRegion).getAllByText('line 2 updated').length).toBeGreaterThan(0);
+      expect(within(editorRegion).getAllByText('line 2.5 inserted').length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByTestId('external-change-review-context-line').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByTestId('external-change-review-block').length).toBe(1);
+  });
+
+  it('renders pure insert external review blocks between surrounding context without duplicating lines', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'alpha',
+            'omega',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 12,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'alpha',
+            'inserted',
+            'omega',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 21,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('alpha');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const editorRegion = screen.getByTestId('code-pane-editor-region');
+    await waitFor(() => {
+      expect(within(editorRegion).getAllByText('alpha')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('omega')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('inserted')).toHaveLength(1);
+    });
+    expect(screen.getAllByTestId('external-change-review-context-line')).toHaveLength(2);
+    expect(screen.getAllByTestId('external-change-review-block')).toHaveLength(1);
+  });
+
   it('treats atomic watcher replace events as a file content change for the active file', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],
