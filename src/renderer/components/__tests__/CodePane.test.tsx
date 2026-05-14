@@ -7536,6 +7536,58 @@ describe('CodePane', () => {
     });
   });
 
+  it('downgrades very large active external reviews to summary mode to avoid renderer stalls', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    const largeBefore = Array.from({ length: 1400 }, (_, index) => `before line ${index + 1}`).join('\n') + '\n';
+    const largeAfter = Array.from({ length: 1400 }, (_, index) => `after line ${index + 1}`).join('\n') + '\n';
+
+    await act(async () => {
+      fakeMonacoState.lastEditorModel?.setValue(largeBefore);
+      await Promise.resolve();
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: largeAfter,
+        mtimeMs: 200,
+        size: largeAfter.length,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(await screen.findByTestId('external-change-review-summary-only')).toBeInTheDocument();
+    expect(screen.getByText('codePane.externalReviewSummaryOnly')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('external-change-review-block')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.externalReviewRevertAll' })).toBeInTheDocument();
+  });
+
   it('tracks external changes that arrive immediately after saving the active file', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],
@@ -7605,6 +7657,76 @@ describe('CodePane', () => {
       expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 2;').length).toBeGreaterThan(0);
       expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 3;').length).toBeGreaterThan(0);
     });
+  });
+
+  it('skips bottom-panel inline diff rendering for very large external changes', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          name: 'index.ts',
+          type: 'file',
+        },
+        {
+          path: '/workspace/project/src/other.ts',
+          name: 'other.ts',
+          type: 'file',
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await screen.findByRole('button', { name: 'other.ts' }, { timeout: 3000 });
+
+    const largeBefore = Array.from({ length: 1400 }, (_, index) => `before line ${index + 1}`).join('\n') + '\n';
+    const largeAfter = Array.from({ length: 1400 }, (_, index) => `after line ${index + 1}`).join('\n') + '\n';
+
+    vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: largeBefore,
+        existsInHead: true,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: largeAfter,
+        mtimeMs: 200,
+        size: largeAfter.length,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/other.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.externalChangesTab' }));
+    });
+
+    expect(await screen.findByText('codePane.externalChangeInlineDiffSkipped')).toBeInTheDocument();
+    expect(screen.queryByText('before line 1')).toBeNull();
+    expect(screen.queryByText('after line 1')).toBeNull();
   });
 
   it('ignores watcher updates that only confirm the just-saved file content', async () => {

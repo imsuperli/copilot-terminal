@@ -382,6 +382,8 @@ const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES = 60;
 const CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT = 80;
+const CODE_PANE_EXTERNAL_CHANGE_INLINE_DIFF_MAX_RENDERED_LINES = 1_200;
+const CODE_PANE_EXTERNAL_CHANGE_INLINE_DIFF_MAX_CONTENT_LENGTH = 120_000;
 const CODE_PANE_SUPPRESSED_EXTERNAL_CHANGE_TTL_MS = 5000;
 const CODE_PANE_FS_CHANGE_FLUSH_DELAY_MS = 48;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
@@ -6814,6 +6816,19 @@ function createExternalChangeLineSummary(
   };
 }
 
+function shouldRenderExternalChangeInlineDiff(
+  previousContent: string | null,
+  currentContent: string | null,
+  summary: ExternalChangeLineSummary,
+): boolean {
+  const totalContentLength = (previousContent?.length ?? 0) + (currentContent?.length ?? 0);
+  if (totalContentLength > CODE_PANE_EXTERNAL_CHANGE_INLINE_DIFF_MAX_CONTENT_LENGTH) {
+    return false;
+  }
+
+  return summary.addedCount + summary.deletedCount <= CODE_PANE_EXTERNAL_CHANGE_INLINE_DIFF_MAX_RENDERED_LINES;
+}
+
 function ExternalChangeLinePreview({
   line,
   tone,
@@ -6976,6 +6991,10 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
     () => createExternalChangeLineSummary(entry.previousContent, entry.currentContent),
     [entry.currentContent, entry.previousContent],
   );
+  const canRenderInlineDiff = useMemo(
+    () => shouldRenderExternalChangeInlineDiff(entry.previousContent, entry.currentContent, lineSummary),
+    [entry.currentContent, entry.previousContent, lineSummary],
+  );
 
   return (
     <>
@@ -7019,14 +7038,20 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
           <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.inlineDiff')}
           </div>
-          <div className="p-3">
-            <InlineDiffViewer
-              beforeContent={entry.previousContent}
-              afterContent={entry.currentContent}
-              maxHeightClassName="max-h-80"
-              emptyLabel={t('codePane.externalChangeNoContent')}
-            />
-          </div>
+          {canRenderInlineDiff ? (
+            <div className="p-3">
+              <InlineDiffViewer
+                beforeContent={entry.previousContent}
+                afterContent={entry.currentContent}
+                maxHeightClassName="max-h-80"
+                emptyLabel={t('codePane.externalChangeNoContent')}
+              />
+            </div>
+          ) : (
+            <div className="px-3 py-3 text-xs text-[rgb(var(--muted-foreground))]">
+              {t('codePane.externalChangeInlineDiffSkipped')}
+            </div>
+          )}
         </div>
       </div>
     </>
