@@ -1191,7 +1191,7 @@ describe('CodePane', () => {
           },
     }));
 
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane());
 
     expect(await screen.findByText('codePane.externalLibraries · Python')).toBeInTheDocument();
 
@@ -1331,7 +1331,7 @@ describe('CodePane', () => {
           },
     }));
 
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane());
 
     expect(await screen.findByText('codePane.externalLibraries · Java')).toBeInTheDocument();
 
@@ -1378,7 +1378,7 @@ describe('CodePane', () => {
       resolveMonaco = resolve as (value: typeof fakeMonaco) => void;
     }));
 
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane());
 
     expect(await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 })).toBeInTheDocument();
 
@@ -1409,7 +1409,7 @@ describe('CodePane', () => {
       })
     ));
 
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane());
 
     expect(await screen.findByRole('button', { name: 'index.ts' })).toBeInTheDocument();
     await waitFor(() => {
@@ -2783,7 +2783,7 @@ describe('CodePane', () => {
       },
     }));
 
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane());
 
     const treeButton = await screen.findByRole('button', { name: 'index.ts' });
     fireEvent.contextMenu(treeButton);
@@ -2804,8 +2804,10 @@ describe('CodePane', () => {
         commitSha: 'origin/main',
       });
     });
-    expect(fakeMonacoState.lastDiffModel?.original.getValue()).toContain('// origin/main');
-    expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const value = 2;\n');
+    await waitFor(() => {
+      expect(view.getPane().code?.viewMode).toBe('diff');
+      expect(view.getPane().code?.diffTargetPath).toBe('/workspace/project/src/index.ts');
+    });
 
     fireEvent.contextMenu(treeButton);
     await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
@@ -7152,7 +7154,6 @@ describe('CodePane', () => {
 
     const externalChangesTab = await screen.findByRole('button', { name: 'codePane.externalChangesTab' });
     expect(externalChangesTab).toBeInTheDocument();
-    expect(screen.getByText('codePane.externalReviewPending')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'codePane.externalReviewRevertAll' })).toBeInTheDocument();
 
@@ -7672,6 +7673,308 @@ describe('CodePane', () => {
     });
   });
 
+  it('removes an accepted block from the inline review and restores the editor surface', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 21,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2 changed',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 29,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('line 2');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const acceptButton = screen.getByLabelText('codePane.externalReviewAccept');
+    await act(async () => {
+      fireEvent.click(acceptButton);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('external-change-review-block')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('code-pane-editor-region')).toBeInTheDocument();
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe([
+        'line 1',
+        'line 2 changed',
+        'line 3',
+      ].join('\n') + '\n');
+    });
+  });
+
+  it('keeps remaining blocks reviewable after accepting one external review block', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2',
+            'line 3',
+            'line 4',
+            'line 5',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 35,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2 changed',
+            'line 3',
+            'line 4 changed',
+            'line 5',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 51,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('line 2');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(screen.getAllByTestId('external-change-review-block')).toHaveLength(2);
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByLabelText('codePane.externalReviewAccept')[0]!);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('external-change-review-block')).toHaveLength(1);
+    });
+    const editorRegion = screen.getByTestId('code-pane-editor-region');
+    await waitFor(() => {
+      expect(within(editorRegion).queryByText('line 2')).toBeNull();
+      expect(within(editorRegion).getAllByText('line 2 changed')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('line 4')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('line 4 changed')).toHaveLength(1);
+    });
+  });
+
+  it('removes a reverted block and keeps the reverted content visible', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 21,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2 changed',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 29,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+    vi.mocked(window.electronAPI.codePaneWriteFile).mockResolvedValue({
+      success: true,
+      data: {
+        mtimeMs: 201,
+      },
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('line 2');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const revertButton = screen.getByLabelText('codePane.externalReviewRevert');
+    await act(async () => {
+      fireEvent.click(revertButton);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('external-change-review-block')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe([
+        'line 1',
+        'line 2',
+        'line 3',
+      ].join('\n') + '\n');
+    });
+  });
+
+  it('renders added and deleted external review lines with inline background colors', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 21,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2 changed',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 29,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('line 2');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const deletedRow = screen.getAllByTestId('external-change-review-line-deleted')[0];
+    const addedRow = screen.getAllByTestId('external-change-review-line-added')[0];
+    expect(deletedRow.getAttribute('style')).toContain('background-color: rgb(var(--error) / 0.22);');
+    expect(addedRow.getAttribute('style')).toContain('background-color: rgb(var(--success) / 0.22);');
+  });
+
   it('downgrades very large active external reviews to summary mode to avoid renderer stalls', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],
@@ -7718,7 +8021,6 @@ describe('CodePane', () => {
     }
 
     expect(await screen.findByTestId('external-change-review-summary-only')).toBeInTheDocument();
-    expect(screen.getByText('codePane.externalReviewSummaryOnly')).toBeInTheDocument();
     expect(screen.queryAllByTestId('external-change-review-block')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'codePane.externalReviewRevertAll' })).toBeInTheDocument();

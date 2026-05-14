@@ -13208,7 +13208,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       currentEntry === snapshot.selectedEntry ? currentEntry : snapshot.selectedEntry
     ));
     if (shouldRefreshActiveEditorSurface) {
-      void refreshEditorSurface();
+      window.requestAnimationFrame(() => {
+        void refreshEditorSurface();
+      });
     }
   }, [refreshEditorSurface, viewMode]);
 
@@ -16340,19 +16342,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (currentEntry.previousContent === null || currentEntry.currentContent === null) {
         return null;
       }
-      const nextPreviousContent = applyExternalChangeReviewBlock(
-        currentEntry.previousContent,
-        block.beforeStartIndex,
-        block.beforeDeleteCount,
-        block.addedLines,
+      const nextCurrentEntryContent = applyExternalChangeReviewBlock(
+        currentEntry.currentContent,
+        block.afterStartIndex,
+        block.afterDeleteCount,
+        block.deletedLines,
       );
-      if (nextPreviousContent === nextCurrentContent) {
+      if (currentEntry.previousContent === nextCurrentEntryContent) {
         return null;
       }
       return {
         ...currentEntry,
-        previousContent: nextPreviousContent,
-        currentContent: nextCurrentContent,
+        currentContent: nextCurrentEntryContent,
         changedAt: Date.now(),
       };
     });
@@ -24856,7 +24857,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     {activeExternalReview?.filePath === activeFilePath ? (
                       <div className="min-h-0 flex-1 overflow-hidden p-2">
                         <ExternalChangeReview
-                          filePath={activeExternalReview.filePath}
                           beforeContent={activeExternalReview.beforeContent}
                           afterContent={activeExternalReview.afterContent}
                           onAcceptAll={() => {

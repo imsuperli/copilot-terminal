@@ -53,7 +53,6 @@ type ExternalChangeReviewRenderRow =
   };
 
 type ExternalChangeReviewProps = {
-  filePath: string;
   beforeContent: string | null | undefined;
   afterContent: string | null | undefined;
   onAcceptAll: () => void;
@@ -65,12 +64,28 @@ type ExternalChangeReviewProps = {
 function getLineToneClassName(kind: InlineDiffLine['kind']): string {
   switch (kind) {
     case 'added':
-      return 'bg-[rgb(var(--success))/0.22] text-[rgb(var(--foreground))]';
+      return 'text-[rgb(var(--foreground))]';
     case 'deleted':
-      return 'bg-[rgb(var(--error))/0.18] text-[rgb(var(--foreground))]';
+      return 'text-[rgb(var(--foreground))]';
     case 'context':
     default:
       return 'text-[rgb(var(--foreground))]';
+  }
+}
+
+function getLineToneStyle(kind: InlineDiffLine['kind']): React.CSSProperties | undefined {
+  switch (kind) {
+    case 'added':
+      return {
+        backgroundColor: 'rgb(var(--success) / 0.22)',
+      };
+    case 'deleted':
+      return {
+        backgroundColor: 'rgb(var(--error) / 0.22)',
+      };
+    case 'context':
+    default:
+      return undefined;
   }
 }
 
@@ -407,13 +422,6 @@ function buildExternalChangeReviewRows(
   return rows;
 }
 
-function formatRangeLabel(start: number | null, end: number | null): string | null {
-  if (start === null || end === null) {
-    return null;
-  }
-  return start === end ? `${start}` : `${start}-${end}`;
-}
-
 function ExternalChangeReviewContextLine({
   lineNumber,
   text,
@@ -423,7 +431,7 @@ function ExternalChangeReviewContextLine({
 }) {
   return (
     <div
-      className={`grid grid-cols-[18px_36px_minmax(0,1fr)] gap-2 px-2 ${getContextLineClassName()}`}
+      className={`grid grid-cols-[12px_34px_minmax(0,1fr)] gap-1.5 px-2 ${getContextLineClassName()}`}
       data-testid="external-change-review-context-line"
     >
       <span className={`select-none text-center font-semibold ${getContextMarkerClassName()}`}>
@@ -440,7 +448,6 @@ function ExternalChangeReviewContextLine({
 }
 
 export function ExternalChangeReview({
-  filePath,
   beforeContent,
   afterContent,
   onAcceptAll,
@@ -467,23 +474,13 @@ export function ExternalChangeReview({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_84%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">
-            {filePath}
-          </div>
-          <div className="mt-1 text-[11px] text-[rgb(var(--muted-foreground))]">
-            {isSummaryOnly
-              ? t('codePane.externalReviewSummaryOnly')
-              : t('codePane.externalReviewPending', { count: blocks.length })}
-          </div>
-        </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <div className="flex items-center justify-end gap-2 px-2 py-1.5">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onRevertAll}
-            className="inline-flex items-center gap-1 rounded border border-[rgb(var(--error))/0.36] bg-[rgb(var(--error))/0.12] px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.18]"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.10]"
           >
             <RotateCcw size={12} />
             {t('codePane.externalReviewRevertAll')}
@@ -491,7 +488,7 @@ export function ExternalChangeReview({
           <button
             type="button"
             onClick={onAcceptAll}
-            className="inline-flex items-center gap-1 rounded border border-[rgb(var(--success))/0.34] bg-[rgb(var(--success))/0.12] px-2 py-1 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.18]"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.10]"
           >
             <Check size={12} />
             {t('codePane.externalReviewAcceptAll')}
@@ -503,18 +500,18 @@ export function ExternalChangeReview({
           className="min-h-0 flex-1 space-y-3 overflow-auto p-3"
           data-testid="external-change-review-summary-only"
         >
-          <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-3 py-2 text-xs text-[rgb(var(--muted-foreground))]">
+          <div className="px-1 py-1 text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.externalReviewSummaryOnlyDetail')}
           </div>
           <ExternalChangeLineSummaryPanel summary={summary} />
         </div>
       ) : rows.length === 0 ? (
-        <div className="px-3 py-3 text-xs text-[rgb(var(--muted-foreground))]">
+        <div className="px-2 py-2 text-xs text-[rgb(var(--muted-foreground))]">
           {t('codePane.externalChangeNoLineChanges')}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-2">
-          <div className="overflow-hidden rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] font-mono text-[11px] leading-5">
+        <div className="min-h-0 flex-1 overflow-auto px-1 pb-1">
+          <div className="font-mono text-[11px] leading-5">
             {rows.map((row) => {
               if (row.kind === 'context') {
                 return (
@@ -527,46 +524,34 @@ export function ExternalChangeReview({
               }
 
               const { block } = row;
-              const deletedRangeLabel = formatRangeLabel(block.deletedStartLineNumber, block.deletedEndLineNumber);
-              const addedRangeLabel = formatRangeLabel(block.addedStartLineNumber, block.addedEndLineNumber);
 
               return (
                 <section
                   key={row.id}
-                  className="border-y border-[rgb(var(--border))] first:border-t-0 last:border-b-0"
+                  className="group relative"
                   data-testid="external-change-review-block"
                 >
-                  <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-y border-[rgb(var(--border))] bg-[rgb(var(--secondary))/0.86] px-3 py-1.5 backdrop-blur">
-                    <div className="flex min-w-0 items-center gap-3 text-[11px] text-[rgb(var(--muted-foreground))]">
-                      {deletedRangeLabel && (
-                        <span>{t('codePane.externalReviewDeletedRange', { range: deletedRangeLabel })}</span>
-                      )}
-                      {addedRangeLabel && (
-                        <span>{t('codePane.externalReviewAddedRange', { range: addedRangeLabel })}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onRevertBlock(block);
-                        }}
-                        className="inline-flex items-center gap-1 rounded border border-[rgb(var(--error))/0.32] bg-[rgb(var(--error))/0.10] px-2 py-0.5 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.16]"
-                      >
-                        <RotateCcw size={11} />
-                        {t('codePane.externalReviewRevert')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onAcceptBlock(block);
-                        }}
-                        className="inline-flex items-center gap-1 rounded border border-[rgb(var(--success))/0.32] bg-[rgb(var(--success))/0.10] px-2 py-0.5 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.16]"
-                      >
-                        <Check size={11} />
-                        {t('codePane.externalReviewAccept')}
-                      </button>
-                    </div>
+                  <div className="pointer-events-none absolute right-2 top-0.5 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRevertBlock(block);
+                      }}
+                      className="pointer-events-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.10]"
+                      aria-label={t('codePane.externalReviewRevert')}
+                    >
+                      <RotateCcw size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAcceptBlock(block);
+                      }}
+                      className="pointer-events-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.10]"
+                      aria-label={t('codePane.externalReviewAccept')}
+                    >
+                      <Check size={11} />
+                    </button>
                   </div>
                   <div>
                     {block.lines.map((line) => {
@@ -580,7 +565,9 @@ export function ExternalChangeReview({
                       return (
                         <div
                           key={line.key}
-                          className={`grid grid-cols-[18px_36px_minmax(0,1fr)] gap-2 px-2 ${getLineToneClassName(line.kind)}`}
+                          className={`grid grid-cols-[12px_34px_minmax(0,1fr)] gap-1.5 px-2 ${getLineToneClassName(line.kind)}`}
+                          style={getLineToneStyle(line.kind)}
+                          data-testid={`external-change-review-line-${line.kind}`}
                         >
                           <span className={`select-none text-center font-semibold ${getMarkerClassName(line.kind)}`}>
                             {marker}
@@ -645,28 +632,9 @@ function ExternalChangeLineSummaryPanel({
   }
 
   return (
-    <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-          {t('codePane.externalChangeLineSummary')}
-        </div>
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="rounded border border-[rgb(var(--success))/0.28] bg-[rgb(var(--success))/0.08] px-1.5 py-0.5 text-[rgb(var(--success))]">
-            {t('codePane.externalChangeAddedLines', { count: summary.addedCount })}
-          </span>
-          <span className="rounded border border-[rgb(var(--error))/0.28] bg-[rgb(var(--error))/0.08] px-1.5 py-0.5 text-[rgb(var(--error))]">
-            {t('codePane.externalChangeDeletedLines', { count: summary.deletedCount })}
-          </span>
-          {summary.isApproximate && (
-            <span className="text-[rgb(var(--muted-foreground))]">{t('codePane.externalChangeLineSummaryApproximate')}</span>
-          )}
-        </div>
-      </div>
+    <div className="min-h-0">
       <div className="grid min-h-0 md:grid-cols-2">
-        <div className="min-h-0 border-b border-[rgb(var(--border))] md:border-b-0 md:border-r">
-          <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--error))]">
-            {t('codePane.externalChangeDeletedLines', { count: summary.deletedCount })}
-          </div>
+        <div className="min-h-0 md:border-r md:border-[rgb(var(--border))/0.18]">
           <div className="max-h-52 overflow-auto">
             {summary.deletedLines.length > 0 ? (
               <>
@@ -685,9 +653,6 @@ function ExternalChangeLineSummaryPanel({
           </div>
         </div>
         <div className="min-h-0">
-          <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--success))]">
-            {t('codePane.externalChangeAddedLines', { count: summary.addedCount })}
-          </div>
           <div className="max-h-52 overflow-auto">
             {summary.addedLines.length > 0 ? (
               <>
