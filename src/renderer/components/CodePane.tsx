@@ -992,7 +992,7 @@ function EditorActionMenuItemRow({
     <DropdownMenu.Item
       disabled={item.disabled}
       onSelect={item.onSelect}
-      className={`${className} justify-between ${isActive ? 'bg-[rgb(var(--primary))]/12 text-[rgb(var(--foreground))]' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+      className={`${className} ${isActive ? 'bg-[rgb(var(--primary))]/12 text-[rgb(var(--foreground))]' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
     >
       <IdeMenuItemContent
         icon={item.icon}
@@ -13130,7 +13130,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     nextEntries: ExternalChangeEntry[],
     nextSelectedPath: string | null,
   ) => {
+    const currentActiveFilePath = activeFilePathRef.current;
+    const previousActiveEntry = currentActiveFilePath
+      ? externalChangeStateRef.current.entriesByPath.get(currentActiveFilePath) ?? null
+      : null;
     const snapshot = createExternalChangeStateSnapshot(nextEntries, nextSelectedPath);
+    const nextActiveEntry = currentActiveFilePath
+      ? snapshot.entriesByPath.get(currentActiveFilePath) ?? null
+      : null;
+    const shouldRefreshActiveEditorSurface = Boolean(currentActiveFilePath)
+      && (paneRef.current.code?.viewMode ?? viewMode) === 'editor'
+      && previousActiveEntry !== nextActiveEntry;
     externalChangeEntriesRef.current = snapshot.entries;
     selectedExternalChangePathRef.current = snapshot.selectedPath;
     externalChangeStateRef.current = snapshot;
@@ -13143,7 +13153,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSelectedExternalChangeEntry((currentEntry) => (
       currentEntry === snapshot.selectedEntry ? currentEntry : snapshot.selectedEntry
     ));
-  }, []);
+    if (shouldRefreshActiveEditorSurface) {
+      void refreshEditorSurface();
+    }
+  }, [refreshEditorSurface, viewMode]);
 
   const reloadFileFromDisk = useCallback(async (filePath: string) => {
     const response = await window.electronAPI.codePaneReadFile({
@@ -15063,12 +15076,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const readExternalChangeBaseContent = useCallback(async (
     filePath: string,
     fallbackLanguage: string,
-  ): Promise<{ content: string | null; language: string }> => {
+  ): Promise<{ content: string | null; language: string; source: 'model' | 'local-history' | 'git-base' | 'none' }> => {
     const existingModel = fileModelsRef.current.get(filePath);
     if (existingModel) {
       return {
         content: existingModel.getValue(),
         language: existingModel.getLanguageId(),
+        source: 'model',
       };
     }
 
@@ -15077,6 +15091,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return {
         content: localHistoryEntry.content,
         language: fallbackLanguage,
+        source: 'local-history',
       };
     }
 
@@ -15089,6 +15104,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return {
           content: gitBaseResponse.data.content,
           language: fallbackLanguage,
+          source: 'git-base',
         };
       }
     } catch {
@@ -15098,6 +15114,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return {
       content: null,
       language: fallbackLanguage,
+      source: 'none',
     };
   }, [rootPath]);
 
@@ -15133,11 +15150,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (matchedSuppressedPath) {
         suppressedExternalChangePathsRef.current.delete(matchedSuppressedPath);
       }
-    }
-
-    const lastSavedAt = fileMetaRef.current.get(filePath)?.lastSavedAt ?? 0;
-    if (Date.now() - lastSavedAt < 1200) {
-      return null;
     }
 
     const existingModel = fileModelsRef.current.get(filePath);
@@ -15182,6 +15194,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const changeType: ExternalChangeKind = change.type === 'add' ? 'added' : 'modified';
     const diffPreviousContent = changeType === 'added' ? (previousContent ?? '') : previousContent;
     const canDiff = changeType === 'added' || previousContent !== null;
+    const existingMeta = fileMetaRef.current.get(filePath) ?? null;
+    const hasUnsavedEditorContent = Boolean(existingModel && (
+      dirtyPathsRef.current.has(filePath)
+      || (
+        existingMeta?.lastSavedVersionId !== undefined
+        && getModelVersionId(existingModel) !== existingMeta.lastSavedVersionId
+      )
+    ));
+
+    if (
+      !hasUnsavedEditorContent
+      && previousContent !== null
+      && currentContent === previousContent
+      && (previousSnapshot.source === 'model' || previousSnapshot.source === 'local-history')
+    ) {
+      if (existingModel) {
+        createOrUpdateModel(filePath, response.data);
+      }
+      return null;
+    }
+
     const nextEntry: ExternalChangeEntry = {
       id: `${filePath}:${changedAt}`,
       filePath,
@@ -15194,12 +15227,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       openedAtChange,
       canDiff,
     };
-
-    const hasUnsavedEditorContent = existingModel && (
-      dirtyPathsRef.current.has(filePath)
-      || autoSaveTimersRef.current.has(filePath)
-      || documentSyncTimersRef.current.has(filePath)
-    );
 
     if (hasUnsavedEditorContent) {
       const revealedEntry = {

@@ -7485,6 +7485,144 @@ describe('CodePane', () => {
     });
   });
 
+  it('tracks external changes that arrive immediately after saving the active file', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    await act(async () => {
+      fakeMonacoState.lastEditorModel?.setValue('export const value = 2;\n');
+      await Promise.resolve();
+    });
+
+    vi.mocked(window.electronAPI.codePaneWriteFile).mockResolvedValue({
+      success: true,
+      data: {
+        mtimeMs: 220,
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const value = 2;\n',
+        expectedMtimeMs: 100,
+      });
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 3;\n',
+        mtimeMs: 230,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(await screen.findByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 2;').length).toBeGreaterThan(0);
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 3;').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('ignores watcher updates that only confirm the just-saved file content', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    await act(async () => {
+      fakeMonacoState.lastEditorModel?.setValue('export const value = 2;\n');
+      await Promise.resolve();
+    });
+
+    vi.mocked(window.electronAPI.codePaneWriteFile).mockResolvedValue({
+      success: true,
+      data: {
+        mtimeMs: 220,
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 2;\n',
+        mtimeMs: 220,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    expect(screen.queryByRole('button', { name: 'codePane.externalChangesTab' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeNull();
+  });
+
   it('coalesces duplicate watcher changes for the same file into one read and one diff refresh', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],

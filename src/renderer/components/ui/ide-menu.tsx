@@ -25,15 +25,12 @@ export const ideMenuDangerItemClassName = joinClassNames(
   'text-[rgb(var(--error))] focus:bg-[rgb(var(--error)/0.12)] data-[highlighted]:bg-[rgb(var(--error)/0.12)]',
 );
 
-export const ideMenuSubTriggerClassName = joinClassNames(
-  ideMenuItemClassName,
-  'justify-between',
-);
+export const ideMenuSubTriggerClassName = ideMenuItemClassName;
 
 export const ideMenuShortcutClassName =
   'ml-auto pl-3 text-[11px] text-[rgb(var(--muted-foreground))] group-data-[highlighted]:text-[rgb(var(--foreground))]';
 
-export const ideMenuLabelClassName = 'truncate';
+export const ideMenuLabelClassName = 'min-w-0 flex-1 truncate';
 
 export const ideMenuIconSlotClassName =
   'flex h-4 w-4 shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] group-data-[highlighted]:text-[rgb(var(--foreground))]';
@@ -58,7 +55,17 @@ export function IdeMenuItemContent({
       </span>
       <span className={ideMenuLabelClassName}>{label}</span>
       {shortcut ? <span className={ideMenuShortcutClassName} aria-hidden="true">{shortcut}</span> : null}
-      {trailing ? <span className="ml-2 shrink-0 text-[rgb(var(--muted-foreground))]" aria-hidden="true">{trailing}</span> : null}
+      {trailing ? (
+        <span
+          className={joinClassNames(
+            'shrink-0 text-[rgb(var(--muted-foreground))]',
+            shortcut ? 'ml-2' : 'ml-auto',
+          )}
+          aria-hidden="true"
+        >
+          {trailing}
+        </span>
+      ) : null}
     </>
   );
 }
