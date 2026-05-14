@@ -598,6 +598,7 @@ export class CodeProjectIndexService {
     const watcher = chokidar.watch(state.projectRootPath, {
       persistent: true,
       ignoreInitial: true,
+      atomic: true,
       awaitWriteFinish: {
         stabilityThreshold: 200,
         pollInterval: 100,

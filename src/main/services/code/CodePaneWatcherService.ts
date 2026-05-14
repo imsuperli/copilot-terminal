@@ -65,6 +65,7 @@ export class CodePaneWatcherService {
       const watcher = chokidar.watch(normalizedRootPath, {
         persistent: true,
         ignoreInitial: true,
+        atomic: true,
         awaitWriteFinish: {
           stabilityThreshold: 200,
           pollInterval: 100,

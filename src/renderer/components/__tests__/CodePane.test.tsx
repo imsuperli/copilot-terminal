@@ -7163,6 +7163,57 @@ describe('CodePane', () => {
     expect(screen.getAllByTestId('external-change-review-block').length).toBeGreaterThan(0);
   });
 
+  it('treats atomic watcher replace events as a file content change for the active file', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 5;\n',
+        mtimeMs: 250,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'unlink',
+            path: '/workspace/project/src/index.ts',
+          },
+          {
+            type: 'add',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 5;\n');
+    });
+    expect(await screen.findByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 1;').length).toBeGreaterThan(0);
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 5;').length).toBeGreaterThan(0);
+    });
+  });
+
   it('does not re-open language documents for watcher refreshes on already opened files', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],

@@ -17980,9 +17980,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       if (normalizedChange.type === 'unlink' || existingChange.type === 'unlink') {
+        const nextType = normalizedChange.type === 'add' || existingChange.type === 'add'
+          ? 'change'
+          : 'unlink';
         nextChangesByPath.set(normalizedPath, {
           ...normalizedChange,
-          type: 'unlink',
+          type: nextType,
         });
         continue;
       }
