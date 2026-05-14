@@ -7659,6 +7659,70 @@ describe('CodePane', () => {
     });
   });
 
+  it('retries external file reads when the first watcher read still returns stale content', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 2;\n',
+        mtimeMs: 200,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: 'export const value = 1;\n',
+        mtimeMs: 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(120);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 2;\n');
+    });
+    expect(await screen.findByRole('button', { name: 'codePane.externalReviewAcceptAll' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 1;').length).toBeGreaterThan(0);
+      expect(within(screen.getByTestId('code-pane-editor-region')).getAllByText('export const value = 2;').length).toBeGreaterThan(0);
+    });
+  });
+
   it('skips bottom-panel inline diff rendering for very large external changes', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
       success: true,

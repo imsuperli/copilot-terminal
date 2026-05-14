@@ -386,6 +386,8 @@ const CODE_PANE_EXTERNAL_CHANGE_INLINE_DIFF_MAX_RENDERED_LINES = 1_200;
 const CODE_PANE_EXTERNAL_CHANGE_INLINE_DIFF_MAX_CONTENT_LENGTH = 120_000;
 const CODE_PANE_SUPPRESSED_EXTERNAL_CHANGE_TTL_MS = 5000;
 const CODE_PANE_FS_CHANGE_FLUSH_DELAY_MS = 48;
+const CODE_PANE_EXTERNAL_CHANGE_READ_RETRY_COUNT = 2;
+const CODE_PANE_EXTERNAL_CHANGE_READ_RETRY_DELAY_MS = 120;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 const CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS = 5_000;
@@ -15207,7 +15209,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return nextEntry;
     }
 
-    const response = await window.electronAPI.codePaneReadFile({
+    let response = await window.electronAPI.codePaneReadFile({
       rootPath,
       filePath,
     });
@@ -15215,7 +15217,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
-    const currentContent = response.data.content;
+    let currentReadResult = response.data;
+    if (
+      change.type === 'change'
+      && previousContent !== null
+      && currentReadResult.content === previousContent
+      && (previousSnapshot.source === 'model' || previousSnapshot.source === 'local-history')
+    ) {
+      for (let attempt = 0; attempt < CODE_PANE_EXTERNAL_CHANGE_READ_RETRY_COUNT; attempt += 1) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, CODE_PANE_EXTERNAL_CHANGE_READ_RETRY_DELAY_MS);
+        });
+        response = await window.electronAPI.codePaneReadFile({
+          rootPath,
+          filePath,
+        });
+        if (!response.success || !response.data) {
+          break;
+        }
+        currentReadResult = response.data;
+        if (currentReadResult.content !== previousContent) {
+          break;
+        }
+      }
+    }
+
+    const currentContent = currentReadResult.content;
     const changeType: ExternalChangeKind = change.type === 'add' ? 'added' : 'modified';
     const diffPreviousContent = changeType === 'added' ? (previousContent ?? '') : previousContent;
     const canDiff = changeType === 'added' || previousContent !== null;
@@ -15235,7 +15262,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       && (previousSnapshot.source === 'model' || previousSnapshot.source === 'local-history')
     ) {
       if (existingModel) {
-        createOrUpdateModel(filePath, response.data);
+        createOrUpdateModel(filePath, currentReadResult);
       }
       return null;
     }
@@ -15246,7 +15273,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       relativePath: getRelativePath(rootPath, filePath),
       previousContent: diffPreviousContent,
       currentContent,
-      language: response.data.language,
+      language: currentReadResult.language,
       changeType,
       changedAt,
       openedAtChange,
@@ -15277,7 +15304,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (existingModel) {
-      createOrUpdateModel(filePath, response.data);
+      createOrUpdateModel(filePath, currentReadResult);
     }
     return nextEntry;
   }, [createOrUpdateModel, readExternalChangeBaseContent, revealExternalChangeEntry, rootPath, t]);
