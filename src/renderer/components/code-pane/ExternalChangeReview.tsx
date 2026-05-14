@@ -474,9 +474,9 @@ export function ExternalChangeReview({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-      <div className="flex items-center justify-end gap-2 px-2 py-1.5">
-        <div className="flex items-center gap-2">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <div className="pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-2">
+        <div className="pointer-events-auto flex items-center gap-2 rounded bg-[rgb(var(--background))/0.94] px-2 py-1 shadow-sm backdrop-blur">
           <button
             type="button"
             onClick={onRevertAll}
@@ -528,30 +528,34 @@ export function ExternalChangeReview({
               return (
                 <section
                   key={row.id}
-                  className="group relative"
+                  className="group relative mt-5 first:mt-0"
                   data-testid="external-change-review-block"
                 >
-                  <div className="pointer-events-none absolute right-2 top-0.5 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRevertBlock(block);
-                      }}
-                      className="pointer-events-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.10]"
-                      aria-label={t('codePane.externalReviewRevert')}
-                    >
-                      <RotateCcw size={11} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onAcceptBlock(block);
-                      }}
-                      className="pointer-events-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.10]"
-                      aria-label={t('codePane.externalReviewAccept')}
-                    >
-                      <Check size={11} />
-                    </button>
+                  <div className="pointer-events-none absolute right-2 top-0 z-10 -translate-y-[calc(100%+2px)] opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="pointer-events-auto flex items-center gap-2 rounded bg-[rgb(var(--background))/0.94] px-2 py-1 shadow-sm backdrop-blur">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onRevertBlock(block);
+                        }}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error))/0.10]"
+                        aria-label={t('codePane.externalReviewRevert')}
+                      >
+                        <RotateCcw size={11} />
+                        {t('codePane.externalReviewRevert')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onAcceptBlock(block);
+                        }}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success))/0.10]"
+                        aria-label={t('codePane.externalReviewAccept')}
+                      >
+                        <Check size={11} />
+                        {t('codePane.externalReviewAccept')}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     {block.lines.map((line) => {

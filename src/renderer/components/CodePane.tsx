@@ -15221,8 +15221,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const fallbackLanguage = fileMetaRef.current.get(filePath)?.language
       ?? existingModel?.getLanguageId()
       ?? detectLanguageFromPath(filePath);
+    const existingExternalEntry = externalChangeStateRef.current.entriesByPath.get(filePath) ?? null;
     const previousSnapshot = await readExternalChangeBaseContent(filePath, fallbackLanguage);
-    const previousContent = previousSnapshot.content;
+    const previousContent = existingExternalEntry?.previousContent ?? previousSnapshot.content;
     const previousLanguage = previousSnapshot.language;
 
     if (change.type === 'unlink') {
@@ -15310,7 +15311,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       previousContent: diffPreviousContent,
       currentContent,
       language: currentReadResult.language,
-      changeType,
+      changeType: existingExternalEntry?.changeType === 'added' && changeType === 'modified'
+        ? existingExternalEntry.changeType
+        : changeType,
       changedAt,
       openedAtChange,
       canDiff,

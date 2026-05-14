@@ -7829,6 +7829,96 @@ describe('CodePane', () => {
     });
   });
 
+  it('preserves earlier external review blocks when later external file changes arrive', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1',
+            'line 2',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 100,
+          size: 21,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1 changed',
+            'line 2',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 200,
+          size: 29,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            'line 1 changed',
+            'line 2 changed',
+            'line 3',
+          ].join('\n') + '\n',
+          mtimeMs: 300,
+          size: 37,
+          language: 'plaintext',
+          isBinary: false,
+        },
+      });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toContain('line 1');
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const editorRegion = screen.getByTestId('code-pane-editor-region');
+    await waitFor(() => {
+      expect(within(editorRegion).getAllByText('line 1')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('line 1 changed')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('line 2')).toHaveLength(1);
+      expect(within(editorRegion).getAllByText('line 2 changed')).toHaveLength(1);
+    });
+    expect(screen.getAllByTestId('external-change-review-line-deleted')).toHaveLength(2);
+    expect(screen.getAllByTestId('external-change-review-line-added')).toHaveLength(2);
+  });
+
   it('removes a reverted block and keeps the reverted content visible', async () => {
     vi.mocked(window.electronAPI.codePaneReadFile)
       .mockResolvedValueOnce({
