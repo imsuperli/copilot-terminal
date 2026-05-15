@@ -1655,7 +1655,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       <div
         ref={terminalContainerRef}
         data-terminal-input-region="true"
-        className="min-h-0 min-w-0 flex-1 overflow-hidden px-1"
+        className="min-h-0 min-w-0 flex-1 overflow-hidden pl-1 pr-0"
         onMouseDownCapture={handleTerminalMouseDownCapture}
       />
     </div>

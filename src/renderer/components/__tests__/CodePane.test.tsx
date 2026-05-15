@@ -1740,13 +1740,15 @@ describe('CodePane', () => {
   it('toggles the workbench sidebar from the activity rail and persists the selected view', async () => {
     const view = renderCodePane(createPane());
 
-    expect(await screen.findByPlaceholderText('codePane.searchFilesPlaceholder')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'codePane.locateActiveFileInExplorer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.expandSelectedInExplorer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.collapseAllInExplorer' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.filesTab' }));
     });
 
-    expect(screen.queryByPlaceholderText('codePane.searchFilesPlaceholder')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'codePane.locateActiveFileInExplorer' })).not.toBeInTheDocument();
     expect(view.getPane().code?.layout?.sidebar).toMatchObject({
       visible: false,
       activeView: 'files',
@@ -1766,7 +1768,7 @@ describe('CodePane', () => {
   it('persists the code pane sidebar width after drag resizing', async () => {
     const view = renderCodePane(createPane());
 
-    await screen.findByPlaceholderText('codePane.searchFilesPlaceholder');
+    await screen.findByRole('button', { name: 'codePane.locateActiveFileInExplorer' });
 
     const resizeHandle = screen.getByTestId('code-pane-sidebar-resize-handle');
 
@@ -1805,7 +1807,7 @@ describe('CodePane', () => {
       expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalled();
     });
 
-    expect(screen.queryByPlaceholderText('codePane.searchFilesPlaceholder')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'codePane.locateActiveFileInExplorer' })).not.toBeInTheDocument();
   });
 
   it('configures Monaco diff editor as inline and compact', async () => {
@@ -9611,28 +9613,20 @@ describe('CodePane', () => {
     expect(screen.getAllByText('codePane.localHistoryOpened')).toHaveLength(1);
   });
 
-  it('tracks search requests in the performance tool window', async () => {
+  it('locates the active file in the explorer from the files toolbar', async () => {
     const user = userEvent.setup();
-    vi.mocked(window.electronAPI.codePaneSearchFiles).mockResolvedValue({
-      success: true,
-      data: ['/workspace/project/src/index.ts'],
-    });
+    const view = renderCodePane(createPane({
+      activeFilePath: '/workspace/project/src/index.ts',
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
 
-    renderCodePane(createPane());
+    await user.click(await screen.findByRole('button', { name: 'codePane.locateActiveFileInExplorer' }));
 
-    await user.type(await screen.findByPlaceholderText('codePane.searchFilesPlaceholder'), 'index');
     await waitFor(() => {
-      expect(window.electronAPI.codePaneSearchFiles).toHaveBeenCalledWith({
-        rootPath: '/workspace/project',
-        query: 'index',
-        limit: 80,
-      });
+      expect(view.getPane().code?.selectedPath).toBe('/workspace/project/src/index.ts');
+      expect(view.getPane().code?.expandedPaths).toContain('/workspace/project/src');
     });
-
-    await user.click(await screen.findByRole('button', { name: 'codePane.performanceTab' }));
-
-    expect(await screen.findAllByText('codePane.performanceRequests')).toHaveLength(2);
-    expect(await screen.findByText('codePane.requestFileSearch')).toBeInTheDocument();
   });
 
   it('opens the hierarchy tool window and loads call hierarchy data', async () => {

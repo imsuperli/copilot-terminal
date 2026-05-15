@@ -19,6 +19,8 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronRight,
+  ChevronsDown,
+  ChevronsUpDown,
   File as FileIcon,
   FileCode2,
   FlaskConical,
@@ -33,6 +35,7 @@ import {
   GripVertical,
   History,
   Loader2,
+  LocateFixed,
   Lock,
   MoreHorizontal,
   Pin,
@@ -3471,30 +3474,31 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
 const FilesSidebarContent = React.memo(function FilesSidebarContent({
   scrollRef,
   body,
-  onSearch,
+  onLocateActiveFile,
+  onExpandSelection,
+  onCollapseAll,
+  canLocateActiveFile,
+  canExpandSelection,
+  canCollapseAll,
   t,
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   body: (viewport: FileTreeViewport, searchState: FilesSidebarSearchState) => React.ReactNode;
-  onSearch: (trimmedQuery: string) => Promise<{
-    results: string[];
-    error: string | null;
-  }>;
+  onLocateActiveFile: () => void;
+  onExpandSelection: () => void;
+  onCollapseAll: () => void;
+  canLocateActiveFile: boolean;
+  canExpandSelection: boolean;
+  canCollapseAll: boolean;
   t: ReturnType<typeof useI18n>['t'];
 }) {
   const [viewport, setViewport] = React.useState<FileTreeViewport>({
     scrollTop: 0,
     viewportHeight: 0,
   });
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [searchResults, setSearchResults] = React.useState<string[]>([]);
-  const [isSearching, setIsSearching] = React.useState(false);
-  const [searchError, setSearchError] = React.useState<string | null>(null);
   const viewportRef = React.useRef(viewport);
   const pendingViewportRef = React.useRef<FileTreeViewport | null>(null);
   const viewportAnimationFrameRef = React.useRef<number | null>(null);
-  const searchRequestIdRef = React.useRef(0);
 
   const updateViewport = React.useCallback((nextViewport: FileTreeViewport) => {
     const nextNormalizedViewport = {
@@ -3562,82 +3566,50 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
     };
   }, [scrollRef, updateViewport]);
 
-  React.useEffect(() => {
-    const trimmedQuery = deferredSearchQuery.trim();
-    if (!trimmedQuery) {
-      searchRequestIdRef.current += 1;
-      setSearchResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return undefined;
-    }
-
-    const requestId = searchRequestIdRef.current + 1;
-    searchRequestIdRef.current = requestId;
-    setIsSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setSearchError((currentError) => (
-      currentError === null ? currentError : null
-    ));
-
-    const timer = window.setTimeout(() => {
-      void onSearch(trimmedQuery).then((result) => {
-        if (searchRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        startTransition(() => {
-          setSearchResults((currentResults) => (
-            areStringListsEqual(currentResults, result.results) ? currentResults : result.results
-          ));
-        });
-        setSearchError((currentError) => (
-          currentError === result.error ? currentError : result.error
-        ));
-        setIsSearching((currentSearching) => (
-          currentSearching ? false : currentSearching
-        ));
-      });
-    }, 180);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [deferredSearchQuery, onSearch]);
-
-  const handleSearchQueryChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextQuery = event.target.value;
-    setSearchQuery((currentQuery) => (
-      currentQuery === nextQuery ? currentQuery : nextQuery
-    ));
-  }, []);
-
   const searchState = React.useMemo<FilesSidebarSearchState>(() => ({
-    trimmedQuery: deferredSearchQuery.trim(),
-    results: searchResults,
-    isSearching,
-    error: searchError,
-  }), [deferredSearchQuery, isSearching, searchError, searchResults]);
+    trimmedQuery: '',
+    results: [],
+    isSearching: false,
+    error: null,
+  }), []);
 
   return (
     <>
       <div className="border-b border-[rgb(var(--border))] px-2 py-2">
-        <div className="flex items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1.5">
-          <Search size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
-          <input
-            value={searchQuery}
-            onChange={handleSearchQueryChange}
-            placeholder={t('codePane.searchFilesPlaceholder')}
-            className="w-full bg-transparent text-xs text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
-          />
-          {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />}
+        <div className="flex items-center justify-end gap-1">
+          <AppTooltip content={t('codePane.locateActiveFileInExplorer')} placement="pane-corner">
+            <button
+              type="button"
+              aria-label={t('codePane.locateActiveFileInExplorer')}
+              disabled={!canLocateActiveFile}
+              onClick={onLocateActiveFile}
+              className="flex h-7 w-7 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <LocateFixed size={14} />
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.expandSelectedInExplorer')} placement="pane-corner">
+            <button
+              type="button"
+              aria-label={t('codePane.expandSelectedInExplorer')}
+              disabled={!canExpandSelection}
+              onClick={onExpandSelection}
+              className="flex h-7 w-7 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronsUpDown size={14} />
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.collapseAllInExplorer')} placement="pane-corner">
+            <button
+              type="button"
+              aria-label={t('codePane.collapseAllInExplorer')}
+              disabled={!canCollapseAll}
+              onClick={onCollapseAll}
+              className="flex h-7 w-7 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronsDown size={14} />
+            </button>
+          </AppTooltip>
         </div>
       </div>
       <div
@@ -12415,10 +12387,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSidebar?: boolean;
     },
   ) => {
+    const externalLibraryRoot = externalLibrarySectionsRef.current
+      .flatMap((section) => section.roots)
+      .find((root) => isPathInside(root.path, targetPath));
+    const rootDirectoryPath = externalLibraryRoot?.path ?? rootPath;
     const directoryPathsToExpand: string[] = [];
     let currentPath = getParentDirectory(targetPath);
 
-    while (isPathInside(rootPath, currentPath) && currentPath !== rootPath) {
+    while (isPathInside(rootDirectoryPath, currentPath) && currentPath !== rootDirectoryPath) {
       directoryPathsToExpand.unshift(currentPath);
       const parentPath = getParentDirectory(currentPath);
       if (parentPath === currentPath) {
@@ -12429,6 +12405,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
     nextExpandedDirectories.add(rootPath);
+    nextExpandedDirectories.add(rootDirectoryPath);
     for (const directoryPath of directoryPathsToExpand) {
       nextExpandedDirectories.add(directoryPath);
     }
@@ -12447,17 +12424,101 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const loadRequests: Array<Promise<void>> = [];
-    for (const directoryPath of directoryPathsToExpand) {
-      if (!loadedDirectoriesRef.current.has(directoryPath)) {
+    for (const directoryPath of [rootDirectoryPath, ...directoryPathsToExpand]) {
+      if (!isDirectoryLoaded(directoryPath)) {
         loadRequests.push((async () => {
-          await loadDirectory(directoryPath);
+          await loadExplorerDirectory(directoryPath);
         })());
       }
     }
     if (loadRequests.length > 0) {
       await Promise.all(loadRequests);
     }
-  }, [getPersistedExpandedPaths, loadDirectory, persistCodeState, rootPath, showSidebarMode]);
+  }, [getPersistedExpandedPaths, isDirectoryLoaded, loadExplorerDirectory, persistCodeState, rootPath, showSidebarMode]);
+
+  const expandDirectoryPath = useCallback(async (directoryPath: string) => {
+    const loadedEntries = isDirectoryLoaded(directoryPath)
+      ? getDirectoryEntries(directoryPath)
+      : await loadExplorerDirectory(directoryPath);
+
+    await preloadCompactDirectoryChildren(directoryPath, loadedEntries);
+    const isCompactCandidate = isCompactPackageCandidate(rootPath, directoryPath);
+    const {
+      terminalPath,
+      visibleDirectoryPaths,
+    } = isCompactCandidate
+      ? await ensureCompactDirectoryChainLoaded(directoryPath, loadedEntries)
+      : {
+          terminalPath: directoryPath,
+          visibleDirectoryPaths: [directoryPath],
+        };
+    const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
+    for (const visiblePath of visibleDirectoryPaths) {
+      nextExpandedDirectories.add(visiblePath);
+    }
+    nextExpandedDirectories.add(terminalPath);
+    setExpandedDirectories((currentDirectories) => (
+      areStringSetsEqual(currentDirectories, nextExpandedDirectories)
+        ? currentDirectories
+        : nextExpandedDirectories
+    ));
+    persistCodeState({
+      selectedPath: terminalPath,
+      expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
+    });
+  }, [
+    ensureCompactDirectoryChainLoaded,
+    getDirectoryEntries,
+    getPersistedExpandedPaths,
+    isDirectoryLoaded,
+    loadExplorerDirectory,
+    persistCodeState,
+    preloadCompactDirectoryChildren,
+    rootPath,
+  ]);
+
+  const expandExplorerSelection = useCallback(async () => {
+    const currentSelectedPath = paneRef.current.code?.selectedPath ?? selectedPath;
+    if (!currentSelectedPath) {
+      return;
+    }
+
+    const selectedEntryType = (() => {
+      if (currentSelectedPath === rootPath) {
+        return 'directory';
+      }
+
+      for (const section of externalLibrarySectionsRef.current) {
+        for (const root of section.roots) {
+          if (currentSelectedPath === root.path) {
+            return 'directory';
+          }
+        }
+      }
+
+      const parentEntries = getDirectoryEntries(getParentDirectory(currentSelectedPath));
+      return parentEntries.find((entry) => entry.path === currentSelectedPath)?.type ?? null;
+    })();
+
+    if (selectedEntryType === 'directory') {
+      await expandDirectoryPath(currentSelectedPath);
+      return;
+    }
+
+    await revealPathInExplorer(currentSelectedPath, { showSidebar: true });
+  }, [expandDirectoryPath, getDirectoryEntries, revealPathInExplorer, rootPath, selectedPath]);
+
+  const collapseAllExplorerDirectories = useCallback(() => {
+    const nextExpandedDirectories = new Set<string>([rootPath]);
+    setExpandedDirectories((currentExpandedDirectories) => (
+      areStringSetsEqual(currentExpandedDirectories, nextExpandedDirectories)
+        ? currentExpandedDirectories
+        : nextExpandedDirectories
+    ));
+    persistCodeState({
+      expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
+    });
+  }, [getPersistedExpandedPaths, persistCodeState, rootPath]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
     const monaco = monacoRef.current;
@@ -15575,46 +15636,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
       return;
     }
-
-    const loadedEntries = isDirectoryLoaded(directoryPath)
-      ? getDirectoryEntries(directoryPath)
-      : await loadExplorerDirectory(directoryPath);
-
-    await preloadCompactDirectoryChildren(directoryPath, loadedEntries);
-    const isCompactCandidate = isCompactPackageCandidate(rootPath, directoryPath);
-    const {
-      terminalPath,
-      visibleDirectoryPaths,
-    } = isCompactCandidate
-      ? await ensureCompactDirectoryChainLoaded(directoryPath, loadedEntries)
-      : {
-          terminalPath: directoryPath,
-          visibleDirectoryPaths: [directoryPath],
-        };
-    const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
-    for (const visiblePath of visibleDirectoryPaths) {
-      nextExpandedDirectories.add(visiblePath);
-    }
-    nextExpandedDirectories.add(terminalPath);
-    setExpandedDirectories((currentDirectories) => (
-      areStringSetsEqual(currentDirectories, nextExpandedDirectories)
-        ? currentDirectories
-        : nextExpandedDirectories
-    ));
-    persistCodeState({
-      selectedPath: terminalPath,
-      expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
-    });
-  }, [
-    ensureCompactDirectoryChainLoaded,
-    getDirectoryEntries,
-    getPersistedExpandedPaths,
-    isDirectoryLoaded,
-    loadExplorerDirectory,
-    persistCodeState,
-    preloadCompactDirectoryChildren,
-    rootPath,
-  ]);
+    await expandDirectoryPath(directoryPath);
+  }, [expandDirectoryPath]);
 
   const selectExplorerPath = useCallback((targetPath: string) => {
     persistCodeState({
@@ -19995,7 +20018,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       for (const root of section.roots) {
         const isExpanded = expandedDirectories.has(root.path);
         const isSelected = selectedPath === root.path;
-        const helperText = root.description ?? root.path;
 
         renderedRoots.push(
           <div key={root.id}>
@@ -20045,7 +20067,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 </button>
               )}
             />
-            <div className="truncate px-8 pb-1 text-[10px] text-zinc-600">{helperText}</div>
             {isExpanded ? renderExplorerTreeRows(externalLibraryExplorerRowsByRoot.get(root.path) ?? []) : null}
           </div>,
         );
@@ -22855,50 +22876,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshLoadedDirectories]);
 
-  const searchFiles = useCallback(async (trimmedQuery: string) => {
-    const requestKey = `search-files:${rootPath}`;
-    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    const cacheKey = `${requestKey}:${trimmedQuery}`;
-    const cachedResults = runtimeStoreRef.current.getCache<string[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
-    if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, t('codePane.requestFileSearch'), {
-        meta: trimmedQuery,
-        fromCache: true,
-      });
-      return {
-        results: cachedResults,
-        error: null,
-      };
-    }
-
-    const response = await trackRequest(
-      requestKey,
-      t('codePane.requestFileSearch'),
-      trimmedQuery,
-      async () => await window.electronAPI.codePaneSearchFiles({
-        rootPath,
-        query: trimmedQuery,
-        limit: 80,
-      }),
-    );
-
-    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-      return {
-        results: [],
-        error: null,
-      };
-    }
-
-    if (response.success) {
-      runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
-    }
-
-    return {
-      results: response.success ? (response.data ?? []) : [],
-      error: response.success ? null : (response.error || t('common.retry')),
-    };
-  }, [rootPath, t, trackRequest]);
-
   const searchContents = useCallback(async (trimmedQuery: string) => {
     searchSidebarStateRef.current.contentQuery = trimmedQuery;
     const requestKey = `search-contents:${rootPath}`;
@@ -24286,12 +24263,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
     <FilesSidebarContent
       scrollRef={filesSidebarScrollRef}
       body={renderedFilesSidebarBody}
-      onSearch={searchFiles}
+      onLocateActiveFile={() => {
+        if (activeFilePath) {
+          void revealPathInExplorer(activeFilePath, { showSidebar: true });
+        }
+      }}
+      onExpandSelection={() => {
+        void expandExplorerSelection();
+      }}
+      onCollapseAll={collapseAllExplorerDirectories}
+      canLocateActiveFile={Boolean(activeFilePath)}
+      canExpandSelection={Boolean(selectedPath)}
+      canCollapseAll={expandedDirectories.size > 1}
       t={t}
     />
   ), [
+    activeFilePath,
+    collapseAllExplorerDirectories,
+    expandExplorerSelection,
+    expandedDirectories.size,
     renderedFilesSidebarBody,
-    searchFiles,
+    revealPathInExplorer,
+    selectedPath,
     t,
   ]);
 

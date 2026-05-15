@@ -9,6 +9,7 @@ describe('xterm scrollbar css', () => {
   it('keeps the scrollbar gutter stable while expanding only the visible thumb on hover', () => {
     expect(xtermCss).toContain('.xterm .xterm-scrollable-element > .xterm-scrollbar,\n.xterm .xterm-scrollable-element > .scrollbar {\n  width: 12px !important;');
     expect(xtermCss).toContain('.xterm .xterm-scrollable-element > .xterm-scrollbar:hover,\n.xterm .xterm-scrollable-element > .scrollbar:hover {\n  width: 12px !important;');
+    expect(xtermCss).toContain('.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {\n  right: 1px !important;');
     expect(xtermCss).toContain('.xterm .xterm-scrollable-element > .xterm-scrollbar:hover > .xterm-slider,');
     expect(xtermCss).toContain('.xterm .xterm-scrollable-element > .scrollbar:hover > .slider,');
     expect(xtermCss).toContain('width: 8px !important;');

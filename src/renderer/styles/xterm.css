@@ -48,7 +48,7 @@
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
-  right: 2px !important;
+  right: 1px !important;
   width: 4px !important;
   background: rgba(255, 255, 255, 0.18) !important;
   border-radius: 999px !important;
