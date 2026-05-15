@@ -475,7 +475,7 @@ export function ExternalChangeReview({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-      <div className="pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-2">
+      <div className="pointer-events-none absolute right-2 top-0 z-20 flex items-center gap-2">
         <div className="pointer-events-auto flex items-center gap-2 rounded bg-[rgb(var(--background))/0.94] px-2 py-1 shadow-sm backdrop-blur">
           <button
             type="button"
@@ -528,10 +528,10 @@ export function ExternalChangeReview({
               return (
                 <section
                   key={row.id}
-                  className="group relative mt-5 first:mt-0"
+                  className="group relative mt-3 first:mt-0"
                   data-testid="external-change-review-block"
                 >
-                  <div className="pointer-events-none absolute right-2 top-0 z-10 -translate-y-[calc(100%+2px)] opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="pointer-events-none absolute right-2 top-0 z-10 -translate-y-[calc(100%+1px)] opacity-0 transition-opacity group-hover:opacity-100">
                     <div className="pointer-events-auto flex items-center gap-2 rounded bg-[rgb(var(--background))/0.94] px-2 py-1 shadow-sm backdrop-blur">
                       <button
                         type="button"
