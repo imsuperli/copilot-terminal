@@ -19,7 +19,7 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronRight,
-  ChevronsDown,
+  ChevronsDownUp,
   ChevronsUpDown,
   File as FileIcon,
   FileCode2,
@@ -256,6 +256,11 @@ type ExplorerTreeRow = {
   isLoading: boolean;
   textClassName: string;
   externalChangeType?: ExternalChangeKind;
+};
+
+type RevealExplorerPathOptions = {
+  showSidebar?: boolean;
+  scrollIntoView?: boolean;
 };
 
 type WindowedListSlice<T> = {
@@ -1066,6 +1071,7 @@ const ExplorerTreeRowButton = React.memo(function ExplorerTreeRowButton({
           className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-[rgb(var(--foreground))]' : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
           style={{ paddingLeft: `${10 + row.depth * 14}px` }}
           title={row.title}
+          data-explorer-path={row.resolvedPath}
         >
           {isDirectory ? (
             <span
@@ -3607,7 +3613,7 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
               onClick={onCollapseAll}
               className="flex h-7 w-7 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <ChevronsDown size={14} />
+              <ChevronsDownUp size={14} />
             </button>
           </AppTooltip>
         </div>
@@ -9042,6 +9048,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const sidebarElementRef = useRef<HTMLElement | null>(null);
   const filesSidebarScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingExplorerRevealPathRef = useRef<string | null>(null);
   const openFileTabsScrollRef = useRef<HTMLDivElement | null>(null);
   const primaryEditorPaneRef = useRef<HTMLDivElement | null>(null);
   const bottomPanelElementRef = useRef<HTMLDivElement | null>(null);
@@ -9530,6 +9537,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     externalLibrarySectionsRef.current = externalLibrarySections;
   }, [externalLibrarySections]);
+
+  useEffect(() => {
+    const revealPath = pendingExplorerRevealPathRef.current;
+    if (
+      !revealPath
+      || !isSidebarVisible
+      || sidebarMode !== 'files'
+      || selectedPath !== revealPath
+    ) {
+      return;
+    }
+
+    const container = filesSidebarScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const escapedPath = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(revealPath)
+      : revealPath.replace(/["\\]/g, '\\$&');
+    const targetElement = container.querySelector<HTMLElement>(`[data-explorer-path="${escapedPath}"]`);
+    if (!targetElement) {
+      return;
+    }
+
+    targetElement.scrollIntoView({
+      block: 'nearest',
+    });
+    pendingExplorerRevealPathRef.current = null;
+  }, [
+    expandedDirectories,
+    externalEntriesByDirectory,
+    isSidebarVisible,
+    selectedPath,
+    sidebarMode,
+    treeEntriesByDirectory,
+  ]);
 
   useEffect(() => {
     gitStatusEntriesRef.current = gitStatusEntries;
@@ -12383,9 +12427,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const revealPathInExplorer = useCallback(async (
     targetPath: string,
-    options?: {
-      showSidebar?: boolean;
-    },
+    options?: RevealExplorerPathOptions,
   ) => {
     const externalLibraryRoot = externalLibrarySectionsRef.current
       .flatMap((section) => section.roots)
@@ -12419,6 +12461,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       selectedPath: targetPath,
       expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
     });
+    pendingExplorerRevealPathRef.current = options?.scrollIntoView ? targetPath : null;
     if (options?.showSidebar) {
       showSidebarMode('files');
     }
@@ -12435,6 +12478,57 @@ export const CodePane: React.FC<CodePaneProps> = ({
       await Promise.all(loadRequests);
     }
   }, [getPersistedExpandedPaths, isDirectoryLoaded, loadExplorerDirectory, persistCodeState, rootPath, showSidebarMode]);
+
+  const expandDirectorySubtree = useCallback(async (
+    directoryPath: string,
+    nextExpandedDirectories: Set<string>,
+    visitedDirectories = new Set<string>(),
+  ) => {
+    if (visitedDirectories.has(directoryPath)) {
+      return;
+    }
+    visitedDirectories.add(directoryPath);
+
+    const loadedEntries = isDirectoryLoaded(directoryPath)
+      ? getDirectoryEntries(directoryPath)
+      : await loadExplorerDirectory(directoryPath);
+
+    await preloadCompactDirectoryChildren(directoryPath, loadedEntries);
+    const isCompactCandidate = isCompactPackageCandidate(rootPath, directoryPath);
+    const {
+      terminalPath,
+      visibleDirectoryPaths,
+    } = isCompactCandidate
+      ? await ensureCompactDirectoryChainLoaded(directoryPath, loadedEntries)
+      : {
+          terminalPath: directoryPath,
+          visibleDirectoryPaths: [directoryPath],
+        };
+
+    for (const visiblePath of visibleDirectoryPaths) {
+      nextExpandedDirectories.add(visiblePath);
+    }
+    nextExpandedDirectories.add(terminalPath);
+
+    const terminalEntries = terminalPath === directoryPath
+      ? loadedEntries
+      : (isDirectoryLoaded(terminalPath)
+        ? getDirectoryEntries(terminalPath)
+        : await loadExplorerDirectory(terminalPath));
+
+    for (const entry of terminalEntries) {
+      if (entry.type === 'directory') {
+        await expandDirectorySubtree(entry.path, nextExpandedDirectories, visitedDirectories);
+      }
+    }
+  }, [
+    ensureCompactDirectoryChainLoaded,
+    getDirectoryEntries,
+    isDirectoryLoaded,
+    loadExplorerDirectory,
+    preloadCompactDirectoryChildren,
+    rootPath,
+  ]);
 
   const expandDirectoryPath = useCallback(async (directoryPath: string) => {
     const loadedEntries = isDirectoryLoaded(directoryPath)
@@ -12501,15 +12595,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
     })();
 
     if (selectedEntryType === 'directory') {
-      await expandDirectoryPath(currentSelectedPath);
+      const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
+      if (currentSelectedPath === rootPath) {
+        nextExpandedDirectories.add(rootPath);
+      }
+      await expandDirectorySubtree(currentSelectedPath, nextExpandedDirectories);
+      setExpandedDirectories((currentDirectories) => (
+        areStringSetsEqual(currentDirectories, nextExpandedDirectories)
+          ? currentDirectories
+          : nextExpandedDirectories
+      ));
+      persistCodeState({
+        selectedPath: currentSelectedPath,
+        expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
+      });
       return;
     }
 
     await revealPathInExplorer(currentSelectedPath, { showSidebar: true });
-  }, [expandDirectoryPath, getDirectoryEntries, revealPathInExplorer, rootPath, selectedPath]);
+  }, [
+    expandDirectorySubtree,
+    getDirectoryEntries,
+    getPersistedExpandedPaths,
+    persistCodeState,
+    revealPathInExplorer,
+    rootPath,
+    selectedPath,
+  ]);
 
   const collapseAllExplorerDirectories = useCallback(() => {
-    const nextExpandedDirectories = new Set<string>([rootPath]);
+    const nextExpandedDirectories = new Set<string>();
     setExpandedDirectories((currentExpandedDirectories) => (
       areStringSetsEqual(currentExpandedDirectories, nextExpandedDirectories)
         ? currentExpandedDirectories
@@ -12518,7 +12633,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     persistCodeState({
       expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
     });
-  }, [getPersistedExpandedPaths, persistCodeState, rootPath]);
+  }, [getPersistedExpandedPaths, persistCodeState]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
     const monaco = monacoRef.current;
@@ -20038,6 +20153,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     void toggleDirectory(root.path);
                   }}
                   className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                  data-explorer-path={root.path}
                 >
                   <span
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
@@ -20197,6 +20313,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     void toggleDirectory(rootPath);
                   }}
                   className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                  data-explorer-path={rootPath}
                 >
                   <span
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
@@ -24265,7 +24382,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       body={renderedFilesSidebarBody}
       onLocateActiveFile={() => {
         if (activeFilePath) {
-          void revealPathInExplorer(activeFilePath, { showSidebar: true });
+          void revealPathInExplorer(activeFilePath, { showSidebar: true, scrollIntoView: true });
         }
       }}
       onExpandSelection={() => {
@@ -24274,7 +24391,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       onCollapseAll={collapseAllExplorerDirectories}
       canLocateActiveFile={Boolean(activeFilePath)}
       canExpandSelection={Boolean(selectedPath)}
-      canCollapseAll={expandedDirectories.size > 1}
+      canCollapseAll={expandedDirectories.size > 0}
       t={t}
     />
   ), [

@@ -9615,18 +9615,212 @@ describe('CodePane', () => {
 
   it('locates the active file in the explorer from the files toolbar', async () => {
     const user = userEvent.setup();
+    const scrollIntoViewSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
     const view = renderCodePane(createPane({
       activeFilePath: '/workspace/project/src/index.ts',
       openFiles: [{ path: '/workspace/project/src/index.ts' }],
-      selectedPath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project',
+      expandedPaths: [],
     }));
 
-    await user.click(await screen.findByRole('button', { name: 'codePane.locateActiveFileInExplorer' }));
+    try {
+      await user.click(await screen.findByRole('button', { name: 'codePane.locateActiveFileInExplorer' }));
+
+      await waitFor(() => {
+        expect(view.getPane().code?.selectedPath).toBe('/workspace/project/src/index.ts');
+        expect(view.getPane().code?.expandedPaths).toContain('/workspace/project');
+        expect(view.getPane().code?.expandedPaths).toContain('/workspace/project/src');
+      });
+      await waitFor(() => {
+        expect(scrollIntoViewSpy).toHaveBeenCalled();
+      });
+    } finally {
+      scrollIntoViewSpy.mockRestore();
+    }
+  });
+
+  it('expands the selected directory recursively from the files toolbar', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main',
+              name: 'main',
+              type: 'directory',
+            },
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java',
+              name: 'java',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com',
+              name: 'com',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java/com') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/example',
+              name: 'example',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java/com/example') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/example/App.java',
+              name: 'App.java',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+
+    const view = renderCodePane(createPane({
+      selectedPath: '/workspace/project/src',
+      expandedPaths: ['/workspace/project'],
+    }));
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.expandSelectedInExplorer' }));
 
     await waitFor(() => {
-      expect(view.getPane().code?.selectedPath).toBe('/workspace/project/src/index.ts');
-      expect(view.getPane().code?.expandedPaths).toContain('/workspace/project/src');
+      expect(view.getPane().code?.expandedPaths).toEqual([
+        '/workspace/project',
+        '/workspace/project/src',
+        '/workspace/project/src/main',
+        '/workspace/project/src/main/java',
+        '/workspace/project/src/main/java/com',
+        '/workspace/project/src/main/java/com/example',
+      ]);
     });
+    expect(await screen.findByRole('button', { name: 'App.java' })).toBeInTheDocument();
+  });
+
+  it('collapses all explorer directories including the root from the files toolbar', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+
+    const view = renderCodePane(createPane({
+      selectedPath: '/workspace/project/src/index.ts',
+      expandedPaths: ['/workspace/project', '/workspace/project/src'],
+    }));
+
+    expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'codePane.collapseAllInExplorer' }));
+
+    await waitFor(() => {
+      expect(view.getPane().code?.expandedPaths).toEqual([]);
+    });
+    expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument();
   });
 
   it('opens the hierarchy tool window and loads call hierarchy data', async () => {
