@@ -1187,7 +1187,7 @@ const SidebarRailButton = React.memo(function SidebarRailButton({
           onClick={() => {
             onSelect(mode);
           }}
-          className={`flex h-9 w-9 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors ${isSelected ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]' : 'hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
+          className={`flex h-8 w-8 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors ${isSelected ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]' : 'hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
         >
           <Icon size={15} />
         </button>
@@ -1216,7 +1216,7 @@ const ToolWindowRailButton = React.memo(function ToolWindowRailButton({
           aria-pressed={active}
           onClick={onClick}
           disabled={disabled}
-          className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
+          className={`flex h-8 w-8 items-center justify-center rounded transition-colors ${
             active
             ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
             : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
@@ -1244,10 +1244,10 @@ const ActivityRail = React.memo(function ActivityRail({
   return (
     <div
       data-testid="code-pane-activity-rail"
-      className="flex h-full w-12 shrink-0 flex-col border-r border-[rgb(var(--border))]"
+      className="flex h-full w-10 shrink-0 flex-col border-r border-[rgb(var(--border))]"
       style={CODE_PANE_CHROME_SURFACE_STYLE}
     >
-      <div className="flex flex-col items-center gap-1 px-1 py-2">
+      <div className="flex flex-col items-center gap-0.5 px-0.5 py-1.5">
         {sidebarTabs.map((tab) => (
           <SidebarRailButton
             key={tab.mode}
@@ -1261,7 +1261,7 @@ const ActivityRail = React.memo(function ActivityRail({
       </div>
 
       <div className="mt-auto border-t border-[rgb(var(--border))]">
-        <div className="flex max-h-full flex-col items-center gap-1 overflow-y-auto px-1 py-2">
+        <div className="flex max-h-full flex-col items-center gap-0.5 overflow-y-auto px-0.5 py-1.5">
           {toolWindowLaunchers.map((item) => (
             <ToolWindowRailButton
               key={item.id}

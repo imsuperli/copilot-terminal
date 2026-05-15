@@ -3162,6 +3162,7 @@ describe('CodePane', () => {
     });
 
     expect(await screen.findByRole('button', { name: 'codePane.runTab' })).toBeInTheDocument();
+    expect(activityRail).toHaveClass('w-10');
     expect(screen.getByRole('button', { name: 'codePane.runTab' }).closest('[data-testid="code-pane-activity-rail"]')).toBe(activityRail);
 
     await user.click(await screen.findByRole('button', { name: 'codePane.runTab' }));
