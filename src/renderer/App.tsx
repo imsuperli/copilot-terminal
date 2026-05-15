@@ -71,7 +71,7 @@ import { matchesKeyboardShortcut } from '../shared/utils/keyboardShortcuts';
 import { destroyWindowResourcesKeepRecord } from './utils/windowDestruction';
 import type { WindowSwitchHandler, WindowSwitchOptions } from './types/windowSwitch';
 
-const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 400;
+const QUICK_NAV_DOUBLE_TAP_INTERVAL_MS = 400;
 const STARTUP_MASK_HOLD_MS = 40;
 const STARTUP_MASK_FADE_MS = 140;
 const CANVAS_LIVE_BLOCK_ATTR = 'data-canvas-live-terminal-block-id';
@@ -838,7 +838,7 @@ function AppContent() {
         const timeSinceLastUp = now - lastQuickNavKeyUpTime.current;
 
         // 两次完整按键（松开间隔必须小于阈值）才触发
-        if (timeSinceLastUp < QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS && timeSinceLastUp > 0) {
+        if (timeSinceLastUp < QUICK_NAV_DOUBLE_TAP_INTERVAL_MS && timeSinceLastUp > 0) {
           setIsQuickNavOpen(prev => !prev);
           lastQuickNavKeyUpTime.current = 0; // 重置，避免连续触发
         } else {
