@@ -9668,6 +9668,57 @@ describe('CodePane', () => {
     }
   });
 
+  it('re-locates the active file even when it is already selected in the explorer', async () => {
+    const user = userEvent.setup();
+    const scrollIntoViewSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+
+    renderCodePane(createPane({
+      activeFilePath: '/workspace/project/src/index.ts',
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      selectedPath: '/workspace/project/src/index.ts',
+      expandedPaths: ['/workspace/project', '/workspace/project/src'],
+    }));
+
+    try {
+      await user.click(await screen.findByRole('button', { name: 'codePane.locateActiveFileInExplorer' }));
+
+      await waitFor(() => {
+        expect(scrollIntoViewSpy).toHaveBeenCalled();
+      });
+    } finally {
+      scrollIntoViewSpy.mockRestore();
+    }
+  });
+
   it('expands the selected directory recursively from the files toolbar', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {

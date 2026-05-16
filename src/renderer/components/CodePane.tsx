@@ -9049,6 +9049,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const sidebarElementRef = useRef<HTMLElement | null>(null);
   const filesSidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingExplorerRevealPathRef = useRef<string | null>(null);
+  const pendingExplorerRevealAnimationFrameRef = useRef<number | null>(null);
   const openFileTabsScrollRef = useRef<HTMLDivElement | null>(null);
   const primaryEditorPaneRef = useRef<HTMLDivElement | null>(null);
   const bottomPanelElementRef = useRef<HTMLDivElement | null>(null);
@@ -9196,6 +9197,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(() => new Set([rootPath]));
   const [loadingExternalDirectories, setLoadingExternalDirectories] = useState<Set<string>>(() => new Set());
   const [externalLibrarySections, setExternalLibrarySections] = useState<CodePaneExternalLibrarySection[]>(cachedExternalLibrarySections);
+  const [explorerRevealVersion, setExplorerRevealVersion] = useState(0);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(initialSidebarLayout.activeView);
   const [isSidebarVisible, setIsSidebarVisible] = useState(initialSidebarLayout.visible);
   const [sidebarWidth, setSidebarWidth] = useState(initialSidebarLayout.width);
@@ -9537,43 +9539,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     externalLibrarySectionsRef.current = externalLibrarySections;
   }, [externalLibrarySections]);
-
-  useEffect(() => {
-    const revealPath = pendingExplorerRevealPathRef.current;
-    if (
-      !revealPath
-      || !isSidebarVisible
-      || sidebarMode !== 'files'
-      || selectedPath !== revealPath
-    ) {
-      return;
-    }
-
-    const container = filesSidebarScrollRef.current;
-    if (!container) {
-      return;
-    }
-
-    const escapedPath = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-      ? CSS.escape(revealPath)
-      : revealPath.replace(/["\\]/g, '\\$&');
-    const targetElement = container.querySelector<HTMLElement>(`[data-explorer-path="${escapedPath}"]`);
-    if (!targetElement) {
-      return;
-    }
-
-    targetElement.scrollIntoView({
-      block: 'nearest',
-    });
-    pendingExplorerRevealPathRef.current = null;
-  }, [
-    expandedDirectories,
-    externalEntriesByDirectory,
-    isSidebarVisible,
-    selectedPath,
-    sidebarMode,
-    treeEntriesByDirectory,
-  ]);
 
   useEffect(() => {
     gitStatusEntriesRef.current = gitStatusEntries;
@@ -12461,7 +12426,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       selectedPath: targetPath,
       expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
     });
-    pendingExplorerRevealPathRef.current = options?.scrollIntoView ? targetPath : null;
+    if (options?.scrollIntoView) {
+      pendingExplorerRevealPathRef.current = targetPath;
+      setExplorerRevealVersion((currentVersion) => currentVersion + 1);
+    }
     if (options?.showSidebar) {
       showSidebarMode('files');
     }
@@ -20060,6 +20028,121 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return rowsByRoot;
   }, [buildExplorerTreeRows, expandedDirectories, externalLibrarySections, gitStatusEntriesKey, hasExternalLibraries, isSidebarVisible, sidebarMode]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingExplorerRevealAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingExplorerRevealAnimationFrameRef.current);
+        pendingExplorerRevealAnimationFrameRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const revealPath = pendingExplorerRevealPathRef.current;
+    if (
+      !revealPath
+      || !isSidebarVisible
+      || sidebarMode !== 'files'
+      || selectedPath !== revealPath
+    ) {
+      return;
+    }
+
+    const container = filesSidebarScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const escapedPath = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(revealPath)
+      : revealPath.replace(/["\\]/g, '\\$&');
+    const selector = `[data-explorer-path="${escapedPath}"]`;
+    const targetElement = container.querySelector<HTMLElement>(selector);
+    if (targetElement) {
+      targetElement.scrollIntoView({
+        block: 'nearest',
+      });
+      pendingExplorerRevealPathRef.current = null;
+      return;
+    }
+
+    let rowIndex: number | null = null;
+    if (revealPath === rootPath) {
+      rowIndex = 0;
+    } else {
+      const workspaceRowIndex = rootExplorerRows.findIndex((row) => row.resolvedPath === revealPath);
+      if (workspaceRowIndex >= 0) {
+        rowIndex = workspaceRowIndex + 1;
+      }
+    }
+
+    if (rowIndex === null) {
+      let nextRowIndex = sidebarEntries.length > 0 ? 1 + rootExplorerRows.length : 0;
+      outer: for (const section of externalLibrarySections) {
+        nextRowIndex += 1;
+        for (const root of section.roots) {
+          if (root.path === revealPath) {
+            rowIndex = nextRowIndex;
+            break outer;
+          }
+
+          nextRowIndex += 1;
+          const childRows = expandedDirectories.has(root.path)
+            ? (externalLibraryExplorerRowsByRoot.get(root.path) ?? [])
+            : [];
+          const childRowIndex = childRows.findIndex((row) => row.resolvedPath === revealPath);
+          if (childRowIndex >= 0) {
+            rowIndex = nextRowIndex + childRowIndex;
+            break outer;
+          }
+          nextRowIndex += childRows.length;
+        }
+      }
+    }
+
+    if (rowIndex === null) {
+      return;
+    }
+
+    const viewportHeight = container.clientHeight;
+    const targetScrollTop = Math.max(
+      0,
+      rowIndex * CODE_PANE_EXPLORER_ROW_HEIGHT
+        - Math.max(0, Math.floor(viewportHeight / 2) - Math.floor(CODE_PANE_EXPLORER_ROW_HEIGHT / 2)),
+    );
+    if (Math.abs(container.scrollTop - targetScrollTop) > 1) {
+      container.scrollTop = targetScrollTop;
+      container.dispatchEvent(new Event('scroll'));
+    }
+
+    if (pendingExplorerRevealAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingExplorerRevealAnimationFrameRef.current);
+    }
+    pendingExplorerRevealAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      pendingExplorerRevealAnimationFrameRef.current = null;
+      const nextTargetElement = container.querySelector<HTMLElement>(selector);
+      if (!nextTargetElement) {
+        return;
+      }
+
+      nextTargetElement.scrollIntoView({
+        block: 'nearest',
+      });
+      pendingExplorerRevealPathRef.current = null;
+    });
+  }, [
+    expandedDirectories,
+    externalLibraryExplorerRowsByRoot,
+    externalLibrarySections,
+    isSidebarVisible,
+    rootExplorerRows,
+    rootPath,
+    selectedPath,
+    sidebarEntries.length,
+    sidebarMode,
+    explorerRevealVersion,
+  ]);
 
   const handleExplorerRowActivate = useCallback((row: ExplorerTreeRow) => {
     if (row.entryType === 'directory') {
